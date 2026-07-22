@@ -1,0 +1,7 @@
+{
+  "fatigueWarningThreshold": 65,
+  "fatigueBlockingThreshold": 85,
+  "maximumContextSwitches": 2,
+  "protectedEmergencyCapacityRequiresApproval": true,
+  "max_postponements_before_warning": 2
+}

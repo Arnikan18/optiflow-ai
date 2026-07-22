@@ -1,0 +1,29 @@
+from enum import StrEnum
+
+class FreshnessStatus(StrEnum):
+    FRESH = "FRESH"
+    STALE_ALLOWED = "STALE_ALLOWED"
+    STALE_BLOCKING = "STALE_BLOCKING"
+    MISSING = "MISSING"
+    CONFLICTING = "CONFLICTING"
+    INVALID = "INVALID"
+
+class FailureMode(StrEnum):
+    NONE = "NONE"
+    TIMEOUT = "TIMEOUT"
+    HTTP_500 = "HTTP_500"
+    MALFORMED_RESPONSE = "MALFORMED_RESPONSE"
+    EMPTY_RESPONSE = "EMPTY_RESPONSE"
+
+class EscalationStatus(StrEnum):
+    OPEN = "OPEN"
+    ASSIGNED = "ASSIGNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    MONITORING = "MONITORING"
+    RESOLVED = "RESOLVED"
+
+class AssignmentRequestStatus(StrEnum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
