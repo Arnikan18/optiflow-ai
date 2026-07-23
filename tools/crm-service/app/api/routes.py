@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.routes import router as customer_router
+
 from app.database import models
 from app.database.base import Base
 from app.database.seed import seed_customers
@@ -18,7 +18,7 @@ app = FastAPI(
     title="OptiFlow CRM Service",
     version="1.0.0"
 )
-app.include_router(customer_router)
+
 
 @app.get("/")
 def home():
