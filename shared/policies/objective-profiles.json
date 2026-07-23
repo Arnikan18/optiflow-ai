@@ -1,0 +1,50 @@
+{
+  "CURRENT_BASELINE": {
+    "profile_id": "CURRENT_BASELINE",
+    "profile_name": "Current Assignments",
+    "sla_weight": 25,
+    "commercial_weight": 20,
+    "delay_weight": 10,
+    "fairness_weight": 10,
+    "workload_weight": 10,
+    "fatigue_weight": 10,
+    "context_switch_weight": 10,
+    "deferral_weight": 5
+  },
+  "SLA_FIRST": {
+    "profile_id": "SLA_FIRST",
+    "profile_name": "SLA First",
+    "sla_weight": 45,
+    "commercial_weight": 10,
+    "delay_weight": 10,
+    "fairness_weight": 10,
+    "workload_weight": 10,
+    "fatigue_weight": 5,
+    "context_switch_weight": 5,
+    "deferral_weight": 5
+  },
+  "COMMERCIAL_FIRST": {
+    "profile_id": "COMMERCIAL_FIRST",
+    "profile_name": "Commercial First",
+    "sla_weight": 15,
+    "commercial_weight": 45,
+    "delay_weight": 10,
+    "fairness_weight": 5,
+    "workload_weight": 10,
+    "fatigue_weight": 5,
+    "context_switch_weight": 5,
+    "deferral_weight": 5
+  },
+  "BALANCED": {
+    "profile_id": "BALANCED",
+    "profile_name": "OptiFlow Balanced",
+    "sla_weight": 25,
+    "commercial_weight": 20,
+    "delay_weight": 10,
+    "fairness_weight": 15,
+    "workload_weight": 10,
+    "fatigue_weight": 10,
+    "context_switch_weight": 5,
+    "deferral_weight": 5
+  }
+}

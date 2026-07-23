@@ -1,0 +1,158 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: optiflow-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  crm-service:
+    build:
+      context: ./tools/crm-service
+    container_name: optiflow-crm
+    environment:
+      SERVICE_NAME: crm-service
+      SERVICE_PORT: 8101
+      DATABASE_URL: sqlite:////app/data/crm.db
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      SCENARIO_ID: ${SCENARIO_ID}
+    ports:
+      - "${CRM_SERVICE_PORT}:8101"
+    volumes:
+      - crm_data:/app/data
+      - ./scenarios:/app/scenarios:ro
+      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
+      - ./tools/crm-service/app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  incident-service:
+    build:
+      context: ./tools/incident-service
+    container_name: optiflow-incident
+    environment:
+      SERVICE_NAME: incident-service
+      SERVICE_PORT: 8102
+      DATABASE_URL: sqlite:////app/data/incident.db
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      SCENARIO_ID: ${SCENARIO_ID}
+    ports:
+      - "${INCIDENT_SERVICE_PORT}:8102"
+    volumes:
+      - incident_data:/app/data
+      - ./scenarios:/app/scenarios:ro
+      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
+      - ./tools/incident-service/app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  workforce-service:
+    build:
+      context: ./tools/workforce-service
+    container_name: optiflow-workforce
+    environment:
+      SERVICE_NAME: workforce-service
+      SERVICE_PORT: 8103
+      DATABASE_URL: sqlite:////app/data/workforce.db
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      SCENARIO_ID: ${SCENARIO_ID}
+    ports:
+      - "${WORKFORCE_SERVICE_PORT}:8103"
+    volumes:
+      - workforce_data:/app/data
+      - ./scenarios:/app/scenarios:ro
+      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
+      - ./tools/workforce-service/app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  communication-service:
+    build:
+      context: ./tools/communication-service
+    container_name: optiflow-communication
+    environment:
+      SERVICE_NAME: communication-service
+      SERVICE_PORT: 8104
+      DATABASE_URL: sqlite:////app/data/communication.db
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      SCENARIO_ID: ${SCENARIO_ID}
+    ports:
+      - "${COMMUNICATION_SERVICE_PORT}:8104"
+    volumes:
+      - communication_data:/app/data
+      - ./scenarios:/app/scenarios:ro
+      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
+      - ./tools/communication-service/app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  core-api:
+    build:
+      context: ./core-api
+    container_name: optiflow-core
+    environment:
+      APP_ENV: ${APP_ENV}
+      APP_VERSION: ${APP_VERSION}
+      DATABASE_URL: ${DATABASE_URL}
+      CRM_SERVICE_URL: ${CRM_SERVICE_URL}
+      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL}
+      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL}
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+    ports:
+      - "${CORE_API_PORT}:8000"
+    volumes:
+      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
+      - ./core-api/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      crm-service:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+      workforce-service:
+        condition: service_healthy
+      communication-service:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: optiflow-frontend
+    environment:
+      VITE_CORE_API_URL: ${VITE_CORE_API_URL}
+    ports:
+      - "${FRONTEND_PORT}:3000"
+    depends_on:
+      - core-api
+
+volumes:
+  postgres_data:
+  crm_data:
+  incident_data:
+  workforce_data:
+  communication_data:

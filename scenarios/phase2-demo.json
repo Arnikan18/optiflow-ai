@@ -1,0 +1,300 @@
+{
+  "scenarioId": "phase2-demo",
+  "version": 1,
+  "generatedAt": "2026-07-22T10:00:00Z",
+  "crm": {
+    "customers": [
+      {
+        "customer_id": "CUS-ALPHA",
+        "name": "Alpha Bank",
+        "tier": "GOLD",
+        "annual_recurring_revenue": 600000,
+        "renewal_date": "2026-09-22",
+        "account_owner": "CSM-01",
+        "strategic_account": 1,
+        "relationship_status": "AT_RISK",
+        "industry": "FINANCE",
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "customer_id": "CUS-NOVA",
+        "name": "Nova Retail",
+        "tier": "PLATINUM",
+        "annual_recurring_revenue": 1200000,
+        "renewal_date": "2026-11-20",
+        "account_owner": "CSM-04",
+        "strategic_account": 1,
+        "relationship_status": "GOOD",
+        "industry": "RETAIL",
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "customer_id": "CUS-GREEN",
+        "name": "GreenLogistics",
+        "tier": "SILVER",
+        "annual_recurring_revenue": 180000,
+        "renewal_date": "2026-07-27",
+        "account_owner": "CSM-02",
+        "strategic_account": 0,
+        "relationship_status": "AT_RISK",
+        "industry": "LOGISTICS",
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "customer_id": "CUS-MEDI",
+        "name": "MediCore",
+        "tier": "GOLD",
+        "annual_recurring_revenue": 400000,
+        "renewal_date": "2027-02-15",
+        "account_owner": "CSM-03",
+        "strategic_account": 1,
+        "relationship_status": "GOOD",
+        "industry": "HEALTHCARE",
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      }
+    ],
+    "commercialDependencies": [
+      {
+        "dependency_id": "DEP-NOVA-01",
+        "customer_id": "CUS-NOVA",
+        "dependency_type": "CUSTOMER_LAUNCH",
+        "description": "Production launch scheduled tomorrow",
+        "due_at": "2026-07-23T10:00:00Z",
+        "impact_level": "HIGH",
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z"
+      }
+    ]
+  },
+  "incident": {
+    "escalations": [
+      {
+        "escalation_id": "ESC-ALPHA-01",
+        "customer_id": "CUS-ALPHA",
+        "title": "Payment API intermittently failing",
+        "description": "Intermittent HTTP 504 errors on checkout flow.",
+        "severity": "CRITICAL",
+        "priority": "P1",
+        "sla_deadline": "2026-07-22T12:00:00Z",
+        "status": "OPEN",
+        "required_duration_minutes": 90,
+        "workaround_status": "PARTIAL",
+        "current_specialist_id": null,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "escalation_id": "ESC-NOVA-01",
+        "customer_id": "CUS-NOVA",
+        "title": "Enterprise onboarding blocked",
+        "description": "SAML configuration error blocking launch migration.",
+        "severity": "HIGH",
+        "priority": "P2",
+        "sla_deadline": "2026-07-23T10:00:00Z",
+        "status": "OPEN",
+        "required_duration_minutes": 90,
+        "workaround_status": "NONE",
+        "current_specialist_id": null,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "escalation_id": "ESC-GREEN-01",
+        "customer_id": "CUS-GREEN",
+        "title": "Reporting defect",
+        "description": "Report exports fail for payload sizes above 50MB.",
+        "severity": "MEDIUM",
+        "priority": "P3",
+        "sla_deadline": "2026-07-27T10:00:00Z",
+        "status": "OPEN",
+        "required_duration_minutes": 120,
+        "workaround_status": "NONE",
+        "current_specialist_id": null,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "escalation_id": "ESC-MEDI-01",
+        "customer_id": "CUS-MEDI",
+        "title": "Security questionnaire blocking deal",
+        "description": "Annual security audit compliance validation pending.",
+        "severity": "LOW",
+        "priority": "P4",
+        "sla_deadline": "2026-07-25T10:00:00Z",
+        "status": "OPEN",
+        "required_duration_minutes": 60,
+        "workaround_status": "NONE",
+        "current_specialist_id": null,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      }
+    ],
+    "skills": [
+      { "escalation_id": "ESC-ALPHA-01", "skill_code": "payments_api" },
+      { "escalation_id": "ESC-ALPHA-01", "skill_code": "api_integration" },
+      { "escalation_id": "ESC-NOVA-01", "skill_code": "solution_architecture" },
+      { "escalation_id": "ESC-NOVA-01", "skill_code": "enterprise_onboarding" },
+      { "escalation_id": "ESC-GREEN-01", "skill_code": "data_reporting" },
+      { "escalation_id": "ESC-MEDI-01", "skill_code": "security_compliance" }
+    ],
+    "accessRequirements": [
+      { "escalation_id": "ESC-ALPHA-01", "access_code": "alpha_payment_system" },
+      { "escalation_id": "ESC-NOVA-01", "access_code": "architecture_workspace" },
+      { "escalation_id": "ESC-GREEN-01", "access_code": "reporting_platform" },
+      { "escalation_id": "ESC-MEDI-01", "access_code": "security_workspace" }
+    ],
+    "assignmentHistory": [
+      {
+        "history_id": "HIST-001",
+        "escalation_id": "ESC-GREEN-01",
+        "specialist_id": "SP-DANIEL",
+        "action": "DEFERRED",
+        "reason": "Postponed due to low priority relative to others",
+        "occurred_at": "2026-07-21T10:00:00Z"
+      },
+      {
+        "history_id": "HIST-002",
+        "escalation_id": "ESC-GREEN-01",
+        "specialist_id": "SP-DANIEL",
+        "action": "DEFERRED",
+        "reason": "Postponed for the second time",
+        "occurred_at": "2026-07-22T09:00:00Z"
+      }
+    ]
+  },
+  "workforce": {
+    "specialists": [
+      {
+        "specialist_id": "SP-MAYA",
+        "name": "Maya",
+        "active": 1,
+        "max_concurrent_assignments": 2,
+        "daily_capacity_minutes": 360,
+        "protected_emergency_minutes": 60,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "specialist_id": "SP-DANIEL",
+        "name": "Daniel",
+        "active": 1,
+        "max_concurrent_assignments": 2,
+        "daily_capacity_minutes": 420,
+        "protected_emergency_minutes": 0,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      },
+      {
+        "specialist_id": "SP-NIMAL",
+        "name": "Nimal",
+        "active": 1,
+        "max_concurrent_assignments": 1,
+        "daily_capacity_minutes": 120,
+        "protected_emergency_minutes": 30,
+        "created_at": "2026-07-22T10:00:00Z",
+        "updated_at": "2026-07-22T10:00:00Z",
+        "scenario_id": "phase2-demo"
+      }
+    ],
+    "skills": [
+      { "specialist_id": "SP-MAYA", "skill_code": "payments_api", "proficiency_level": 5 },
+      { "specialist_id": "SP-MAYA", "skill_code": "api_integration", "proficiency_level": 4 },
+      { "specialist_id": "SP-DANIEL", "skill_code": "data_reporting", "proficiency_level": 5 },
+      { "specialist_id": "SP-DANIEL", "skill_code": "data_pipeline", "proficiency_level": 4 },
+      { "specialist_id": "SP-NIMAL", "skill_code": "solution_architecture", "proficiency_level": 5 },
+      { "specialist_id": "SP-NIMAL", "skill_code": "enterprise_onboarding", "proficiency_level": 5 }
+    ],
+    "accessPermissions": [
+      { "specialist_id": "SP-MAYA", "access_code": "alpha_payment_system" },
+      { "specialist_id": "SP-DANIEL", "access_code": "reporting_platform" },
+      { "specialist_id": "SP-NIMAL", "access_code": "architecture_workspace" }
+    ],
+    "availability": [
+      {
+        "slot_id": "SLOT-MAYA-01",
+        "specialist_id": "SP-MAYA",
+        "available_from": "2026-07-22T08:00:00Z",
+        "available_until": "2026-07-22T14:00:00Z",
+        "status": "AVAILABLE",
+        "updated_at": "2026-07-22T10:00:00Z"
+      },
+      {
+        "slot_id": "SLOT-DANIEL-01",
+        "specialist_id": "SP-DANIEL",
+        "available_from": "2026-07-22T08:00:00Z",
+        "available_until": "2026-07-22T15:00:00Z",
+        "status": "AVAILABLE",
+        "updated_at": "2026-07-22T10:00:00Z"
+      },
+      {
+        "slot_id": "SLOT-NIMAL-01",
+        "specialist_id": "SP-NIMAL",
+        "available_from": "2026-07-22T10:30:00Z",
+        "available_until": "2026-07-22T12:30:00Z",
+        "status": "AVAILABLE",
+        "updated_at": "2026-07-22T10:00:00Z"
+      }
+    ],
+    "workloads": [
+      {
+        "record_id": "WL-MAYA",
+        "specialist_id": "SP-MAYA",
+        "active_assignment_count": 0,
+        "assigned_minutes": 0,
+        "after_hours_minutes": 240,
+        "overnight_incident_count": 2,
+        "recent_interruption_count": 4,
+        "updated_at": "2026-07-22T10:00:00Z"
+      },
+      {
+        "record_id": "WL-DANIEL",
+        "specialist_id": "SP-DANIEL",
+        "active_assignment_count": 0,
+        "assigned_minutes": 0,
+        "after_hours_minutes": 0,
+        "overnight_incident_count": 0,
+        "recent_interruption_count": 1,
+        "updated_at": "2026-07-22T10:00:00Z"
+      },
+      {
+        "record_id": "WL-NIMAL",
+        "specialist_id": "SP-NIMAL",
+        "active_assignment_count": 0,
+        "assigned_minutes": 0,
+        "after_hours_minutes": 0,
+        "overnight_incident_count": 0,
+        "recent_interruption_count": 0,
+        "updated_at": "2026-07-22T10:00:00Z"
+      }
+    ]
+  },
+  "communication": {
+    "assignmentRequests": [],
+    "notifications": [],
+    "configuredResponses": [
+      {
+        "configuration_id": 1,
+        "specialist_id": "SP-DANIEL",
+        "next_status": "REJECTED",
+        "response_reason": "Assigned to a new internal data incident",
+        "delay_ms": 1500,
+        "active": 1,
+        "updated_at": "2026-07-22T10:00:00Z"
+      }
+    ]
+  }
+}
