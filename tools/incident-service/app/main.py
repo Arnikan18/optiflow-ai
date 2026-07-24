@@ -1,281 +1,119 @@
-import os
 import contextlib
-import random
-from fastapi import FastAPI, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from datetime import datetime, timezone
+import logging
+from collections.abc import AsyncIterator
 
-from app.config import settings
-from app.database.session import get_db, engine
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.api.routes import admin_router, legacy_router, router
+from app.config import get_settings
+from app.database import session as db_session
 from app.database.base import Base
-from app.database.models import Escalation, EscalationSkill, EscalationAccess, AssignmentHistory, FailureMode
-from app.database.seed import seed_database
-from app.middleware.authentication import verify_tool_token
 from app.middleware.request_context import RequestContextMiddleware
-from app.services.failure_service import apply_failure_mode
+from app.schemas.responses import error_response
+from app.services.incident_service import IncidentError, seed_incidents_if_empty
 
-@contextlib.asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
+
+logger = logging.getLogger(__name__)
+
+
+def _error_json(status_code: int, message: str, error_code: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=error_response(message, error_code),
+    )
+
+
+async def initialize_database() -> None:
+    async with db_session.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    async with AsyncSession(engine) as session:
-        await seed_database(session)
-    yield
-    await engine.dispose()
 
-app = FastAPI(
-    title="OptiFlow Incident Service Mock",
-    version="4.0",
-    lifespan=lifespan
-)
+    if get_settings().seed_on_startup:
+        async with db_session.async_session() as session:
+            await seed_incidents_if_empty(session)
 
-app.add_middleware(RequestContextMiddleware)
 
-@app.get("/health")
-async def health(db: AsyncSession = Depends(get_db)):
-    try:
-        await db.execute(select(Escalation).limit(1))
-        return {
-            "service": settings.service_name,
-            "status": "UP",
-            "database": "UP",
-            "scenarioId": settings.scenario_id,
-            "version": "4.0"
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database unreachable: {str(e)}"
+def create_app(*, initialize_on_startup: bool = True) -> FastAPI:
+    @contextlib.asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if initialize_on_startup:
+            await initialize_database()
+        yield
+        await db_session.engine.dispose()
+
+    application = FastAPI(
+        title="OptiFlow Incident Service",
+        version="4.0",
+        lifespan=lifespan,
+    )
+    application.add_middleware(RequestContextMiddleware)
+
+    application.include_router(router)
+    application.include_router(admin_router)
+    application.include_router(legacy_router)
+
+    @application.exception_handler(IncidentError)
+    async def incident_error_handler(_: Request, exc: IncidentError) -> JSONResponse:
+        return _error_json(exc.status_code, exc.message, exc.error_code)
+
+    @application.exception_handler(RequestValidationError)
+    async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        logger.info("Incident request validation failed: %s", exc.errors())
+        return _error_json(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Request validation failed",
+            "INCIDENT_422",
         )
 
-@app.get("/escalations", dependencies=[Depends(verify_tool_token)])
-async def get_escalations(db: AsyncSession = Depends(get_db)):
-    await apply_failure_mode(db)
-    result = await db.execute(select(Escalation))
-    return result.scalars().all()
+    @application.exception_handler(HTTPException)
+    async def http_error_handler(_: Request, exc: HTTPException) -> JSONResponse:
+        error_code = "INCIDENT_401" if exc.status_code == status.HTTP_401_UNAUTHORIZED else f"INCIDENT_{exc.status_code}"
+        public_message = "Incident service error" if exc.status_code >= 500 else str(exc.detail)
+        return _error_json(exc.status_code, public_message, error_code)
 
-@app.get("/escalations/active", dependencies=[Depends(verify_tool_token)])
-async def get_active_escalations(db: AsyncSession = Depends(get_db)):
-    await apply_failure_mode(db)
-    result = await db.execute(select(Escalation).where(Escalation.status != "RESOLVED"))
-    escalations = result.scalars().all()
-    
-    response_data = []
-    for esc in escalations:
-        # Get skills
-        sk_res = await db.execute(select(EscalationSkill.skill_code).where(EscalationSkill.escalation_id == esc.escalation_id))
-        skills = sk_res.scalars().all()
-        
-        # Get access
-        acc_res = await db.execute(select(EscalationAccess.access_code).where(EscalationAccess.escalation_id == esc.escalation_id))
-        access = acc_res.scalars().all()
-        
-        response_data.append({
-            "escalationId": esc.escalation_id,
-            "customerId": esc.customer_id,
-            "title": esc.title,
-            "severity": esc.severity,
-            "slaDeadline": esc.sla_deadline,
-            "status": esc.status,
-            "requiredSkills": list(skills),
-            "requiredAccess": list(access),
-            "requiredDurationMinutes": esc.required_duration_minutes,
-            "workaroundStatus": esc.workaround_status,
-            "currentSpecialistId": esc.current_specialist_id,
-            "sourceUpdatedAt": esc.updated_at
-        })
-        
-    return response_data
+    @application.exception_handler(Exception)
+    async def unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Unexpected Incident service error: %s", exc)
+        return _error_json(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Incident service encountered an unexpected error",
+            "INCIDENT_500",
+        )
 
-@app.get("/escalations/{escalation_id}", dependencies=[Depends(verify_tool_token)])
-async def get_escalation(escalation_id: str, db: AsyncSession = Depends(get_db)):
-    await apply_failure_mode(db)
-    result = await db.execute(select(Escalation).where(Escalation.escalation_id == escalation_id))
-    esc = result.scalar_one_or_none()
-    if not esc:
-        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
-        
-    sk_res = await db.execute(select(EscalationSkill.skill_code).where(EscalationSkill.escalation_id == esc.escalation_id))
-    skills = sk_res.scalars().all()
-    
-    acc_res = await db.execute(select(EscalationAccess.access_code).where(EscalationAccess.escalation_id == esc.escalation_id))
-    access = acc_res.scalars().all()
-    
-    return {
-        "escalationId": esc.escalation_id,
-        "customerId": esc.customer_id,
-        "title": esc.title,
-        "severity": esc.severity,
-        "slaDeadline": esc.sla_deadline,
-        "status": esc.status,
-        "requiredSkills": list(skills),
-        "requiredAccess": list(access),
-        "requiredDurationMinutes": esc.required_duration_minutes,
-        "workaroundStatus": esc.workaround_status,
-        "currentSpecialistId": esc.current_specialist_id,
-        "sourceUpdatedAt": esc.updated_at
-    }
+    @application.get("/")
+    async def root():
+        settings = get_settings()
+        return {"service": settings.service_name, "version": "4.0"}
 
-@app.post("/escalations/{escalation_id}/assign", dependencies=[Depends(verify_tool_token)])
-async def assign_specialist(escalation_id: str, payload: dict, db: AsyncSession = Depends(get_db)):
-    await apply_failure_mode(db)
-    
-    specialist_id = payload.get("specialistId")
-    idempotency_key = payload.get("idempotencyKey")
-    
-    # 1. Idempotency Check
-    if idempotency_key:
-        stmt = select(AssignmentHistory).where(AssignmentHistory.idempotency_key == idempotency_key)
-        res = await db.execute(stmt)
-        hist = res.scalar_one_or_none()
-        if hist:
-            # Re-fetch escalation
-            stmt_esc = select(Escalation).where(Escalation.escalation_id == escalation_id)
-            res_esc = await db.execute(stmt_esc)
-            esc = res_esc.scalar_one()
-            
+    @application.get("/health")
+    async def health():
+        return {
+            "status": "healthy",
+            "service": get_settings().service_name,
+        }
+
+    @application.get("/readiness")
+    async def readiness():
+        try:
+            async with db_session.async_session() as session:
+                await session.execute(text("SELECT 1"))
             return {
-                "escalationId": escalation_id,
-                "previousSpecialistId": None,
-                "currentSpecialistId": esc.current_specialist_id,
-                "status": esc.status,
-                "assignmentReference": f"ASN-{hist.history_id.split('-')[-1]}",
-                "idempotencyKey": idempotency_key,
-                "sourceUpdatedAt": esc.updated_at,
-                "duplicate": True
+                "status": "ready",
+                "service": get_settings().service_name,
+                "database": "reachable",
             }
-            
-    # Fetch escalation
-    stmt_esc = select(Escalation).where(Escalation.escalation_id == escalation_id)
-    res_esc = await db.execute(stmt_esc)
-    esc = res_esc.scalar_one_or_none()
-    if not esc:
-        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
-        
-    prev_specialist_id = esc.current_specialist_id
-    esc.current_specialist_id = specialist_id
-    esc.status = "ASSIGNED"
-    esc.updated_at = datetime.now(timezone.utc).isoformat()
-    db.add(esc)
-    
-    # Create History
-    history_id = f"HIST-{random.randint(100, 999)}"
-    history_record = AssignmentHistory(
-        history_id=history_id,
-        escalation_id=escalation_id,
-        specialist_id=specialist_id,
-        action="ASSIGNED",
-        reason=payload.get("reason", "Autonomous reallocation"),
-        occurred_at=datetime.now(timezone.utc).isoformat(),
-        idempotency_key=idempotency_key
-    )
-    db.add(history_record)
-    await db.commit()
-    
-    return {
-        "escalationId": escalation_id,
-        "previousSpecialistId": prev_specialist_id,
-        "currentSpecialistId": specialist_id,
-        "status": "ASSIGNED",
-        "assignmentReference": f"ASN-{random.randint(500, 599)}",
-        "idempotencyKey": idempotency_key,
-        "sourceUpdatedAt": esc.updated_at
-    }
+        except SQLAlchemyError as exc:
+            logger.exception("Incident readiness database failure: %s", exc)
+            return _error_json(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Incident database is not reachable",
+                "INCIDENT_503",
+            )
 
-@app.post("/escalations/{escalation_id}/status", dependencies=[Depends(verify_tool_token)])
-async def update_status(escalation_id: str, payload: dict, db: AsyncSession = Depends(get_db)):
-    await apply_failure_mode(db)
-    stmt = select(Escalation).where(Escalation.escalation_id == escalation_id)
-    res = await db.execute(stmt)
-    esc = res.scalar_one_or_none()
-    if not esc:
-        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
-        
-    esc.status = payload.get("status", "OPEN")
-    esc.updated_at = datetime.now(timezone.utc).isoformat()
-    db.add(esc)
-    await db.commit()
-    return {"status": "success", "escalation_id": escalation_id, "status_value": esc.status}
+    return application
 
-# Admin endpoints
-@app.post("/admin/escalations", dependencies=[Depends(verify_tool_token)])
-async def create_admin_escalation(payload: dict, db: AsyncSession = Depends(get_db)):
-    esc = Escalation(
-        escalation_id=payload["escalationId"],
-        customer_id=payload["customerId"],
-        title=payload["title"],
-        description=payload.get("description"),
-        severity=payload["severity"],
-        priority=payload["priority"],
-        sla_deadline=payload.get("slaDeadline"),
-        status=payload.get("status", "OPEN"),
-        required_duration_minutes=payload.get("requiredDurationMinutes", 90),
-        workaround_status=payload.get("workaroundStatus", "NONE"),
-        current_specialist_id=payload.get("currentSpecialistId"),
-        created_at=datetime.now(timezone.utc).isoformat(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
-        scenario_id=settings.scenario_id
-    )
-    db.add(esc)
-    
-    # Skills
-    for sk in payload.get("requiredSkills", []):
-        db.add(EscalationSkill(escalation_id=esc.escalation_id, skill_code=sk))
-        
-    # Access
-    for acc in payload.get("requiredAccess", []):
-        db.add(EscalationAccess(escalation_id=esc.escalation_id, access_code=acc))
-        
-    await db.commit()
-    return {"status": "success", "escalation_id": esc.escalation_id}
 
-@app.post("/admin/escalations/{escalation_id}/sla-change", dependencies=[Depends(verify_tool_token)])
-async def admin_sla_change(escalation_id: str, payload: dict, db: AsyncSession = Depends(get_db)):
-    stmt = select(Escalation).where(Escalation.escalation_id == escalation_id)
-    res = await db.execute(stmt)
-    esc = res.scalar_one_or_none()
-    if not esc:
-        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
-        
-    esc.sla_deadline = payload.get("slaDeadline")
-    esc.updated_at = datetime.now(timezone.utc).isoformat()
-    db.add(esc)
-    await db.commit()
-    return {"status": "success", "escalation_id": escalation_id}
-
-@app.post("/admin/escalations/{escalation_id}/workaround", dependencies=[Depends(verify_tool_token)])
-async def admin_workaround(escalation_id: str, payload: dict, db: AsyncSession = Depends(get_db)):
-    stmt = select(Escalation).where(Escalation.escalation_id == escalation_id)
-    res = await db.execute(stmt)
-    esc = res.scalar_one_or_none()
-    if not esc:
-        raise HTTPException(status_code=404, detail=f"Escalation {escalation_id} not found")
-        
-    esc.workaround_status = payload.get("workaroundStatus", "NONE")
-    esc.updated_at = datetime.now(timezone.utc).isoformat()
-    db.add(esc)
-    await db.commit()
-    return {"status": "success", "escalation_id": escalation_id}
-
-@app.post("/admin/failure-mode", dependencies=[Depends(verify_tool_token)])
-async def configure_failure_mode(data: dict, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(FailureMode).limit(1))
-    fm = result.scalar_one_or_none()
-    if not fm:
-        fm = FailureMode(mode=data.get("mode", "TIMEOUT"), enabled=0, updated_at="")
-        
-    fm.mode = data.get("mode", "TIMEOUT")
-    fm.enabled = 1 if data.get("enabled", False) else 0
-    fm.delay_ms = data.get("delayMs", 5000)
-    fm.remaining_failures = data.get("failureCount", 2)
-    fm.updated_at = datetime.now(timezone.utc).isoformat()
-    
-    db.add(fm)
-    await db.commit()
-    return {"status": "success", "mode": fm.mode, "enabled": bool(fm.enabled)}
-
-@app.post("/admin/reset", dependencies=[Depends(verify_tool_token)])
-async def admin_reset(db: AsyncSession = Depends(get_db)):
-    await seed_database(db)
-    return {"status": "success", "message": "Database reset to seed state"}
+app = create_app()

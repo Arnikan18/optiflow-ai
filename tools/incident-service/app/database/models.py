@@ -1,7 +1,48 @@
+from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Integer, UniqueConstraint, PrimaryKeyConstraint
+
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, PrimaryKeyConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.base import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    incident_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    customer_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(String(2000), nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True, default="OPEN")
+    sla_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    assigned_specialist_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')",
+            name="ck_incidents_priority",
+        ),
+        CheckConstraint(
+            "status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')",
+            name="ck_incidents_status",
+        ),
+        Index("ix_incidents_sla_status", "sla_deadline", "status"),
+    )
+
 
 class Escalation(Base):
     __tablename__ = "escalations"
