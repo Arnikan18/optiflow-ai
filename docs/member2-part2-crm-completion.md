@@ -159,9 +159,9 @@ The CRM service is ready for a future PostgreSQL URL at the session layer. Befor
 
 ## 19. Git commit and merge details
 
-Part 2 implementation was committed on the `sanjeevan` branch as `ddca3a9` with commit message `feat(crm): complete scalable customer service`. Push to `origin/sanjeevan` succeeded (`39f4c84..ddca3a9`), with Git also emitting the existing local `credential-manager-core` warning.
+Part 2 implementation was committed on the `sanjeevan` branch as `ddca3a9` with commit message `feat(crm): complete scalable customer service`. Documentation follow-up commit `00ef074` recorded the first push result. Pushes to `origin/sanjeevan` succeeded, with Git also emitting the existing local `credential-manager-core` warning.
 
-Develop merge result: not attempted. The Part 2 merge gate requires `git checkout develop` followed by `git pull --ff-only origin develop`, but local `develop` is `8a094be` and `origin/develop` is `83fc793`; neither is an ancestor of the other. The remote also has both `Sanjeevan` and `sanjeevan` refs, which previously prevented a normal fetch from updating the lowercase remote-tracking ref on this Windows checkout. A team branch cleanup or explicit develop-base decision is needed before pushing CRM changes to `develop`.
+Develop merge result: completed after explicit follow-up instruction to also merge to `develop`. The merge was based on confirmed remote `origin/develop` at `83fc793`, merged `sanjeevan` with no conflicts, passed CRM compile and pytest validation, and pushed merge commit `daa7473` to `origin/develop`. The local `develop` branch was then fast-forwarded to the pushed merge commit. The remote still has both `Sanjeevan` and `sanjeevan` refs, so local tracking output for `origin/sanjeevan` can appear stale on this Windows checkout even when `git ls-remote` confirms the lowercase branch is up to date.
 
 ## 20. Readiness for Part 3
 
