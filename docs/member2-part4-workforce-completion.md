@@ -175,7 +175,11 @@ Production should move to PostgreSQL with migrations, row-level locking such as 
 
 ## 30. Git commit and merge details
 
-Implementation branch: `sanjeevan`. Branch preparation merged the latest `develop` into `sanjeevan` before Part 4 work. Commit and merge details are recorded after the final commit/push/merge step.
+Implementation branch: `sanjeevan`. Branch preparation merged the latest `develop` into `sanjeevan` before Part 4 work.
+
+Part 4 implementation was committed on `sanjeevan` as `2e61440` with commit message `feat(workforce): complete scalable workforce service`. Push to `origin/sanjeevan` succeeded (`94c30c5..2e61440`) with Git also emitting the existing local `credential-manager-core` warning.
+
+Develop merge result: completed after the `sanjeevan` push. `develop` was fast-forward pulled from `origin/develop`, `sanjeevan` merged with no conflicts, Workforce compile and pytest validation passed on the merged state, and merge commit `96bb905` was pushed to `origin/develop` (`ab6d761..96bb905`). This report section was then corrected in a documentation-only follow-up that should also be merged into `develop`.
 
 ## 31. Readiness for Part 5
 
