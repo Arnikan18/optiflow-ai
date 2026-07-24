@@ -1,40 +1,61 @@
+from datetime import date
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 
 from app.database.models import Customer
 
 
-def seed_customers(db: Session) -> None:
-    existing_customer = db.query(Customer).first()
-
-    if existing_customer:
-        return
-
-    customers = [
+def build_seed_customers() -> list[Customer]:
+    return [
         Customer(
-            customer_id="CUST-001",
-            name="Alpha Technologies",
+            customer_id="CUS-ALPHA",
+            name="Alpha Bank",
             tier="Enterprise",
-            arr=250000.00,
-            renewal_date="2026-09-15",
-            active=True
+            arr=Decimal("600000.00"),
+            renewal_date=date(2026, 9, 22),
+            active=True,
         ),
         Customer(
-            customer_id="CUST-002",
-            name="BlueWave Retail",
-            tier="Premium",
-            arr=120000.00,
-            renewal_date="2026-11-20",
-            active=True
+            customer_id="CUS-NOVA",
+            name="Nova Retail",
+            tier="Enterprise",
+            arr=Decimal("1200000.00"),
+            renewal_date=date(2026, 11, 20),
+            active=True,
         ),
         Customer(
-            customer_id="CUST-003",
-            name="Ceylon Logistics",
+            customer_id="CUS-GREEN",
+            name="GreenLogistics",
             tier="Standard",
-            arr=60000.00,
-            renewal_date="2027-01-10",
-            active=True
-        )
+            arr=Decimal("180000.00"),
+            renewal_date=date(2026, 7, 27),
+            active=True,
+        ),
+        Customer(
+            customer_id="CUS-MEDI",
+            name="MediCore",
+            tier="Premium",
+            arr=Decimal("400000.00"),
+            renewal_date=date(2027, 2, 15),
+            active=True,
+        ),
+        Customer(
+            customer_id="CUS-DORMANT",
+            name="Dormant Systems",
+            tier="Standard",
+            arr=Decimal("25000.00"),
+            renewal_date=date(2025, 12, 1),
+            active=False,
+        ),
     ]
 
+
+def seed_customers(db: Session) -> int:
+    if db.query(Customer).first():
+        return 0
+
+    customers = build_seed_customers()
     db.add_all(customers)
     db.commit()
+    return len(customers)
