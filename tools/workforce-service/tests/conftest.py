@@ -1,0 +1,44 @@
+import asyncio
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+TOOL_TOKEN = "test-tool-token"
+ADMIN_KEY = "test-admin-key"
+
+
+@pytest.fixture
+def auth_headers() -> dict[str, str]:
+    return {"X-Tool-Token": TOOL_TOKEN}
+
+
+@pytest.fixture
+def admin_headers() -> dict[str, str]:
+    return {"X-Admin-Key": ADMIN_KEY}
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    db_path = tmp_path / "workforce-test.db"
+    database_url = f"sqlite:///{db_path.as_posix()}"
+
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("TOOL_SHARED_TOKEN", TOOL_TOKEN)
+    monkeypatch.setenv("ADMIN_API_KEY", ADMIN_KEY)
+    monkeypatch.setenv("SERVICE_NAME", "workforce-service")
+    monkeypatch.setenv("SERVICE_PORT", "8103")
+    monkeypatch.setenv("RESERVATION_TTL_SECONDS", "300")
+
+    from app.config import get_settings
+    from app.database import session as db_session
+    from app.main import create_app
+
+    get_settings.cache_clear()
+    asyncio.run(db_session.configure_database(database_url))
+
+    with TestClient(create_app()) as test_client:
+        yield test_client
+
+    asyncio.run(db_session.engine.dispose())
+    get_settings.cache_clear()

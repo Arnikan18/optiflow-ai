@@ -1,54 +1,190 @@
-import json
-import os
 from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.models import Specialist, SpecialistSkill, SpecialistAccess, AvailabilitySlot, WorkloadRecord, Reservation, FailureMode
 
-async def seed_database(session: AsyncSession):
-    scenario_path = "/app/scenarios/phase2-demo.json"
-    if not os.path.exists(scenario_path):
-        scenario_path = os.path.join(os.path.dirname(__file__), "../../../../scenarios/phase2-demo.json")
-        
-    with open(scenario_path, "r") as f:
-        data = json.load(f)
-        
-    # Clear existing
-    await session.execute(Specialist.__table__.delete())
-    await session.execute(SpecialistSkill.__table__.delete())
-    await session.execute(SpecialistAccess.__table__.delete())
-    await session.execute(AvailabilitySlot.__table__.delete())
-    await session.execute(WorkloadRecord.__table__.delete())
-    await session.execute(Reservation.__table__.delete())
-    await session.execute(FailureMode.__table__.delete())
-    
-    # Insert specialists
-    for spec in data["workforce"]["specialists"]:
-        session.add(Specialist(**spec))
-        
-    # Insert skills
-    for sk in data["workforce"]["skills"]:
-        session.add(SpecialistSkill(**sk))
-        
-    # Insert access
-    for acc in data["workforce"]["accessPermissions"]:
-        session.add(SpecialistAccess(**acc))
-        
-    # Insert slots
-    for slot in data["workforce"]["availability"]:
-        session.add(AvailabilitySlot(**slot))
-        
-    # Insert workloads
-    for wl in data["workforce"]["workloads"]:
-        session.add(WorkloadRecord(**wl))
-        
-    # Insert default failure mode
-    fm = FailureMode(
-        mode="TIMEOUT",
-        enabled=0,
-        delay_ms=5000,
-        remaining_failures=0,
-        updated_at=datetime.now(timezone.utc).isoformat()
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import FailureMode, Reservation, Specialist, SpecialistSkill
+
+
+def _utc_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def _specialist(
+    specialist_id: str,
+    name: str,
+    email: str,
+    skills: list[str],
+    capacity: int,
+    current_workload: int,
+    availability: bool,
+    active: bool,
+) -> Specialist:
+    created_at = _utc_datetime("2026-07-22T10:00:00Z")
+    specialist = Specialist(
+        specialist_id=specialist_id,
+        name=name,
+        email=email,
+        capacity=capacity,
+        current_workload=current_workload,
+        availability=availability,
+        active=active,
+        created_at=created_at,
+        updated_at=created_at,
     )
-    session.add(fm)
-    
+    specialist.skills = [SpecialistSkill(specialist_id=specialist_id, skill=skill) for skill in skills]
+    return specialist
+
+
+def build_seed_specialists() -> list[Specialist]:
+    return [
+        _specialist(
+            "SPEC-MAYA",
+            "Maya Sen",
+            "maya.sen@example.test",
+            ["billing", "technical", "integration"],
+            2,
+            0,
+            True,
+            True,
+        ),
+        _specialist(
+            "SPEC-DANIEL",
+            "Daniel Ruiz",
+            "daniel.ruiz@example.test",
+            ["technical", "enterprise-support"],
+            2,
+            1,
+            True,
+            True,
+        ),
+        _specialist(
+            "SPEC-NIMAL",
+            "Nimal Perera",
+            "nimal.perera@example.test",
+            ["security", "integration"],
+            1,
+            1,
+            True,
+            True,
+        ),
+        _specialist(
+            "SPEC-PRIYA",
+            "Priya Raman",
+            "priya.raman@example.test",
+            ["account-management", "billing"],
+            3,
+            0,
+            False,
+            True,
+        ),
+        _specialist(
+            "SPEC-KAI",
+            "Kai Morgan",
+            "kai.morgan@example.test",
+            ["technical", "security"],
+            2,
+            0,
+            True,
+            False,
+        ),
+    ]
+
+
+def build_seed_reservations() -> list[Reservation]:
+    created_at = _utc_datetime("2026-07-22T10:00:00Z")
+    return [
+        Reservation(
+            reservation_id="RES-MAYA-PENDING",
+            specialist_id="SPEC-MAYA",
+            incident_id="INC-ALPHA-001",
+            status="PENDING",
+            created_at=created_at,
+            expires_at=_utc_datetime("2099-07-24T10:05:00Z"),
+            updated_at=created_at,
+        ),
+        Reservation(
+            reservation_id="RES-DANIEL-CONFIRMED",
+            specialist_id="SPEC-DANIEL",
+            incident_id="INC-NOVA-001",
+            status="CONFIRMED",
+            created_at=created_at,
+            expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
+            confirmed_at=_utc_datetime("2026-07-22T10:02:00Z"),
+            updated_at=_utc_datetime("2026-07-22T10:02:00Z"),
+        ),
+        Reservation(
+            reservation_id="RES-NIMAL-CONFIRMED",
+            specialist_id="SPEC-NIMAL",
+            incident_id="INC-MEDI-001",
+            status="CONFIRMED",
+            created_at=created_at,
+            expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
+            confirmed_at=_utc_datetime("2026-07-22T10:03:00Z"),
+            updated_at=_utc_datetime("2026-07-22T10:03:00Z"),
+        ),
+        Reservation(
+            reservation_id="RES-PRIYA-CANCELLED",
+            specialist_id="SPEC-PRIYA",
+            incident_id="INC-CANCELLED-001",
+            status="CANCELLED",
+            created_at=created_at,
+            expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
+            cancelled_at=_utc_datetime("2026-07-22T10:04:00Z"),
+            updated_at=_utc_datetime("2026-07-22T10:04:00Z"),
+        ),
+        Reservation(
+            reservation_id="RES-DANIEL-EXPIRED",
+            specialist_id="SPEC-DANIEL",
+            incident_id="INC-EXPIRED-001",
+            status="PENDING",
+            created_at=created_at,
+            expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
+            updated_at=created_at,
+        ),
+    ]
+
+
+async def ensure_failure_mode(session: AsyncSession) -> None:
+    result = await session.execute(select(FailureMode).limit(1))
+    if result.scalar_one_or_none() is not None:
+        return
+
+    session.add(
+        FailureMode(
+            mode="TIMEOUT",
+            enabled=0,
+            delay_ms=5000,
+            remaining_failures=0,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+    )
+
+
+async def seed_database(session: AsyncSession) -> dict[str, int]:
+    await session.execute(delete(Reservation))
+    await session.execute(delete(SpecialistSkill))
+    await session.execute(delete(Specialist))
+    specialists = build_seed_specialists()
+    reservations = build_seed_reservations()
+    session.add_all(specialists)
+    session.add_all(reservations)
+    await ensure_failure_mode(session)
     await session.commit()
+    return {"specialist_count": len(specialists), "reservation_count": len(reservations)}
+
+
+async def seed_workforce_if_empty(session: AsyncSession) -> dict[str, int]:
+    result = await session.execute(select(func.count(Specialist.id)))
+    existing = result.scalar_one() or 0
+    await ensure_failure_mode(session)
+    if existing:
+        await session.commit()
+        return {"specialist_count": 0, "reservation_count": 0}
+
+    specialists = build_seed_specialists()
+    reservations = build_seed_reservations()
+    session.add_all(specialists)
+    session.add_all(reservations)
+    await session.commit()
+    return {"specialist_count": len(specialists), "reservation_count": len(reservations)}
