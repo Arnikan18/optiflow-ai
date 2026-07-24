@@ -159,9 +159,9 @@ The CRM service is ready for a future PostgreSQL URL at the session layer. Befor
 
 ## 19. Git commit and merge details
 
-Part 2 implementation is intended for the `sanjeevan` branch with commit message `feat(crm): complete scalable customer service`.
+Part 2 implementation was committed on the `sanjeevan` branch as `ddca3a9` with commit message `feat(crm): complete scalable customer service`. Push to `origin/sanjeevan` succeeded (`39f4c84..ddca3a9`), with Git also emitting the existing local `credential-manager-core` warning.
 
-Branch-prep limitation: `git fetch origin` could not update local lowercase `origin/sanjeevan` because the repository has both `Sanjeevan` and `sanjeevan` remote refs on a Windows filesystem. Local `develop` and `origin/develop` are also divergent, so the exact Part 2 `develop` fast-forward workflow could not be completed safely without a team branch decision.
+Develop merge result: not attempted. The Part 2 merge gate requires `git checkout develop` followed by `git pull --ff-only origin develop`, but local `develop` is `8a094be` and `origin/develop` is `83fc793`; neither is an ancestor of the other. The remote also has both `Sanjeevan` and `sanjeevan` refs, which previously prevented a normal fetch from updating the lowercase remote-tracking ref on this Windows checkout. A team branch cleanup or explicit develop-base decision is needed before pushing CRM changes to `develop`.
 
 ## 20. Readiness for Part 3
 
