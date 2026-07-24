@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     workforce_service_url: str
     communication_service_url: str
     tool_shared_token: str
+    admin_api_key: str = ""
     
     tool_timeout_seconds: float = 3.0
     max_tool_retries: int = 2
