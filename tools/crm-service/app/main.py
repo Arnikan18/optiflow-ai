@@ -7,6 +7,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from optiflow_shared.logging import configure_service_logging
+from optiflow_shared.responses import validation_error_details
+
 from app.api.routes import admin_router, router as customer_router
 from app.config import get_settings
 from app.database import session as database_session
@@ -38,6 +41,10 @@ def _error_json(status_code: int, message: str, error_code: str) -> JSONResponse
 
 
 def create_app(*, initialize_on_startup: bool = True) -> FastAPI:
+    settings = get_settings()
+    global logger
+    logger = configure_service_logging(settings.service_name, settings.log_level)
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         if initialize_on_startup:
@@ -59,6 +66,15 @@ def create_app(*, initialize_on_startup: bool = True) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        logger.info(
+            "request_validation_failed",
+            extra={
+                "structured": {
+                    "request_id": getattr(request.state, "request_id", None),
+                    "validation_errors": validation_error_details(exc.errors()),
+                }
+            },
+        )
         return _error_json(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Request validation failed",
@@ -92,7 +108,7 @@ def create_app(*, initialize_on_startup: bool = True) -> FastAPI:
     def health():
         return {
             "status": "healthy",
-            "service": get_settings().service_name,
+            "service": settings.service_name,
         }
 
     @app.get("/readiness")
@@ -102,7 +118,7 @@ def create_app(*, initialize_on_startup: bool = True) -> FastAPI:
             db.execute(text("SELECT 1"))
             return {
                 "status": "ready",
-                "service": get_settings().service_name,
+                "service": settings.service_name,
                 "database": "UP",
             }
         except SQLAlchemyError:

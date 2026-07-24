@@ -1,73 +1,106 @@
+from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Integer, PrimaryKeyConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.database.base import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 class Specialist(Base):
     __tablename__ = "specialists"
-    specialist_id: Mapped[str] = mapped_column(String, primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    max_concurrent_assignments: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    daily_capacity_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    protected_emergency_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-    updated_at: Mapped[str] = mapped_column(String, nullable=False)
-    scenario_id: Mapped[str] = mapped_column(String, nullable=False)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    specialist_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(254), nullable=True, unique=True, index=True)
+    capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_workload: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    availability: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    skills: Mapped[list["SpecialistSkill"]] = relationship(
+        back_populates="specialist",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    reservations: Mapped[list["Reservation"]] = relationship(back_populates="specialist", lazy="selectin")
+
+    __table_args__ = (
+        CheckConstraint("capacity >= 1", name="ck_specialists_capacity_positive"),
+        CheckConstraint("current_workload >= 0", name="ck_specialists_workload_nonnegative"),
+        CheckConstraint("current_workload <= capacity", name="ck_specialists_workload_capacity"),
+    )
+
 
 class SpecialistSkill(Base):
     __tablename__ = "specialist_skills"
-    specialist_id: Mapped[str] = mapped_column(String, primary_key=True)
-    skill_code: Mapped[str] = mapped_column(String, primary_key=True)
-    proficiency_level: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    specialist_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("specialists.specialist_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    skill: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+
+    specialist: Mapped[Specialist] = relationship(back_populates="skills")
 
     __table_args__ = (
-        PrimaryKeyConstraint("specialist_id", "skill_code"),
+        UniqueConstraint("specialist_id", "skill", name="uq_specialist_skill"),
     )
 
-class SpecialistAccess(Base):
-    __tablename__ = "specialist_access"
-    specialist_id: Mapped[str] = mapped_column(String, primary_key=True)
-    access_code: Mapped[str] = mapped_column(String, primary_key=True)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("specialist_id", "access_code"),
-    )
-
-class AvailabilitySlot(Base):
-    __tablename__ = "availability_slots"
-    slot_id: Mapped[str] = mapped_column(String, primary_key=True)
-    specialist_id: Mapped[str] = mapped_column(String, nullable=False)
-    available_from: Mapped[str] = mapped_column(String, nullable=False)
-    available_until: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    updated_at: Mapped[str] = mapped_column(String, nullable=False)
-
-class WorkloadRecord(Base):
-    __tablename__ = "workload_records"
-    record_id: Mapped[str] = mapped_column(String, primary_key=True)
-    specialist_id: Mapped[str] = mapped_column(String, nullable=False)
-    active_assignment_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    assigned_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    after_hours_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    overnight_incident_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    recent_interruption_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 class Reservation(Base):
     __tablename__ = "reservations"
-    reservation_id: Mapped[str] = mapped_column(String, primary_key=True)
-    specialist_id: Mapped[str] = mapped_column(String, nullable=False)
-    escalation_id: Mapped[str] = mapped_column(String, nullable=False)
-    start_at: Mapped[str] = mapped_column(String, nullable=False)
-    end_at: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    idempotency_key: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
-    created_at: Mapped[str] = mapped_column(String, nullable=False)
-    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reservation_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    specialist_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("specialists.specialist_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    incident_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    specialist: Mapped[Specialist] = relationship(back_populates="reservations")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED')",
+            name="ck_reservations_status",
+        ),
+        Index("ix_reservations_specialist_incident_status", "specialist_id", "incident_id", "status"),
+    )
+
 
 class FailureMode(Base):
     __tablename__ = "failure_modes"
+
     mode_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     mode: Mapped[str] = mapped_column(String, nullable=False)
     enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

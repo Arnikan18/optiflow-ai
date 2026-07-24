@@ -1,13 +1,14 @@
 services:
   postgres:
+    profiles: ["full-stack"]
     image: postgres:16
     container_name: optiflow-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-optiflow}
+      POSTGRES_USER: ${POSTGRES_USER:-optiflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -19,111 +20,144 @@ services:
 
   crm-service:
     build:
-      context: ./tools/crm-service
+      context: .
+      dockerfile: tools/crm-service/Dockerfile
     container_name: optiflow-crm
     environment:
       SERVICE_NAME: crm-service
       SERVICE_PORT: 8101
+      ENVIRONMENT: ${APP_ENV:-development}
       DATABASE_URL: sqlite:////app/data/crm.db
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
-      SCENARIO_ID: ${SCENARIO_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
     ports:
-      - "${CRM_SERVICE_PORT}:8101"
+      - "${CRM_SERVICE_PORT:-8101}:8101"
     volumes:
       - crm_data:/app/data
       - ./scenarios:/app/scenarios:ro
-      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
-      - ./tools/crm-service/app:/app/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8101/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   incident-service:
     build:
-      context: ./tools/incident-service
+      context: .
+      dockerfile: tools/incident-service/Dockerfile
     container_name: optiflow-incident
     environment:
       SERVICE_NAME: incident-service
       SERVICE_PORT: 8102
+      ENVIRONMENT: ${APP_ENV:-development}
       DATABASE_URL: sqlite:////app/data/incident.db
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
-      SCENARIO_ID: ${SCENARIO_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+      CRM_SERVICE_URL: http://crm-service:8101
+      WORKFORCE_SERVICE_URL: http://workforce-service:8103
     ports:
-      - "${INCIDENT_SERVICE_PORT}:8102"
+      - "${INCIDENT_SERVICE_PORT:-8102}:8102"
     volumes:
       - incident_data:/app/data
       - ./scenarios:/app/scenarios:ro
-      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
-      - ./tools/incident-service/app:/app/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8102/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8102/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   workforce-service:
     build:
-      context: ./tools/workforce-service
+      context: .
+      dockerfile: tools/workforce-service/Dockerfile
     container_name: optiflow-workforce
     environment:
       SERVICE_NAME: workforce-service
       SERVICE_PORT: 8103
+      ENVIRONMENT: ${APP_ENV:-development}
       DATABASE_URL: sqlite:////app/data/workforce.db
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
-      SCENARIO_ID: ${SCENARIO_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+      INCIDENT_SERVICE_URL: http://incident-service:8102
+      RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS:-300}
     ports:
-      - "${WORKFORCE_SERVICE_PORT}:8103"
+      - "${WORKFORCE_SERVICE_PORT:-8103}:8103"
     volumes:
       - workforce_data:/app/data
       - ./scenarios:/app/scenarios:ro
-      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
-      - ./tools/workforce-service/app:/app/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8103/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8103/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   communication-service:
     build:
-      context: ./tools/communication-service
+      context: .
+      dockerfile: tools/communication-service/Dockerfile
     container_name: optiflow-communication
     environment:
       SERVICE_NAME: communication-service
       SERVICE_PORT: 8104
+      ENVIRONMENT: ${APP_ENV:-development}
       DATABASE_URL: sqlite:////app/data/communication.db
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
-      SCENARIO_ID: ${SCENARIO_ID}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
+      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+      INCIDENT_SERVICE_URL: http://incident-service:8102
+      WORKFORCE_SERVICE_URL: http://workforce-service:8103
+      ASSIGNMENT_REQUEST_TTL_SECONDS: ${ASSIGNMENT_REQUEST_TTL_SECONDS:-900}
+      SIMULATED_DELIVERY_MODE: ${SIMULATED_DELIVERY_MODE:-success}
     ports:
-      - "${COMMUNICATION_SERVICE_PORT}:8104"
+      - "${COMMUNICATION_SERVICE_PORT:-8104}:8104"
     volumes:
       - communication_data:/app/data
       - ./scenarios:/app/scenarios:ro
-      - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
-      - ./tools/communication-service/app:/app/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8104/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8104/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   core-api:
+    profiles: ["full-stack"]
     build:
       context: ./core-api
     container_name: optiflow-core
     environment:
-      APP_ENV: ${APP_ENV}
-      APP_VERSION: ${APP_VERSION}
-      DATABASE_URL: ${DATABASE_URL}
-      CRM_SERVICE_URL: ${CRM_SERVICE_URL}
-      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL}
-      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL}
-      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      APP_ENV: ${APP_ENV:-development}
+      APP_VERSION: ${APP_VERSION:-4.0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://optiflow:change-me@postgres:5432/optiflow}
+      CRM_SERVICE_URL: ${CRM_SERVICE_URL:-http://crm-service:8101}
+      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL:-http://incident-service:8102}
+      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL:-http://workforce-service:8103}
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:8104}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
     ports:
-      - "${CORE_API_PORT}:8000"
+      - "${CORE_API_PORT:-8000}:8000"
     volumes:
       - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
       - ./core-api/app:/app/app
@@ -140,13 +174,14 @@ services:
         condition: service_healthy
 
   frontend:
+    profiles: ["full-stack"]
     build:
       context: ./frontend
     container_name: optiflow-frontend
     environment:
-      VITE_CORE_API_URL: ${VITE_CORE_API_URL}
+      VITE_CORE_API_URL: ${VITE_CORE_API_URL:-http://localhost:8000}
     ports:
-      - "${FRONTEND_PORT}:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - core-api
 

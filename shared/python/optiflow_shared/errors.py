@@ -1,5 +1,26 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
+
+
+class ServiceError(Exception):
+    """Public service exception shape shared by OptiFlow HTTP tools."""
+
+    def __init__(
+        self,
+        status_code: int,
+        error_code: str,
+        public_message: str,
+        *,
+        retryable: bool = False,
+    ) -> None:
+        self.status_code = status_code
+        self.error_code = error_code
+        self.public_message = public_message
+        self.message = public_message
+        self.retryable = retryable
+        super().__init__(public_message)
+
 
 class ErrorDetail(BaseModel):
     code: str

@@ -42,11 +42,17 @@ app/
 | --- | --- | --- |
 | `SERVICE_NAME` | Service metadata | `crm-service` |
 | `SERVICE_PORT` | Service port | `8101` |
+| `ENVIRONMENT` | Runtime environment label | `development` |
 | `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./data/crm.db` |
+| `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required for customer API calls via `X-Tool-Token` | `change-me` |
 | `ADMIN_API_KEY` | Required for `POST /admin/reset` via `X-Admin-Key` | unset |
 | `SCENARIO_ID` | Demo scenario identifier | `phase2-demo` |
+| `ENABLE_SEED_DATA` | Standard seed toggle alias | unset |
 | `SEED_ON_STARTUP` | Seed when customer table is empty | `true` |
+| `REQUEST_ID_HEADER` | Request correlation header | `X-Request-ID` |
+| `MAX_REQUEST_ID_LENGTH` | Maximum accepted request ID length | `128` |
+| `MAX_PAGE_SIZE` | Standard maximum page size | `100` |
 
 SQLite is embedded in Python through the standard `sqlite3` runtime and SQLAlchemy. No separate SQLite server is required. The service creates the SQLite parent directory automatically only for SQLite URLs.
 
@@ -56,6 +62,7 @@ SQLite is embedded in Python through the standard `sqlite3` runtime and SQLAlche
 cd D:\netx\optiflow-ai\tools\crm-service
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -e ..\..\shared\python
 
 $env:DATABASE_URL='sqlite:///./data/crm.db'
 $env:TOOL_SHARED_TOKEN='change-me'
@@ -163,6 +170,7 @@ Seed records:
 
 - Customer endpoints require `X-Tool-Token`.
 - Reset requires `X-Admin-Key`.
+- Responses echo valid `X-Request-ID` values in the response header for log correlation.
 - Do not commit `.env`, local databases, tokens, credentials, or virtual environments.
 - Seed data is fictional and contains no sensitive personal data.
 
