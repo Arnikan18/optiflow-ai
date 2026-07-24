@@ -6,8 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
-if str(SERVICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(SERVICE_ROOT))
+REPO_ROOT = SERVICE_ROOT.parent.parent
+SHARED_ROOT = REPO_ROOT / "shared" / "python"
+for path in (SERVICE_ROOT, SHARED_ROOT):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 TOOL_TOKEN = "test-tool-token"
 ADMIN_KEY = "test-admin-key"
