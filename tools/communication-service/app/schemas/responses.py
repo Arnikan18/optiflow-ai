@@ -1,19 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
-
-def utc_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def serialize_datetime_value(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+from optiflow_shared.responses import (
+    error_response as shared_error_response,
+    serialize_datetime_value,
+    success_response as shared_success_response,
+    utc_timestamp,
+)
 
 
 class AssignmentRequestResponse(BaseModel):
@@ -80,18 +75,8 @@ class ResetResponseData(BaseModel):
 
 
 def success_response(data: Any, message: str = "Request completed successfully") -> dict[str, Any]:
-    return {
-        "success": True,
-        "message": message,
-        "timestamp": utc_timestamp(),
-        "data": data,
-    }
+    return shared_success_response(data, message)
 
 
 def error_response(message: str, error_code: str) -> dict[str, Any]:
-    return {
-        "success": False,
-        "message": message,
-        "errorCode": error_code,
-        "timestamp": utc_timestamp(),
-    }
+    return shared_error_response(message, error_code)

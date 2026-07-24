@@ -5,8 +5,15 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
+COPY shared/python /app/shared/python
+COPY tools/incident-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
-RUN mkdir -p /app/data
+RUN pip install --no-cache-dir /app/shared/python
+COPY tools/incident-service/app ./app
+RUN groupadd --system optiflow \
+    && useradd --system --gid optiflow --home-dir /app --shell /usr/sbin/nologin optiflow \
+    && mkdir -p /app/data \
+    && chown -R optiflow:optiflow /app
+USER optiflow
+EXPOSE 8102
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8102"]

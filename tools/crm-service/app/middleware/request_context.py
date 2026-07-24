@@ -1,15 +1,14 @@
-import uuid
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from app.config import get_settings
+from optiflow_shared.middleware import RequestContextMiddleware as SharedRequestContextMiddleware
 
-class RequestContextMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-        request.state.request_id = request_id
-        
-        run_id = request.headers.get("X-Run-ID")
-        request.state.run_id = run_id
-        
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
+
+class RequestContextMiddleware(SharedRequestContextMiddleware):
+    def __init__(self, app) -> None:
+        settings = get_settings()
+        super().__init__(
+            app,
+            service_name=settings.service_name,
+            log_level=settings.log_level,
+            header_name=settings.request_id_header,
+            max_request_id_length=settings.max_request_id_length,
+        )
