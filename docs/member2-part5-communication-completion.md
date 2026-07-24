@@ -164,7 +164,11 @@ Future delivery should use an approved queue, retry schedule, dead-letter queue,
 
 ## 30. Git commit and merge details
 
-Implementation branch: `sanjeevan`. Branch preparation confirmed the latest `develop` was already merged into `sanjeevan` before Part 5 work. Commit and merge details are recorded after the final commit/push/merge step.
+Implementation branch: `sanjeevan`. Branch preparation confirmed the latest `develop` was already merged into `sanjeevan` before Part 5 work.
+
+Part 5 implementation was committed on `sanjeevan` as `7de79a1` with commit message `feat(communication): complete scalable communication service`. Push to `origin/sanjeevan` succeeded (`cf734fa..7de79a1`) with Git also emitting the existing local `credential-manager-core` warning.
+
+Develop merge result: completed after the `sanjeevan` push. `develop` was fast-forward pulled from `origin/develop`, `sanjeevan` merged with no conflicts, Communication compile and pytest validation passed on the merged state, and merge commit `82a7026` was pushed to `origin/develop` (`cf734fa..82a7026`). This report section was then corrected in a documentation-only follow-up that should also be merged into `develop`.
 
 ## 31. Readiness for Part 6
 
