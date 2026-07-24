@@ -1,36 +1,29 @@
 """Goal Interpreter module.
 
 Responsible for parsing the manager's natural language goal input
-and mapping it to a StructuredGoal representation containing objectives,
-constraints, preferences, and parsed time horizons.
-
-Intended Usage:
-    Invoked within the `interpret_goal` node of the LangGraph flow.
-
-Extension Points:
-    - In future sets, this rule-based parsing can be replaced or enhanced with LLM calls.
+and mapping it to a StructuredGoal representation using Gemini API structured outputs,
+falling back gracefully to a deterministic rule-based engine on key failure modes.
 """
+
+import logging
+import re
+from typing import List
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError
 
 from optiflow_shared.enums import ObjectiveType
 from optiflow_shared.tool_contracts import StructuredGoal, TimeHorizon
-import re
+from app.config.settings import settings
 
-def interpret_goal_text(goal_text: str) -> StructuredGoal:
-    """Parses a natural-language goal string into a StructuredGoal.
-    
-    Uses keyword matching to identify objectives, extract duration windows,
-    and detect potential strategic ambiguities.
-    
-    Args:
-        goal_text: The user-supplied goal text.
-        
-    Returns:
-        StructuredGoal containing objectives, constraints, and parsed time horizon.
-    """
+logger = logging.getLogger("core-api.interpreter")
+
+
+def interpret_goal_text_fallback(goal_text: str, notes: List[str]) -> StructuredGoal:
+    """Fallback rule-based goal interpreter used when Gemini is unavailable or not configured."""
     normalized = goal_text.lower()
-    
-    # 1. Parse objectives
     objectives = []
+    
     if "sla" in normalized or "breach" in normalized or "commitments" in normalized:
         objectives.append(ObjectiveType.SLA_PROTECTION)
     if "renew" in normalized or "renewal" in normalized:
@@ -51,7 +44,6 @@ def interpret_goal_text(goal_text: str) -> StructuredGoal:
     if not objectives and goal_text.strip():
         objectives.append(ObjectiveType.SLA_PROTECTION)
 
-    # 2. Parse time horizon
     horizon_val = 7
     horizon_unit = "DAYS"
     
@@ -69,14 +61,12 @@ def interpret_goal_text(goal_text: str) -> StructuredGoal:
             horizon_val = int(match.group(1))
             horizon_unit = "DAYS"
 
-    # 3. Hard constraints
     hard_constraints = [
         "REQUIRED_SKILL_MATCH",
         "CONFIRMED_AVAILABILITY",
         "MAXIMUM_CAPACITY"
     ]
     
-    # 4. Soft preferences
     soft_preferences = []
     if ObjectiveType.CUSTOMER_FAIRNESS in objectives:
         soft_preferences.append("AVOID_REPEATED_POSTPONEMENT")
@@ -85,10 +75,7 @@ def interpret_goal_text(goal_text: str) -> StructuredGoal:
     else:
         soft_preferences.append("MINIMISE_CONTEXT_SWITCHING")
 
-    # 5. Requested actions
     requested_actions = ["GENERATE_ALLOCATION_PLAN"]
-
-    # 6. Detect ambiguity
     ambiguities = []
     if "important" in normalized:
         ambiguities.append("Should customer importance primarily mean nearest SLA deadline, renewal exposure or strategic account tier?")
@@ -102,5 +89,56 @@ def interpret_goal_text(goal_text: str) -> StructuredGoal:
         requested_actions=requested_actions,
         ambiguities=ambiguities,
         unsupported_requests=[],
-        interpretation_notes=[]
+        interpretation_notes=notes
     )
+
+
+def interpret_goal_text(goal_text: str) -> StructuredGoal:
+    """Parses goal text into a StructuredGoal.
+    
+    Attempts to call Gemini using the google-genai Pydantic response schema,
+    falling back to a rule-based parser on timeouts, exceptions, or missing API keys.
+    """
+    if not settings.gemini_api_key or not settings.gemini_model:
+        logger.info("Gemini API key or model is not configured. Falling back to rule-based interpreter.")
+        notes = ["LIMITED_CAPABILITY_MODE", "Fallback rule-based interpreter applied due to missing config"]
+        return interpret_goal_text_fallback(goal_text, notes)
+
+    try:
+        # Initializing Gemini Client
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        prompt = f"""
+        You are the OptiFlow AI goal interpreter. Your task is to translate a natural language manager goal into a StructuredGoal JSON object.
+        Identify target business objectives:
+        - SLA_PROTECTION (sla, commitments, breach)
+        - RENEWAL_PROTECTION (renewals, renewal exposure)
+        - COMMERCIAL_PROTECTION (arr, commercial, revenue)
+        - CUSTOMER_FAIRNESS (fairness, balance)
+        - WORKLOAD_PROTECTION (workload, capacity, overload)
+        - MINIMISE_CONTEXT_SWITCHING (context switching, fatigue)
+        
+        Analyze the manager goal text: "{goal_text}"
+        Generate a StructuredGoal structure conforming strictly to the requested schema.
+        """
+        
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=StructuredGoal,
+                temperature=0.0
+            )
+        )
+        
+        # Parse Pydantic model directly from response
+        # Google-genai parses and validates the Pydantic schema in background
+        structured_goal = StructuredGoal.model_validate_json(response.text)
+        structured_goal.interpretation_notes.append(f"Parsed via Gemini model {settings.gemini_model}")
+        return structured_goal
+
+    except (APIError, Exception) as e:
+        logger.warning(f"Gemini interpretation failed: {str(e)}. Executing rule-based fallback.")
+        notes = ["LIMITED_CAPABILITY_MODE", f"Fallback applied due to Gemini API failure: {str(e)}"]
+        return interpret_goal_text_fallback(goal_text, notes)
