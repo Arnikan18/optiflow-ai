@@ -29,11 +29,17 @@ app/
 | --- | --- | --- |
 | `SERVICE_NAME` | Service metadata | `incident-service` |
 | `SERVICE_PORT` | Runtime port | `8102` |
+| `ENVIRONMENT` | Runtime environment label | `development` |
 | `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./data/incident.db` |
+| `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required on Incident APIs as `X-Tool-Token` | `change-me` |
 | `ADMIN_API_KEY` | Required on `POST /admin/reset` as `X-Admin-Key` | unset |
 | `SCENARIO_ID` | Demo scenario metadata | `phase2-demo` |
+| `ENABLE_SEED_DATA` | Standard seed toggle alias | unset |
 | `SEED_ON_STARTUP` | Seed when the incident table is empty | `true` |
+| `REQUEST_ID_HEADER` | Request correlation header | `X-Request-ID` |
+| `MAX_REQUEST_ID_LENGTH` | Maximum accepted request ID length | `128` |
+| `MAX_PAGE_SIZE` | Standard maximum page size | `100` |
 | `CRM_SERVICE_URL` | Future CRM HTTP validation hook | unset |
 | `WORKFORCE_SERVICE_URL` | Future Workforce HTTP validation hook | unset |
 
@@ -46,6 +52,7 @@ cd D:\netx\optiflow-ai\tools\incident-service
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m pip install -e ..\..\shared\python
 ```
 
 ## Running
@@ -219,7 +226,7 @@ The service validates all external input, rejects unknown request fields, avoids
 - No optimistic concurrency version column is implemented yet; the MVP uses transactional last-write behavior.
 - No incident audit-history table is exposed through the Part 3 API.
 - CRM and Workforce references are logical only.
-- Docker Compose does not currently pass `ADMIN_API_KEY`, so reset is disabled in Compose until that variable is configured.
+- Docker Compose passes the standard service configuration and uses `/readiness` health checks for enterprise services.
 - Core still uses older `/escalations/active`; deprecated compatibility reads remain until integration aligns on `/incident/api/v1/incidents`.
 
 ## PostgreSQL And Audit History

@@ -33,14 +33,20 @@ app/
 | --- | --- | --- |
 | `SERVICE_NAME` | Service metadata | `communication-service` |
 | `SERVICE_PORT` | Runtime port | `8104` |
+| `ENVIRONMENT` | Runtime environment label | `development` |
 | `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./data/communication.db` |
+| `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required as `X-Tool-Token` on Communication APIs | `change-me` |
 | `ADMIN_API_KEY` | Required as `X-Admin-Key` on `POST /admin/reset` | unset |
 | `ASSIGNMENT_REQUEST_TTL_SECONDS` | Default pending assignment TTL | `900` |
 | `MIN_ASSIGNMENT_REQUEST_TTL_SECONDS` | Minimum accepted TTL | `30` |
 | `MAX_ASSIGNMENT_REQUEST_TTL_SECONDS` | Maximum accepted TTL | `86400` |
 | `SIMULATED_DELIVERY_MODE` | `success`, `fail`, or `recipient_rule` | `success` |
+| `ENABLE_SEED_DATA` | Standard seed toggle alias | unset |
 | `SEED_ON_STARTUP` | Seed when assignment table is empty | `true` |
+| `REQUEST_ID_HEADER` | Request correlation header | `X-Request-ID` |
+| `MAX_REQUEST_ID_LENGTH` | Maximum accepted request ID length | `128` |
+| `MAX_PAGE_SIZE` | Standard maximum page size | `100` |
 | `INCIDENT_SERVICE_URL` | Future Incident validation hook | unset |
 | `WORKFORCE_SERVICE_URL` | Future Workforce validation hook | unset |
 
@@ -53,6 +59,7 @@ cd D:\netx\optiflow-ai\tools\communication-service
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m pip install -e ..\..\shared\python
 ```
 
 ## Running
@@ -248,7 +255,7 @@ Startup seeds only when the assignment table is empty. Reset inserts:
 
 ## Security And Limits
 
-The service validates input, rejects unknown fields on new write APIs, limits page sizes, hides database/provider errors, avoids raw SQL interpolation, does not expose secrets, protects reset with `X-Admin-Key`, and avoids returning internal numeric IDs.
+The service validates input, rejects unknown fields on new write APIs, limits page sizes, returns `X-Request-ID` for correlation, hides database/provider errors, avoids raw SQL interpolation, does not expose secrets, protects reset with `X-Admin-Key`, and avoids returning internal numeric IDs.
 
 ## SQLite And PostgreSQL
 

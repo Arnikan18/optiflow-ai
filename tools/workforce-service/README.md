@@ -30,13 +30,19 @@ app/
 | --- | --- | --- |
 | `SERVICE_NAME` | Service metadata | `workforce-service` |
 | `SERVICE_PORT` | Runtime port | `8103` |
+| `ENVIRONMENT` | Runtime environment label | `development` |
 | `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./data/workforce.db` |
+| `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required as `X-Tool-Token` on Workforce APIs | `change-me` |
 | `ADMIN_API_KEY` | Required as `X-Admin-Key` on `POST /admin/reset` | unset |
 | `RESERVATION_TTL_SECONDS` | Default pending reservation TTL | `300` |
 | `MIN_RESERVATION_TTL_SECONDS` | Minimum accepted TTL | `30` |
 | `MAX_RESERVATION_TTL_SECONDS` | Maximum accepted TTL | `3600` |
+| `ENABLE_SEED_DATA` | Standard seed toggle alias | unset |
 | `SEED_ON_STARTUP` | Seed when the specialist table is empty | `true` |
+| `REQUEST_ID_HEADER` | Request correlation header | `X-Request-ID` |
+| `MAX_REQUEST_ID_LENGTH` | Maximum accepted request ID length | `128` |
+| `MAX_PAGE_SIZE` | Standard maximum page size | `100` |
 | `INCIDENT_SERVICE_URL` | Future Incident validation hook | unset |
 
 Do not commit real admin keys or `.env` files.
@@ -48,6 +54,7 @@ cd D:\netx\optiflow-ai\tools\workforce-service
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m pip install -e ..\..\shared\python
 ```
 
 ## Running
@@ -206,7 +213,7 @@ Seed reservations:
 
 ## Security And Limits
 
-The service validates all external input, rejects unknown request fields on new write APIs, limits page sizes, hides database errors, avoids raw SQL interpolation, does not expose secrets, protects reset with `X-Admin-Key`, and avoids returning internal numeric IDs.
+The service validates all external input, rejects unknown request fields on new write APIs, limits page sizes, returns `X-Request-ID` for correlation, hides database errors, avoids raw SQL interpolation, does not expose secrets, protects reset with `X-Admin-Key`, and avoids returning internal numeric IDs.
 
 ## SQLite And PostgreSQL
 
