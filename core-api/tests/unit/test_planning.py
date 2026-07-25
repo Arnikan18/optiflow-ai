@@ -181,3 +181,40 @@ def test_provider_selection():
     assert isinstance(provider, GroqLLMProvider)
     assert provider.api_key == "groq-key"
     assert provider.model_name == "llama-3.1-8b-instant"
+
+
+def test_provider_generate_text():
+    from app.goals.providers import GeminiLLMProvider, GroqLLMProvider
+    from unittest.mock import MagicMock, patch
+    
+    # 1. Test Gemini generate_text
+    gemini = GeminiLLMProvider(api_key="gemini-key", model_name="gemini-3.6-flash")
+    mock_response = MagicMock()
+    mock_response.text = "Mocked Gemini text completion"
+    
+    with patch("app.goals.providers.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_cls.return_value = mock_client
+        
+        res = gemini.generate_text("Hello Gemini")
+        assert res == "Mocked Gemini text completion"
+        mock_client.models.generate_content.assert_called_once()
+        
+    # 2. Test Groq generate_text
+    groq = GroqLLMProvider(api_key="groq-key", model_name="llama-3.1-8b-instant")
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Mocked Groq text completion"
+    mock_choices = [mock_choice]
+    mock_completion = MagicMock()
+    mock_completion.choices = mock_choices
+    
+    with patch("app.goals.providers.Groq") as mock_groq_cls:
+        mock_groq_client = MagicMock()
+        mock_groq_client.chat.completions.create.return_value = mock_completion
+        mock_groq_cls.return_value = mock_groq_client
+        
+        res = groq.generate_text("Hello Groq")
+        assert res == "Mocked Groq text completion"
+        mock_groq_client.chat.completions.create.assert_called_once()
+
