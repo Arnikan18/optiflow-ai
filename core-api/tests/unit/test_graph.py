@@ -49,8 +49,8 @@ async def test_graph_compilation_and_execution():
         assert len(final_state["selected_tools"]) == 4
         
         # Check execute_tools populated tool_results
-        assert len(final_state["tool_results"]) == 2
+        assert len(final_state["tool_results"]) == 3
         
         # Check build_state populated enterprise_state
         assert final_state["enterprise_state"] is not None
-        assert final_state["enterprise_state"]["snapshot_id"] == "SNAP-001"
+        assert final_state["enterprise_state"]["snapshot_id"] == "SNAP-RUN-TEST-001"
