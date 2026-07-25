@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 from optiflow_shared.tool_contracts import StructuredGoal, TimeHorizon
-from app.goals.interpreter import interpret_goal_text
+from app.goals import interpreter
 from app.goals.validator import validate_goal
 from app.evidence.planner import build_evidence_requirements
 from app.agent.graph import compiled_graph
@@ -27,7 +27,7 @@ async def test_example_1_renewals_and_sla():
          patch("app.agent.nodes.interpret_goal.interpret_goal_text", return_value=mock_goal):
          
         # 1. Interpret
-        goal = interpret_goal_text(goal_text)
+        goal = interpreter.interpret_goal_text(goal_text)
         assert "SLA_PROTECTION" in goal.objectives
         assert "RENEWAL_PROTECTION" in goal.objectives
         
@@ -81,7 +81,7 @@ async def test_example_2_workload_fairly():
          patch("app.agent.nodes.interpret_goal.interpret_goal_text", return_value=mock_goal):
          
         # 1. Interpret
-        goal = interpret_goal_text(goal_text)
+        goal = interpreter.interpret_goal_text(goal_text)
         assert "CUSTOMER_FAIRNESS" in goal.objectives
         assert "WORKLOAD_PROTECTION" in goal.objectives
         
@@ -113,7 +113,7 @@ async def test_example_2_workload_fairly():
 async def test_example_3_empty_goal():
     # Input: empty string
     goal_text = "   "
-    goal = interpret_goal_text(goal_text)
+    goal = interpreter.interpret_goal_text(goal_text)
     val_res = validate_goal(goal)
     
     # Must fail validation
@@ -139,7 +139,7 @@ async def test_example_4_duplicate_objectives():
     )
     
     with patch("app.goals.interpreter.interpret_goal_text", return_value=mock_goal):
-        goal = interpret_goal_text(goal_text)
+        goal = interpreter.interpret_goal_text(goal_text)
         
         # objectives list has deduplicated after validation
         val_res = validate_goal(goal)

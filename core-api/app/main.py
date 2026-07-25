@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
 from app.config.settings import settings
@@ -9,9 +9,7 @@ from app.adapters.tool_client import ToolClient
 
 logger = logging.getLogger("core-api.main")
 
-# Database session setup for PostgreSQL
-engine = create_async_engine(settings.database_url, echo=False)
-async_session = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+from app.database.session import async_session, engine
 
 async def get_db():
     async with async_session() as session:
