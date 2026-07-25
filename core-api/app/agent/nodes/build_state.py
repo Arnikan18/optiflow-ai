@@ -1,6 +1,8 @@
 from app.agent.state import AgentState
 
 from datetime import datetime
+from app.database.session import async_session
+import app.database.persistence as persistence
 
 async def build_state(state: AgentState) -> dict:
     print("[build_state]\nEnterprise state built")
@@ -37,7 +39,7 @@ async def build_state(state: AgentState) -> dict:
     # 1. CRM Evidence
     for cus in customers:
         collected_evidence.append({
-            "evidence_id": f"EV-CRM-{cus.get('customer_id', 'UNKNOWN')}",
+            "evidence_id": f"EV-{run_id}-CRM-{cus.get('customer_id', 'UNKNOWN')}",
             "run_id": run_id,
             "evidence_type": "CUSTOMER_IDENTITY",
             "entity_type": "CUSTOMER",
@@ -53,7 +55,7 @@ async def build_state(state: AgentState) -> dict:
     # 2. Incident Evidence
     for inc in escalations:
         collected_evidence.append({
-            "evidence_id": f"EV-INC-{inc.get('incident_id', 'UNKNOWN')}",
+            "evidence_id": f"EV-{run_id}-INC-{inc.get('incident_id', 'UNKNOWN')}",
             "run_id": run_id,
             "evidence_type": "ACTIVE_ESCALATIONS",
             "entity_type": "INCIDENT",
@@ -69,7 +71,7 @@ async def build_state(state: AgentState) -> dict:
     # 3. Specialist Evidence
     for spec in specialists:
         collected_evidence.append({
-            "evidence_id": f"EV-WRK-{spec.get('specialist_id', 'UNKNOWN')}",
+            "evidence_id": f"EV-{run_id}-WRK-{spec.get('specialist_id', 'UNKNOWN')}",
             "run_id": run_id,
             "evidence_type": "SPECIALIST_SKILLS",
             "entity_type": "SPECIALIST",
@@ -92,6 +94,27 @@ async def build_state(state: AgentState) -> dict:
         "assignment_requests": assignment_requests
     }
     
+    async with async_session() as session:
+        async with session.begin():
+            await persistence.save_evidence_items(session, run_id, 1, collected_evidence)
+            await persistence.save_state_snapshot(session, run_id, 1, enterprise_state)
+            await persistence.save_agent_run(
+                session=session,
+                run_id=run_id,
+                scenario_id="phase2-demo",
+                status="STATE_BUILT",
+                current_node="build_state"
+            )
+            await persistence.save_run_event(
+                session=session,
+                run_id=run_id,
+                sequence_number=4,
+                event_type="STATE_BUILT",
+                source="build_state",
+                summary="Unified database snapshot state cache successfully constructed and saved",
+                state_version=1
+            )
+            
     return {
         "enterprise_state": enterprise_state,
         "collected_evidence": collected_evidence

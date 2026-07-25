@@ -2,6 +2,8 @@ import asyncio
 import logging
 from app.agent.state import AgentState
 from app.adapters.tool_client import ToolClient
+from app.database.session import async_session
+import app.database.persistence as persistence
 
 logger = logging.getLogger("core-api.nodes.execute_tools")
 
@@ -104,4 +106,24 @@ async def execute_tools(state: AgentState) -> dict:
                     "records_fetched": records_fetched
                 })
                 
+    async with async_session() as session:
+        async with session.begin():
+            await persistence.save_agent_run(
+                session=session,
+                run_id=run_id,
+                scenario_id="phase2-demo",
+                status="TOOLS_EXECUTED",
+                current_node="execute_tools"
+            )
+            await persistence.save_run_event(
+                session=session,
+                run_id=run_id,
+                sequence_number=3,
+                event_type="TOOLS_EXECUTED",
+                source="execute_tools",
+                summary="Telemetry tools queried and responses fetched successfully",
+                payload_dict={"tool_results_summary": [{"tool": tr["tool"], "status": tr["status"], "records": tr.get("records_fetched", 0)} for tr in tool_results]},
+                state_version=1
+            )
+            
     return {"tool_results": tool_results}
