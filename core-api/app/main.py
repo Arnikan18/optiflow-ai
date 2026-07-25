@@ -186,3 +186,106 @@ async def control_reset_v1():
 @app.post("/api/control/reset", deprecated=True)
 async def control_reset_legacy():
     return await execute_system_reset()
+
+
+# --- AGENT RUN CONTROL ROUTING ---
+import uuid
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from app.agent.manager import start_new_run, resume_run_from_checkpoint, load_last_checkpoint
+
+class CreateRunRequest(BaseModel):
+    goal_text: str
+
+class ApproveRunRequest(BaseModel):
+    approval_status: str
+    recommended_plan: Optional[Dict[str, Any]] = None
+
+class ClarifyRunRequest(BaseModel):
+    clarification_reply: str
+
+@app.post("/api/v1/runs", status_code=status.HTTP_201_CREATED)
+async def create_run(body: CreateRunRequest, db: AsyncSession = Depends(get_db)):
+    run_id = f"RUN-{uuid.uuid4().hex[:8].upper()}"
+    await start_new_run(run_id, body.goal_text)
+    return {"run_id": run_id, "status": "RECEIVED"}
+
+@app.get("/api/v1/runs/{run_id}")
+async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        text("SELECT run_id, status, current_node, recommended_plan_id FROM agent_runs WHERE run_id = :r"),
+        {"r": run_id}
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+        
+    checkpoint = await load_last_checkpoint(run_id)
+    candidate_plans = checkpoint.get("candidate_plans", []) if checkpoint else []
+    
+    return {
+        "run_id": row[0],
+        "status": row[1],
+        "current_node": row[2],
+        "recommended_plan_id": row[3],
+        "candidate_plans": candidate_plans
+    }
+
+@app.post("/api/v1/runs/{run_id}/approve")
+async def approve_run(run_id: str, body: ApproveRunRequest, db: AsyncSession = Depends(get_db)):
+    success = await resume_run_from_checkpoint(run_id, body.approval_status, body.recommended_plan)
+    if not success:
+        raise HTTPException(status_code=404, detail="Run checkpoint not found")
+    return {"status": "success", "message": f"Run resumed with status: {body.approval_status}"}
+
+@app.post("/api/v1/runs/{run_id}/clarify")
+async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = Depends(get_db)):
+    success = await resume_run_from_checkpoint(run_id, "APPROVED")
+    if not success:
+        raise HTTPException(status_code=404, detail="Run checkpoint not found")
+    return {"status": "success", "message": "Run resumed after clarification"}
+
+
+# --- SERVER-SENT EVENTS (SSE) STREAMING ---
+import json
+from sse_starlette.sse import EventSourceResponse
+
+@app.get("/api/v1/runs/{run_id}/stream")
+async def run_events_stream(run_id: str):
+    """Streams real-time agent run events for the given run_id using SSE."""
+    
+    async def event_generator():
+        # 1. Fetch historical events from database to feed client history
+        async with async_session() as session:
+            res = await session.execute(
+                text("SELECT sequence_number, event_type, source, summary, payload, state_version FROM run_events WHERE run_id = :r ORDER BY sequence_number"),
+                {"r": run_id}
+            )
+            rows = res.fetchall()
+            for r in rows:
+                ev = {
+                    "run_id": run_id,
+                    "sequence_number": r[0],
+                    "event_type": r[1],
+                    "source": r[2],
+                    "summary": r[3],
+                    "payload": r[4],
+                    "state_version": r[5]
+                }
+                yield {"event": "run_event", "data": json.dumps(ev)}
+                
+        # 2. Subscribe to active updates broker queue
+        from app.agent.events import event_publisher
+        queue = event_publisher.subscribe(run_id)
+        try:
+            while True:
+                # Wait for next event published asynchronously
+                event_data = await queue.get()
+                yield {"event": "run_event", "data": json.dumps(event_data)}
+                queue.task_done()
+        except asyncio.CancelledError:
+            # Clean up subscriber list when client disconnects
+            event_publisher.unsubscribe(run_id, queue)
+            raise
+            
+    return EventSourceResponse(event_generator())

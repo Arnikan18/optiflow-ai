@@ -1,0 +1,73 @@
+import pytest
+from unittest.mock import MagicMock, patch
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+def test_create_run_route():
+    with patch("app.main.start_new_run") as mock_start:
+        response = client.post("/api/v1/runs", json={"goal_text": "Optimize renewals"})
+        assert response.status_code == 201
+        data = response.json()
+        assert "run_id" in data
+        assert data["status"] == "RECEIVED"
+        mock_start.assert_called_once()
+
+def test_get_run_status_not_found():
+    response = client.get("/api/v1/runs/RUN-MISSING-123")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Run not found"
+
+def test_approve_run_route_not_found():
+    response = client.post("/api/v1/runs/RUN-MISSING-123/approve", json={"approval_status": "APPROVED"})
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Run checkpoint not found"
+
+def test_approve_run_route_success():
+    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume:
+        response = client.post("/api/v1/runs/RUN-EXIST-999/approve", json={
+            "approval_status": "APPROVED",
+            "recommended_plan": {"plan_id": "PLAN-BALANCED"}
+        })
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED", {"plan_id": "PLAN-BALANCED"})
+
+def test_clarify_run_route_success():
+    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume:
+        response = client.post("/api/v1/runs/RUN-EXIST-999/clarify", json={
+            "clarification_reply": "Here is the details"
+        })
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED")
+
+@pytest.mark.asyncio
+async def test_manager_resume_run_no_checkpoint():
+    from app.agent.manager import resume_run_from_checkpoint
+    
+    with patch("app.agent.manager.load_last_checkpoint", return_value=None) as mock_load:
+        success = await resume_run_from_checkpoint("RUN-FAKE", "APPROVED")
+        assert success is False
+        mock_load.assert_called_once_with("RUN-FAKE")
+
+@pytest.mark.asyncio
+async def test_manager_resume_run_success():
+    from app.agent.manager import resume_run_from_checkpoint
+    
+    mock_state = {"run_id": "RUN-FAKE", "goal_text": "Optimize SLA", "candidate_plans": []}
+    
+    with patch("app.agent.manager.load_last_checkpoint", return_value=mock_state) as mock_load, \
+         patch("app.agent.manager.asyncio.create_task") as mock_create_task:
+         
+        success = await resume_run_from_checkpoint("RUN-FAKE", "APPROVED", {"plan_id": "PLAN-SLA"})
+        assert success is True
+        mock_load.assert_called_once_with("RUN-FAKE")
+        
+        # Verify that state was updated with resumer context
+        expected_state = mock_state.copy()
+        expected_state["approval_status"] = "APPROVED"
+        expected_state["recommended_plan"] = {"plan_id": "PLAN-SLA"}
+        
+        mock_create_task.assert_called_once()

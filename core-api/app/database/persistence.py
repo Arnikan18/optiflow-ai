@@ -119,6 +119,23 @@ async def save_run_event(
     )
     session.add(event)
     await session.flush()
+    
+    # Dispatch event to active Server-Sent Event subscribers
+    try:
+        from app.agent.events import event_publisher
+        event_publisher.publish(run_id, {
+            "event_id": event_id,
+            "run_id": run_id,
+            "sequence_number": sequence_number,
+            "event_type": event_type,
+            "source": source,
+            "summary": summary,
+            "payload": payload_dict,
+            "state_version": state_version
+        })
+    except Exception as pe:
+        pass
+        
     return event
 
 async def save_evidence_items(
