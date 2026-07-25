@@ -56,6 +56,11 @@ class LLMProvider(ABC):
         """Parses raw manager goal text into a StructuredGoal representation."""
         pass
 
+    @abstractmethod
+    def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
+        """Generates plain text response for the given prompt."""
+        pass
+
 class GeminiLLMProvider(LLMProvider):
     def __init__(self, api_key: str, model_name: str):
         self.api_key = api_key
@@ -94,6 +99,20 @@ class GeminiLLMProvider(LLMProvider):
         
         gemini_res = GeminiStructuredGoal.model_validate_json(response.text)
         return map_flat_to_structured_goal(gemini_res, self.model_name)
+
+    def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
+        if not self.api_key or not self.model_name:
+            raise ValueError("Gemini API key or model name is missing.")
+            
+        client = genai.Client(api_key=self.api_key)
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=temperature
+            )
+        )
+        return response.text
 
 class GroqLLMProvider(LLMProvider):
     def __init__(self, api_key: str, model_name: str):
@@ -150,6 +169,20 @@ You must output a JSON object with this exact structure:
         raw_content = chat_completion.choices[0].message.content
         gemini_res = GeminiStructuredGoal.model_validate_json(raw_content)
         return map_flat_to_structured_goal(gemini_res, self.model_name)
+
+    def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
+        if not self.api_key or not self.model_name:
+            raise ValueError("Groq API key or model name is missing.")
+            
+        client = Groq(api_key=self.api_key)
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            model=self.model_name,
+            temperature=temperature
+        )
+        return chat_completion.choices[0].message.content
 
 def get_llm_provider(provider_name: str, settings) -> LLMProvider:
     provider_name_lower = provider_name.strip().lower()

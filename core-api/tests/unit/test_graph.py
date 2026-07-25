@@ -54,3 +54,11 @@ async def test_graph_compilation_and_execution():
         # Check build_state populated enterprise_state
         assert final_state["enterprise_state"] is not None
         assert final_state["enterprise_state"]["snapshot_id"] == "SNAP-RUN-TEST-001"
+        
+        # Check generate_plans populated candidate_plans and explanations
+        assert "candidate_plans" in final_state
+        assert len(final_state["candidate_plans"]) == 2
+        for plan in final_state["candidate_plans"]:
+            assert "explanation" in plan
+            assert plan["explanation"] is not None
+            assert len(plan["explanation"]) > 0

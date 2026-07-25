@@ -1,6 +1,7 @@
 import logging
 from app.agent.state import AgentState
 from app.optimizer.solver import generate_optimization_plans
+from app.optimizer.explainer import explain_plan
 from app.database.session import async_session
 import app.database.persistence as persistence
 
@@ -20,6 +21,10 @@ async def generate_plans(state: AgentState) -> dict:
     # Generate plans using the custom priority constraint solver
     plans = generate_optimization_plans(customers, escalations, specialists)
     
+    # Generate natural language justifications for each computed plan
+    for plan in plans:
+        plan["explanation"] = explain_plan(plan["profile"], plan, ent_state)
+        
     # Recommend the plan with the highest objective value
     recommended = max(plans, key=lambda p: p["objective_value"]) if plans else None
     recommended_id = recommended["plan_id"] if recommended else None
