@@ -6,10 +6,13 @@ class Settings(BaseSettings):
     app_version: str = "4.0"
     database_url: str
     
+    llm_provider: str = "gemini"
     gemini_api_key: str = ""
     gemini_model: str = ""
     gemini_timeout_seconds: int = 8
     gemini_max_retries: int = 1
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
     prompt_version: str = "4.0"
     
     crm_service_url: str
