@@ -8,10 +8,6 @@ falling back gracefully to a deterministic rule-based engine on key failure mode
 import logging
 import re
 from typing import List
-from google import genai
-from google.genai import types
-from google.genai.errors import APIError
-
 from optiflow_shared.enums import ObjectiveType
 from optiflow_shared.tool_contracts import StructuredGoal, TimeHorizon
 from app.config.settings import settings
@@ -93,52 +89,43 @@ def interpret_goal_text_fallback(goal_text: str, notes: List[str]) -> Structured
     )
 
 
+from pydantic import BaseModel
+
+from app.goals.providers import get_llm_provider
+
+
 def interpret_goal_text(goal_text: str) -> StructuredGoal:
     """Parses goal text into a StructuredGoal.
     
-    Attempts to call Gemini using the google-genai Pydantic response schema,
-    falling back to a rule-based parser on timeouts, exceptions, or missing API keys.
+    Attempts to call the configured LLM provider (Gemini or Groq) using a structured JSON schema,
+    falling back gracefully to a deterministic rule-based parser on any failures.
     """
-    if not settings.gemini_api_key or not settings.gemini_model:
-        logger.info("Gemini API key or model is not configured. Falling back to rule-based interpreter.")
+    if not goal_text or not goal_text.strip():
+        return StructuredGoal(
+            summary="",
+            objectives=[],
+            time_horizon=TimeHorizon(value=7, unit="DAYS"),
+            hard_constraints=[],
+            soft_preferences=[],
+            requested_actions=[],
+            ambiguities=[],
+            unsupported_requests=[],
+            interpretation_notes=["Empty goal text input"]
+        )
+
+    provider_name = settings.llm_provider or "gemini"
+    api_key = settings.groq_api_key if provider_name.lower() == "groq" else settings.gemini_api_key
+    model = settings.groq_model if provider_name.lower() == "groq" else settings.gemini_model
+    
+    if not api_key or not model:
+        logger.info(f"{provider_name} API key or model is not configured. Falling back to rule-based interpreter.")
         notes = ["LIMITED_CAPABILITY_MODE", "Fallback rule-based interpreter applied due to missing config"]
         return interpret_goal_text_fallback(goal_text, notes)
 
     try:
-        # Initializing Gemini Client
-        client = genai.Client(api_key=settings.gemini_api_key)
-        
-        prompt = f"""
-        You are the OptiFlow AI goal interpreter. Your task is to translate a natural language manager goal into a StructuredGoal JSON object.
-        Identify target business objectives:
-        - SLA_PROTECTION (sla, commitments, breach)
-        - RENEWAL_PROTECTION (renewals, renewal exposure)
-        - COMMERCIAL_PROTECTION (arr, commercial, revenue)
-        - CUSTOMER_FAIRNESS (fairness, balance)
-        - WORKLOAD_PROTECTION (workload, capacity, overload)
-        - MINIMISE_CONTEXT_SWITCHING (context switching, fatigue)
-        
-        Analyze the manager goal text: "{goal_text}"
-        Generate a StructuredGoal structure conforming strictly to the requested schema.
-        """
-        
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=StructuredGoal,
-                temperature=0.0
-            )
-        )
-        
-        # Parse Pydantic model directly from response
-        # Google-genai parses and validates the Pydantic schema in background
-        structured_goal = StructuredGoal.model_validate_json(response.text)
-        structured_goal.interpretation_notes.append(f"Parsed via Gemini model {settings.gemini_model}")
-        return structured_goal
-
-    except (APIError, Exception) as e:
-        logger.warning(f"Gemini interpretation failed: {str(e)}. Executing rule-based fallback.")
-        notes = ["LIMITED_CAPABILITY_MODE", f"Fallback applied due to Gemini API failure: {str(e)}"]
+        provider = get_llm_provider(provider_name, settings)
+        return provider.interpret_goal(goal_text)
+    except Exception as e:
+        logger.warning(f"{provider_name} interpretation failed: {str(e)}. Executing rule-based fallback.")
+        notes = ["LIMITED_CAPABILITY_MODE", f"Fallback applied due to {provider_name} API failure: {str(e)}"]
         return interpret_goal_text_fallback(goal_text, notes)

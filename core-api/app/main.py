@@ -40,14 +40,18 @@ async def health() -> dict[str, str]:
         "version": "4.0"
     }
 
-# Helper health checker using ToolClient
+# Helper health checker using direct httpx request
 async def verify_health_status(tool_client: ToolClient, service_name: str, base_url: str) -> str:
+    import httpx
     try:
-        data = await tool_client._request("GET", base_url, "/health")
-        # Tool health endpoints return e.g. {"status": "healthy"} or similar
-        return "UP"
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{base_url}/health")
+            if response.status_code == 200:
+                return "UP"
+        return "DOWN"
     except Exception:
         return "DOWN"
+
 
 async def execute_health_aggregation(db: AsyncSession) -> dict:
     # Check PostgreSQL
