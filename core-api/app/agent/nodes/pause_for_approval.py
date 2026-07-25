@@ -8,6 +8,11 @@ async def pause_for_approval(state: AgentState) -> dict:
     If approval is not yet received, status remains 'WAITING_FOR_APPROVAL'
     and graph halts at this checkpoint.
     """
+    app_status = state.get("approval_status")
+    if app_status == "APPROVED":
+        print("[pause_for_approval] Resuming: Approval status is APPROVED. Bypassing halt.")
+        return {"status": "EXECUTING"}
+        
     print("[pause_for_approval]\nHalting run. Waiting for manager approval...")
     
     run_id = state.get("run_id", "unknown")
