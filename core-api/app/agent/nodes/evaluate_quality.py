@@ -69,7 +69,7 @@ async def evaluate_quality(state: AgentState) -> dict:
     try:
         async with async_session() as session:
             await session.execute(
-                text("UPDATE state_snapshots SET quality = :q WHERE run_id = :r"),
+                text("UPDATE state_snapshots SET quality_category = :q WHERE run_id = :r"),
                 {"q": quality_status, "r": run_id}
             )
             await session.commit()

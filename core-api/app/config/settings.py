@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     max_clarification_rounds: int = 1
     max_replan_count: int = 5
     
+    optimization_strategy: str = "greedy"
+    solver_time_limit_seconds: float = 3.0
+    
     sse_heartbeat_seconds: int = 15
     demo_mode: bool = True
     demo_step_delay_ms: int = 250

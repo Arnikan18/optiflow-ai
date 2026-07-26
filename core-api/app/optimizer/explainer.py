@@ -27,11 +27,16 @@ def build_explanation_prompt(profile: str, plan: Dict[str, Any], ent_state: Dict
         
     allocations_str = "\n".join(alloc_narrative)
     
+    meta = plan.get("metadata", {})
+    solver_type = meta.get("solver_type", "Greedy")
+    fallback_msg = " (Greedy Fallback Active)" if meta.get("fallback_status") else ""
+    
     prompt = f"""
 You are the OptiFlow AI scheduling advisor reporting to the Customer Support Manager.
 Your task is to write a professional, concise, bulleted natural language justification explaining why this allocation plan was recommended.
 
 PLAN PROFILE: {profile}
+SOLVER STRATEGY: {solver_type}{fallback_msg}
 ALLOCATIONS IN THIS PLAN:
 {allocations_str}
 
@@ -62,11 +67,13 @@ def generate_deterministic_fallback_explanation(profile: str, plan: Dict[str, An
     customers = ent_state.get("customers", [])
     
     specialists_used = len(set(a.get("specialist_id") for a in allocations if a.get("specialist_id")))
+    meta = plan.get("metadata", {})
+    solver_type = meta.get("solver_type", "Greedy")
     
     if profile.lower() == "balanced":
         text = (
             f"### Plan Justification: Balanced Profile\n"
-            f"This plan was generated to optimize work distribution and prevent team burnout.\n\n"
+            f"This plan was generated via the {solver_type} strategy to optimize work distribution and prevent team burnout.\n\n"
             f"**Key Allocations:**\n"
             f"- Allocated {assigned_count} active incidents across {specialists_used} specialists matching skill constraints.\n"
             f"- Left {unassigned_count} incidents unassigned due to capacity limits or skill mismatch.\n\n"
@@ -78,8 +85,8 @@ def generate_deterministic_fallback_explanation(profile: str, plan: Dict[str, An
         # Calculate critical items count
         critical_count = sum(1 for e in escalations if str(e.get("priority", "")).upper() in ("CRITICAL", "HIGH"))
         text = (
-            f"### Plan Justification: SLA-First Profile\n"
-            f"This plan was generated to prioritize urgent SLA commitments and strategic customer ARR accounts.\n\n"
+            f"### Plan Justification: {profile} Profile\n"
+            f"This plan was generated via the {solver_type} strategy to prioritize urgent SLA commitments and strategic customer ARR accounts.\n\n"
             f"**Key Allocations:**\n"
             f"- Prioritized {critical_count} critical/high escalations and strategic accounts first.\n"
             f"- Assigned {assigned_count} incidents to specialists matching skill requirements.\n\n"
