@@ -31,7 +31,10 @@ async def evaluate_quality(state: AgentState) -> dict:
         if not c_id:
             missing_fields.append("Customer missing customer_id")
             continue
-        arr = c.get("arr", 0.0)
+        try:
+            arr = float(c.get("arr") or 0.0)
+        except (ValueError, TypeError):
+            arr = 0.0
         if arr < 0:
             data_conflicts.append(f"Customer {c_id} has negative ARR: {arr}")
             
