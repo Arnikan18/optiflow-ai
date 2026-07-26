@@ -39,6 +39,20 @@ async def generate_plans(state: AgentState) -> dict:
                 current_node="generate_plans",
                 recommended_plan_id=recommended_id
             )
+            # Check if a fallback occurred
+            fallback_occurred = any(p.get("metadata", {}).get("fallback_status") for p in plans)
+            if fallback_occurred:
+                await persistence.save_run_event(
+                    session=session,
+                    run_id=run_id,
+                    sequence_number=4,
+                    event_type="SOLVER_FALLBACK",
+                    source="generate_plans",
+                    summary="Primary CP-SAT solver failed or timed out. Transparently fell back to Greedy Optimizer.",
+                    payload_dict={},
+                    state_version=1
+                )
+                
             await persistence.save_run_event(
                 session=session,
                 run_id=run_id,
