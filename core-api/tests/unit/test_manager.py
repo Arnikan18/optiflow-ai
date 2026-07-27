@@ -48,7 +48,11 @@ def test_clarify_run_route_success():
         })
         assert response.status_code == 200
         assert response.json()["status"] == "success"
-        mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED")
+        mock_resume.assert_called_once_with(
+            run_id="RUN-EXIST-999", 
+            approval_status="APPROVED", 
+            clarification_reply="Here is the details"
+        )
 
 @pytest.mark.asyncio
 async def test_manager_resume_run_no_checkpoint():
@@ -77,4 +81,30 @@ async def test_manager_resume_run_success():
         expected_state["approval_status"] = "APPROVED"
         expected_state["recommended_plan"] = {"plan_id": "PLAN-SLA"}
         
+        mock_create_task.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_manager_resume_run_clarification():
+    from app.agent.manager import resume_run_from_checkpoint
+    
+    mock_state = {
+        "run_id": "RUN-FAKE",
+        "goal_text": "Optimize",
+        "structured_goal": {"ambiguities": ["Which tiers?"]}
+    }
+    
+    with patch("app.agent.manager.load_last_checkpoint", return_value=mock_state) as mock_load, \
+         patch("app.agent.manager.asyncio.create_task") as mock_create_task:
+         
+        success = await resume_run_from_checkpoint(
+            run_id="RUN-FAKE",
+            approval_status="APPROVED",
+            clarification_reply="Tier 1"
+        )
+        assert success is True
+        mock_load.assert_called_once_with("RUN-FAKE")
+        
+        # Verify that state was updated with clarification context and ambiguities cleared
+        assert mock_state["goal_text"] == "Optimize (Clarification: Tier 1)"
+        assert mock_state["structured_goal"]["ambiguities"] == []
         mock_create_task.assert_called_once()

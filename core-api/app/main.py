@@ -249,7 +249,11 @@ async def approve_run(run_id: str, body: ApproveRunRequest, db: AsyncSession = D
 
 @app.post("/api/v1/runs/{run_id}/clarify")
 async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = Depends(get_db)):
-    success = await resume_run_from_checkpoint(run_id, "APPROVED")
+    success = await resume_run_from_checkpoint(
+        run_id=run_id, 
+        approval_status="APPROVED", 
+        clarification_reply=body.clarification_reply
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Run checkpoint not found")
     return {"status": "success", "message": "Run resumed after clarification"}
