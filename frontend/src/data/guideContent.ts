@@ -107,7 +107,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     keyConcept: {
       term: 'Evidence Freshness',
       definition:
-        'Each data point is timestamped. A specialist's availability updated 5 minutes ago is weighted more heavily than one updated 2 hours ago. Freshness directly affects optimisation confidence.',
+        "Each data point is timestamped. A specialist's availability updated 5 minutes ago is weighted more heavily than one updated 2 hours ago. Freshness directly affects optimisation confidence.",
     },
   },
   {
@@ -181,7 +181,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     whatToWatch:
       'Execution receipts and final allocation metrics. These confirm precisely what changed in each system as a direct result of your decision.',
     actionPrompt:
-      'Review the completion summary. Note which customers are now served and which specialists are assigned. This session's record is your operational log.',
+      "Review the completion summary. Note which customers are now served and which specialists are assigned. This session's record is your operational log.",
     keyConcept: {
       term: 'Execution Receipts',
       definition:
