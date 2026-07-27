@@ -1,4 +1,6 @@
 import logging
+import asyncio
+from collections import defaultdict
 from datetime import datetime
 from uuid import uuid4
 from typing import Dict, Any, List, Optional
@@ -8,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import BusinessGoal, AgentRun, RunEvent, GraphCheckpoint, StateSnapshot, EvidenceItem
 
 logger = logging.getLogger("core-api.database.persistence")
+
+_run_locks = defaultdict(asyncio.Lock)
 
 async def save_business_goal(
     session: AsyncSession,
@@ -104,39 +108,45 @@ async def save_run_event(
     payload_dict: Optional[Dict[str, Any]] = None,
     state_version: Optional[int] = None
 ) -> RunEvent:
-    """Inserts a new audit log event in run_events."""
-    event_id = str(uuid4())
-    event = RunEvent(
-        event_id=event_id,
-        run_id=run_id,
-        sequence_number=sequence_number,
-        event_type=event_type,
-        source=source,
-        summary=summary,
-        payload=payload_dict,
-        state_version=state_version,
-        created_at=datetime.utcnow()
-    )
-    session.add(event)
-    await session.flush()
-    
-    # Dispatch event to active Server-Sent Event subscribers
-    try:
-        from app.agent.events import event_publisher
-        event_publisher.publish(run_id, {
-            "event_id": event_id,
-            "run_id": run_id,
-            "sequence_number": sequence_number,
-            "event_type": event_type,
-            "source": source,
-            "summary": summary,
-            "payload": payload_dict,
-            "state_version": state_version
-        })
-    except Exception as pe:
-        pass
+    """Inserts a new audit log event in run_events with transaction-safe dynamic sequence numbering."""
+    async with _run_locks[run_id]:
+        stmt = select(RunEvent.sequence_number).where(RunEvent.run_id == run_id).order_by(RunEvent.sequence_number.desc())
+        res = await session.execute(stmt)
+        max_seq = res.scalars().first()
+        actual_seq = (max_seq or 0) + 1
+
+        event_id = str(uuid4())
+        event = RunEvent(
+            event_id=event_id,
+            run_id=run_id,
+            sequence_number=actual_seq,
+            event_type=event_type,
+            source=source,
+            summary=summary,
+            payload=payload_dict,
+            state_version=state_version,
+            created_at=datetime.utcnow()
+        )
+        session.add(event)
+        await session.flush()
         
-    return event
+        # Dispatch event to active Server-Sent Event subscribers
+        try:
+            from app.agent.events import event_publisher
+            event_publisher.publish(run_id, {
+                "event_id": event_id,
+                "run_id": run_id,
+                "sequence_number": actual_seq,
+                "event_type": event_type,
+                "source": source,
+                "summary": summary,
+                "payload": payload_dict,
+                "state_version": state_version
+            })
+        except Exception as pe:
+            pass
+            
+        return event
 
 async def save_evidence_items(
     session: AsyncSession,
