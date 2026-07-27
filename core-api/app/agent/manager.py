@@ -47,7 +47,8 @@ async def load_last_checkpoint(run_id: str) -> Optional[Dict[str, Any]]:
 async def resume_run_from_checkpoint(
     run_id: str, 
     approval_status: str, 
-    recommended_plan: Optional[Dict[str, Any]] = None
+    recommended_plan: Optional[Dict[str, Any]] = None,
+    clarification_reply: Optional[str] = None
 ) -> bool:
     """Restores the last checkpoint state, injects decision flags, and resumes execution."""
     checkpoint_state = await load_last_checkpoint(run_id)
@@ -59,6 +60,14 @@ async def resume_run_from_checkpoint(
     checkpoint_state["approval_status"] = approval_status
     if recommended_plan:
         checkpoint_state["recommended_plan"] = recommended_plan
+    if clarification_reply:
+        # Append clarification context to the original goal text
+        orig_goal = checkpoint_state.get("goal_text", "")
+        checkpoint_state["goal_text"] = f"{orig_goal} (Clarification: {clarification_reply})"
+        checkpoint_state["clarification_resolved"] = True
+        # Remove ambiguities from structured goal so validator doesn't loop
+        if "structured_goal" in checkpoint_state and checkpoint_state["structured_goal"]:
+            checkpoint_state["structured_goal"]["ambiguities"] = []
         
     # Re-launch graph from the restored state
     asyncio.create_task(run_agent_background(checkpoint_state))

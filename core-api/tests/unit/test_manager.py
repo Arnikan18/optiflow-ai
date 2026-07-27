@@ -14,18 +14,29 @@ def test_create_run_route():
         assert data["status"] == "RECEIVED"
         mock_start.assert_called_once()
 
+def test_create_run_empty_goal():
+    response = client.post("/api/v1/runs", json={"goal_text": ""})
+    assert response.status_code == 422
+    
+    response = client.post("/api/v1/runs", json={"goal_text": "   "})
+    assert response.status_code == 422
+
 def test_get_run_status_not_found():
     response = client.get("/api/v1/runs/RUN-MISSING-123")
     assert response.status_code == 404
     assert response.json()["detail"] == "Run not found"
 
 def test_approve_run_route_not_found():
-    response = client.post("/api/v1/runs/RUN-MISSING-123/approve", json={"approval_status": "APPROVED"})
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Run checkpoint not found"
+    with patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
+        mock_execute.return_value.fetchone.return_value = None
+        response = client.post("/api/v1/runs/RUN-MISSING-123/approve", json={"approval_status": "APPROVED"})
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Run not found"
 
 def test_approve_run_route_success():
-    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume:
+    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume, \
+         patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
+        mock_execute.return_value.fetchone.return_value = ("WAITING_FOR_APPROVAL",)
         response = client.post("/api/v1/runs/RUN-EXIST-999/approve", json={
             "approval_status": "APPROVED",
             "recommended_plan": {"plan_id": "PLAN-BALANCED"}
@@ -35,13 +46,19 @@ def test_approve_run_route_success():
         mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED", {"plan_id": "PLAN-BALANCED"})
 
 def test_clarify_run_route_success():
-    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume:
+    with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume, \
+         patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
+        mock_execute.return_value.fetchone.return_value = ("WAITING_FOR_CLARIFICATION",)
         response = client.post("/api/v1/runs/RUN-EXIST-999/clarify", json={
             "clarification_reply": "Here is the details"
         })
         assert response.status_code == 200
         assert response.json()["status"] == "success"
-        mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED")
+        mock_resume.assert_called_once_with(
+            run_id="RUN-EXIST-999", 
+            approval_status="APPROVED", 
+            clarification_reply="Here is the details"
+        )
 
 @pytest.mark.asyncio
 async def test_manager_resume_run_no_checkpoint():
@@ -70,4 +87,30 @@ async def test_manager_resume_run_success():
         expected_state["approval_status"] = "APPROVED"
         expected_state["recommended_plan"] = {"plan_id": "PLAN-SLA"}
         
+        mock_create_task.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_manager_resume_run_clarification():
+    from app.agent.manager import resume_run_from_checkpoint
+    
+    mock_state = {
+        "run_id": "RUN-FAKE",
+        "goal_text": "Optimize",
+        "structured_goal": {"ambiguities": ["Which tiers?"]}
+    }
+    
+    with patch("app.agent.manager.load_last_checkpoint", return_value=mock_state) as mock_load, \
+         patch("app.agent.manager.asyncio.create_task") as mock_create_task:
+         
+        success = await resume_run_from_checkpoint(
+            run_id="RUN-FAKE",
+            approval_status="APPROVED",
+            clarification_reply="Tier 1"
+        )
+        assert success is True
+        mock_load.assert_called_once_with("RUN-FAKE")
+        
+        # Verify that state was updated with clarification context and ambiguities cleared
+        assert mock_state["goal_text"] == "Optimize (Clarification: Tier 1)"
+        assert mock_state["structured_goal"]["ambiguities"] == []
         mock_create_task.assert_called_once()
