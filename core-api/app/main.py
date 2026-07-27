@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
@@ -242,6 +243,16 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
 
 @app.post("/api/v1/runs/{run_id}/approve")
 async def approve_run(run_id: str, body: ApproveRunRequest, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        text("SELECT status FROM agent_runs WHERE run_id = :r"),
+        {"r": run_id}
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row[0] in ("COMPLETED", "FAILED", "CANCELLED"):
+        raise HTTPException(status_code=400, detail=f"Cannot approve run in {row[0]} state.")
+        
     success = await resume_run_from_checkpoint(run_id, body.approval_status, body.recommended_plan)
     if not success:
         raise HTTPException(status_code=404, detail="Run checkpoint not found")
@@ -249,6 +260,18 @@ async def approve_run(run_id: str, body: ApproveRunRequest, db: AsyncSession = D
 
 @app.post("/api/v1/runs/{run_id}/clarify")
 async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        text("SELECT status FROM agent_runs WHERE run_id = :r"),
+        {"r": run_id}
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row[0] in ("COMPLETED", "FAILED", "CANCELLED"):
+        raise HTTPException(status_code=400, detail=f"Cannot clarify run in {row[0]} state.")
+    if row[0] != "WAITING_FOR_CLARIFICATION":
+        raise HTTPException(status_code=400, detail=f"Cannot clarify run in {row[0]} state. Run must be in WAITING_FOR_CLARIFICATION state.")
+        
     success = await resume_run_from_checkpoint(
         run_id=run_id, 
         approval_status="APPROVED", 
@@ -257,6 +280,30 @@ async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = D
     if not success:
         raise HTTPException(status_code=404, detail="Run checkpoint not found")
     return {"status": "success", "message": "Run resumed after clarification"}
+
+@app.post("/api/v1/runs/{run_id}/cancel")
+async def cancel_run(run_id: str, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        text("SELECT status FROM agent_runs WHERE run_id = :r"),
+        {"r": run_id}
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if row[0] in ("COMPLETED", "FAILED", "CANCELLED"):
+        raise HTTPException(status_code=400, detail=f"Cannot cancel run in {row[0]} state.")
+        
+    await db.execute(
+        text("UPDATE agent_runs SET status = 'CANCELLED', current_node = 'cancel' WHERE run_id = :r"),
+        {"r": run_id}
+    )
+    await db.execute(
+        text("INSERT INTO run_events (event_id, run_id, sequence_number, event_type, source, summary, state_version, created_at) "
+             "VALUES (:ev, :r, 99, 'RUN_CANCELLED', 'cancel_run', 'Run was manually cancelled by the manager.', 1, :dt)"),
+        {"ev": str(uuid.uuid4()), "r": run_id, "dt": datetime.utcnow()}
+    )
+    await db.commit()
+    return {"status": "success", "message": "Run cancelled successfully."}
 
 
 # --- SERVER-SENT EVENTS (SSE) STREAMING ---
