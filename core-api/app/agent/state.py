@@ -43,3 +43,4 @@ class AgentState(TypedDict, total=False):
     replan_count: int
     created_at: str
     updated_at: str
+    clarification_resolved: bool

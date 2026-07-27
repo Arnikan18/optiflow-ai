@@ -26,7 +26,7 @@ async def validate_goal(state: AgentState) -> dict:
     status_val = "PLANNING"
     if not validation_res.valid:
         status_val = "FAILED_SAFE"
-    elif validation_res.clarification_required:
+    elif validation_res.clarification_required and not state.get("clarification_resolved"):
         status_val = "NEEDS_CLARIFICATION"
         
     return {

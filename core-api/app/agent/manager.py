@@ -64,6 +64,7 @@ async def resume_run_from_checkpoint(
         # Append clarification context to the original goal text
         orig_goal = checkpoint_state.get("goal_text", "")
         checkpoint_state["goal_text"] = f"{orig_goal} (Clarification: {clarification_reply})"
+        checkpoint_state["clarification_resolved"] = True
         # Remove ambiguities from structured goal so validator doesn't loop
         if "structured_goal" in checkpoint_state and checkpoint_state["structured_goal"]:
             checkpoint_state["structured_goal"]["ambiguities"] = []
