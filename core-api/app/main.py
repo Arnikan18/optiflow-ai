@@ -194,8 +194,17 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from app.agent.manager import start_new_run, resume_run_from_checkpoint, load_last_checkpoint
 
+from pydantic import field_validator
+
 class CreateRunRequest(BaseModel):
     goal_text: str
+    
+    @field_validator("goal_text")
+    @classmethod
+    def validate_goal_text(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("goal_text cannot be empty or consist only of whitespace.")
+        return v
 
 class ApproveRunRequest(BaseModel):
     approval_status: str

@@ -14,6 +14,13 @@ def test_create_run_route():
         assert data["status"] == "RECEIVED"
         mock_start.assert_called_once()
 
+def test_create_run_empty_goal():
+    response = client.post("/api/v1/runs", json={"goal_text": ""})
+    assert response.status_code == 422
+    
+    response = client.post("/api/v1/runs", json={"goal_text": "   "})
+    assert response.status_code == 422
+
 def test_get_run_status_not_found():
     response = client.get("/api/v1/runs/RUN-MISSING-123")
     assert response.status_code == 404
