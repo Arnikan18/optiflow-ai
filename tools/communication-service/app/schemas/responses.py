@@ -79,6 +79,7 @@ class ResetResponseData(BaseModel):
 
 
 class ConfiguredResponseData(BaseModel):
+    simulation_rule_id: int
     specialist_id: str | None
     incident_id: str | None
     status: str
@@ -86,15 +87,37 @@ class ConfiguredResponseData(BaseModel):
     response_delay_seconds: int
     apply_once: bool
     active: bool
+    created_at: str
+    expires_at: str | None
+    consumed_at: str | None
 
 
 class FailureModeData(BaseModel):
+    simulation_rule_id: int
     enabled: bool
     failure_type: str
     status_code: int
     delay_seconds: int
     affected_endpoint: str | None
     scope: str | None
+    apply_once: bool
+    remaining_uses: int | None
+    message: str | None
+    created_at: str
+    expires_at: str | None
+
+
+class FailureModeStateData(BaseModel):
+    enabled: bool
+    active_rules: list[FailureModeData]
+
+
+class SimulationStateData(BaseModel):
+    queued_specialist_responses: list[ConfiguredResponseData]
+    active_failure_modes: list[FailureModeData]
+    pending_assignment_requests: list[AssignmentRequestResponse]
+    last_reset_at: str | None
+    demo_seed_status: str
 
 
 def success_response(data: Any, message: str = "Request completed successfully") -> dict[str, Any]:

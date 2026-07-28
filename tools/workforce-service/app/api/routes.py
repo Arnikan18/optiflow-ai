@@ -20,6 +20,8 @@ from app.schemas.responses import (
     ResetResponseData,
     SpecialistListData,
     SpecialistResponse,
+    WorkloadListData,
+    WorkloadResponse,
     success_response,
 )
 from app.services.reservation_service import (
@@ -34,8 +36,10 @@ from app.services.specialist_service import (
     WorkforceError,
     get_specialist,
     list_specialists,
+    list_workloads,
     specialist_view_to_dict,
     specialist_view_to_legacy_dict,
+    workload_view_to_dict,
 )
 
 
@@ -57,6 +61,10 @@ def _specialist_response(view) -> SpecialistResponse:
 
 def _reservation_data(reservation) -> dict:
     return ReservationResponse.model_validate(reservation).model_dump(mode="json")
+
+
+def _workload_response(view) -> WorkloadResponse:
+    return WorkloadResponse(**workload_view_to_dict(view))
 
 
 @router.get("/specialists")
@@ -108,6 +116,23 @@ async def get_available_specialists(
     )
     data = SpecialistListData(
         specialists=[_specialist_response(view) for view in result.specialists],
+        page=result.page,
+        page_size=result.page_size,
+        total_items=result.total_items,
+        total_pages=result.total_pages,
+    )
+    return success_response(data.model_dump(mode="json"))
+
+
+@router.get("/workloads")
+async def get_workloads(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await list_workloads(db, page=page, page_size=page_size)
+    data = WorkloadListData(
+        workloads=[_workload_response(view) for view in result.workloads],
         page=result.page,
         page_size=result.page_size,
         total_items=result.total_items,

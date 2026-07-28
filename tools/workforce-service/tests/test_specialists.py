@@ -110,6 +110,22 @@ def test_available_specialists_filters_capacity_and_pending_counts(client, auth_
     assert maya["operationally_available"] is True
 
 
+def test_list_workloads_exposes_reservation_counts(client, auth_headers):
+    data = assert_success(client.get("/workforce/api/v1/workloads", headers=auth_headers))
+    assert data["page"] == 1
+    assert data["total_items"] == 5
+
+    workloads = {item["specialist_id"]: item for item in data["workloads"]}
+    assert workloads["SPEC-MAYA"]["assigned_count"] == 0
+    assert workloads["SPEC-MAYA"]["tentative_reservation_count"] == 1
+    assert workloads["SPEC-MAYA"]["confirmed_reservation_count"] == 0
+    assert workloads["SPEC-MAYA"]["available_capacity"] == 1
+    assert workloads["SPEC-MAYA"]["utilisation_percentage"] == 50.0
+
+    assert workloads["SPEC-DANIEL"]["assigned_count"] == 1
+    assert workloads["SPEC-DANIEL"]["confirmed_reservation_count"] == 1
+
+
 def test_get_specialist_existing_missing_inactive_and_full_capacity(client, auth_headers):
     inactive = assert_success(client.get("/workforce/api/v1/specialists/spec-kai", headers=auth_headers))
     assert inactive["active"] is False

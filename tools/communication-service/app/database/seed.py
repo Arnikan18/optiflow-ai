@@ -168,6 +168,10 @@ async def ensure_failure_mode(session: AsyncSession) -> None:
             delay_ms=5000,
             affected_endpoint=None,
             scope=None,
+            apply_once=0,
+            message=None,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            expires_at=None,
             remaining_failures=0,
             updated_at=datetime.now(timezone.utc).isoformat(),
         )

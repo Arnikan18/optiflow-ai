@@ -88,6 +88,7 @@ If the Windows temp directory is restricted, set `TMP` and `TEMP` to a writable 
 | `GET` | `/workforce/api/v1/specialists` | `X-Tool-Token` | List specialists |
 | `GET` | `/workforce/api/v1/specialists/available` | `X-Tool-Token` | List operationally available specialists |
 | `GET` | `/workforce/api/v1/specialists/{specialist_id}` | `X-Tool-Token` | Retrieve one specialist |
+| `GET` | `/workforce/api/v1/workloads` | `X-Tool-Token` | List workload and reservation counts |
 | `POST` | `/workforce/api/v1/reservations` | `X-Tool-Token` | Create tentative reservation |
 | `GET` | `/workforce/api/v1/reservations/{reservation_id}` | `X-Tool-Token` | Retrieve reservation |
 | `PATCH` | `/workforce/api/v1/reservations/{reservation_id}/confirm` | `X-Tool-Token` | Confirm reservation |
@@ -121,6 +122,8 @@ Success envelope:
   "data": {}
 }
 ```
+
+Workload records expose `specialist_id`, `assigned_count`, `tentative_reservation_count`, `confirmed_reservation_count`, `available_capacity`, `utilisation_percentage`, and `updated_at`. Core demo portfolio aggregation uses this endpoint instead of reading Workforce SQLite data.
 
 Error envelope:
 

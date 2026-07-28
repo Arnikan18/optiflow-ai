@@ -6,6 +6,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 ASSIGNMENT_STATUSES = {"PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "FAILED", "CANCELLED"}
 ASSIGNMENT_RESPONSES = {"ACCEPTED", "REJECTED"}
+FAILURE_TYPES = {"HTTP_ERROR", "TIMEOUT", "DELAY", "CONNECTION_FAILURE", "INVALID_RESPONSE"}
 NOTIFICATION_CHANNELS = {"EMAIL", "SMS", "IN_APP", "WEBHOOK"}
 NOTIFICATION_STATUSES = {"PENDING", "DELIVERED", "FAILED"}
 
@@ -345,6 +346,12 @@ class AdminConfiguredResponseRequest(BaseModel):
     )
     delayMs: int | None = Field(default=None, ge=0, le=60000)
     apply_once: bool = Field(default=True, validation_alias=AliasChoices("apply_once", "applyOnce"))
+    expires_after_seconds: int | None = Field(
+        default=None,
+        ge=1,
+        le=86400,
+        validation_alias=AliasChoices("expires_after_seconds", "expiresAfterSeconds"),
+    )
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -378,6 +385,14 @@ class AdminFailureModeRequest(BaseModel):
         validation_alias=AliasChoices("affected_endpoint", "affectedEndpoint"),
     )
     scope: str | None = None
+    apply_once: bool = Field(default=False, validation_alias=AliasChoices("apply_once", "applyOnce"))
+    expires_after_seconds: int | None = Field(
+        default=None,
+        ge=1,
+        le=86400,
+        validation_alias=AliasChoices("expires_after_seconds", "expiresAfterSeconds"),
+    )
+    message: str | None = None
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -385,11 +400,20 @@ class AdminFailureModeRequest(BaseModel):
     @classmethod
     def validate_failure_type(cls, value: str) -> str:
         normalized = value.strip().upper()
-        if not normalized:
-            raise ValueError("failure_type cannot be empty")
+        if normalized not in FAILURE_TYPES:
+            supported = ", ".join(sorted(FAILURE_TYPES))
+            raise ValueError(f"failure_type must be one of: {supported}")
         return normalized
 
     @field_validator("affected_endpoint", "scope")
     @classmethod
     def validate_optional_text(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str | None) -> str | None:
+        normalized = normalize_optional_text(value)
+        if normalized and len(normalized) > 300:
+            raise ValueError("message must be at most 300 characters")
+        return normalized

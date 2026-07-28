@@ -896,7 +896,21 @@ SSE_QUEUE_SIZE=200
 # Demonstration
 DEMO_MODE=true
 DEMO_STEP_DELAY_MS=250
+DEMO_PORTFOLIO_TIMEOUT_SECONDS=3
+DEMO_HEALTH_TIMEOUT_SECONDS=2
+DEMO_ALLOW_FAILURE_INJECTION=true
 ```
+
+Core demo APIs:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/demo/portfolio` | Aggregate CRM, Incident, Workforce, workload, and Communication source data for the demo dashboard |
+| `GET` | `/api/v1/demo/health` | Return Core, PostgreSQL, and enterprise-service readiness |
+| `POST` | `/api/v1/demo/simulation/specialist-response` | Queue an accepted or rejected specialist response without exposing service admin credentials |
+| `POST` | `/api/v1/demo/simulation/failure` | Enable or disable demo source failure simulation |
+| `POST` | `/api/v1/demo/simulation/reset` | Reset deterministic demo service state |
+| `GET` | `/api/v1/demo/simulation/state` | Read current demo simulation state |
 
 Never commit:
 

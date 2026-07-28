@@ -21,9 +21,11 @@ from app.schemas.responses import (
     AssignmentRequestResponse,
     ConfiguredResponseData,
     FailureModeData,
+    FailureModeStateData,
     NotificationListData,
     NotificationResponse,
     ResetResponseData,
+    SimulationStateData,
     success_response,
 )
 from app.services.assignment_service import (
@@ -35,6 +37,8 @@ from app.services.assignment_service import (
     create_legacy_assignment_request,
     get_assignment_request,
     get_failure_mode,
+    get_simulation_state,
+    list_active_failure_modes,
     list_assignment_requests,
     reset_communication,
     respond_to_assignment_request,
@@ -227,8 +231,15 @@ async def configure_next_response(payload: AdminConfiguredResponseRequest, db: A
         reason=payload.reason,
         delay_seconds=delay_seconds,
         apply_once=payload.apply_once,
+        expires_after_seconds=payload.expires_after_seconds,
     )
-    data = ConfiguredResponseData(
+    data = _configured_response_data(configured)
+    return success_response(data, message="Queued response configured")
+
+
+def _configured_response_data(configured) -> dict:
+    return ConfiguredResponseData(
+        simulation_rule_id=configured.configuration_id,
         specialist_id=configured.specialist_id,
         incident_id=configured.incident_id,
         status=configured.next_status,
@@ -236,24 +247,39 @@ async def configure_next_response(payload: AdminConfiguredResponseRequest, db: A
         response_delay_seconds=configured.delay_seconds,
         apply_once=bool(configured.apply_once),
         active=bool(configured.active),
-    )
-    return success_response(data.model_dump(mode="json"), message="Queued response configured")
+        created_at=configured.created_at,
+        expires_at=configured.expires_at,
+        consumed_at=configured.consumed_at,
+    ).model_dump(mode="json")
 
 
 def _failure_mode_data(mode) -> dict:
     return FailureModeData(
+        simulation_rule_id=mode.mode_id,
         enabled=bool(mode.enabled),
         failure_type=mode.failure_type,
         status_code=mode.status_code,
         delay_seconds=mode.delay_seconds,
         affected_endpoint=mode.affected_endpoint,
         scope=mode.scope,
+        apply_once=bool(mode.apply_once),
+        remaining_uses=mode.remaining_failures,
+        message=mode.message,
+        created_at=mode.created_at,
+        expires_at=mode.expires_at,
     ).model_dump(mode="json")
 
 
 @admin_router.get("/admin/failure-mode", dependencies=[Depends(verify_admin_key)])
 async def read_failure_mode(db: AsyncSession = Depends(get_db)):
-    return success_response(_failure_mode_data(await get_failure_mode(db)))
+    active_rules = [_failure_mode_data(rule) for rule in await list_active_failure_modes(db)]
+    enabled = any(rule["enabled"] for rule in active_rules)
+    if not active_rules:
+        mode = await get_failure_mode(db)
+        return success_response(
+            FailureModeStateData(enabled=bool(mode.enabled), active_rules=[]).model_dump(mode="json")
+        )
+    return success_response(FailureModeStateData(enabled=enabled, active_rules=active_rules).model_dump(mode="json"))
 
 
 @admin_router.post("/admin/failure-mode", dependencies=[Depends(verify_admin_key)])
@@ -266,8 +292,26 @@ async def update_failure_mode(payload: AdminFailureModeRequest, db: AsyncSession
         delay_seconds=payload.delay_seconds,
         affected_endpoint=payload.affected_endpoint,
         scope=payload.scope,
+        apply_once=payload.apply_once,
+        expires_after_seconds=payload.expires_after_seconds,
+        message=payload.message,
     )
     return success_response(_failure_mode_data(mode), message="Failure mode updated")
+
+
+@admin_router.get("/admin/simulation-state", dependencies=[Depends(verify_admin_key)])
+async def read_simulation_state(db: AsyncSession = Depends(get_db)):
+    state = await get_simulation_state(db)
+    data = SimulationStateData(
+        queued_specialist_responses=[_configured_response_data(item) for item in state["queued_specialist_responses"]],
+        active_failure_modes=[_failure_mode_data(item) for item in state["active_failure_modes"]],
+        pending_assignment_requests=[
+            AssignmentRequestResponse.model_validate(item) for item in state["pending_assignment_requests"]
+        ],
+        last_reset_at=state["last_reset_at"],
+        demo_seed_status=state["demo_seed_status"],
+    )
+    return success_response(data.model_dump(mode="json"))
 
 
 @legacy_router.get("/assignment-requests", deprecated=True)
