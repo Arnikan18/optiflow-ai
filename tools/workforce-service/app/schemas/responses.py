@@ -41,13 +41,16 @@ class SpecialistListData(BaseModel):
 
 class ReservationResponse(BaseModel):
     reservation_id: str
+    run_id: str | None
     specialist_id: str
     incident_id: str
     status: str
+    idempotency_key: str | None
     created_at: datetime
     expires_at: datetime
     confirmed_at: datetime | None
     cancelled_at: datetime | None
+    cancellation_reason: str | None
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

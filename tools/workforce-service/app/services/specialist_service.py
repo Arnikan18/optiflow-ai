@@ -54,7 +54,7 @@ def _database_error() -> WorkforceError:
 def _active_pending_subquery(now_utc: datetime):
     return (
         select(Reservation.specialist_id, func.count(Reservation.id).label("pending_count"))
-        .where(Reservation.status == "PENDING", Reservation.expires_at > now_utc)
+        .where(Reservation.status == "TENTATIVE", Reservation.expires_at > now_utc)
         .group_by(Reservation.specialist_id)
         .subquery()
     )

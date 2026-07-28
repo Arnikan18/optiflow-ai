@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,8 +123,15 @@ async def get_specialist_by_id(specialist_id: str, db: AsyncSession = Depends(ge
 
 
 @router.post("/reservations", status_code=201)
-async def create_reservation_record(payload: ReservationCreateRequest, db: AsyncSession = Depends(get_db)):
-    reservation = await create_reservation(db, payload)
+async def create_reservation_record(
+    payload: ReservationCreateRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    reservation, created = await create_reservation(db, payload)
+    if not created:
+        response.status_code = 200
+        return success_response(_reservation_data(reservation), message="Reservation already exists")
     return success_response(_reservation_data(reservation), message="Reservation created successfully")
 
 
@@ -141,8 +148,13 @@ async def confirm_reservation_record(reservation_id: str, db: AsyncSession = Dep
 
 
 @router.delete("/reservations/{reservation_id}")
-async def cancel_reservation_record(reservation_id: str, db: AsyncSession = Depends(get_db)):
-    reservation = await cancel_reservation(db, reservation_id)
+async def cancel_reservation_record(
+    reservation_id: str,
+    cancellation_reason: str | None = Query(default=None, max_length=1000),
+    db: AsyncSession = Depends(get_db),
+):
+    reason = cancellation_reason.strip() if cancellation_reason else None
+    reservation = await cancel_reservation(db, reservation_id, cancellation_reason=reason)
     return success_response(_reservation_data(reservation), message="Reservation cancelled successfully")
 
 
@@ -216,6 +228,7 @@ async def create_legacy_tentative_reservation(
         specialist_id=payload.specialistId,
         incident_id=payload.escalationId,
         reservation_id=payload.idempotencyKey,
+        run_id=payload.runId,
     )
     return {
         "reservationId": reservation.reservation_id,

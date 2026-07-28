@@ -37,7 +37,7 @@ app/
 | `DATABASE_URL` | SQLAlchemy database URL | `sqlite:///./data/communication.db` |
 | `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required as `X-Tool-Token` on Communication APIs | `change-me` |
-| `ADMIN_API_KEY` | Required as `X-Admin-Key` on `POST /admin/reset` | unset |
+| `ADMIN_API_KEY` | Required as `X-Admin-Key` on admin endpoints | unset |
 | `ASSIGNMENT_REQUEST_TTL_SECONDS` | Default pending assignment TTL | `900` |
 | `MIN_ASSIGNMENT_REQUEST_TTL_SECONDS` | Minimum accepted TTL | `30` |
 | `MAX_ASSIGNMENT_REQUEST_TTL_SECONDS` | Maximum accepted TTL | `86400` |
@@ -99,8 +99,11 @@ If the Windows temp directory is restricted, set `TMP` and `TEMP` to a writable 
 | `GET` | `/communication/api/v1/notifications` | `X-Tool-Token` | List notifications |
 | `GET` | `/communication/api/v1/notifications/{notification_id}` | `X-Tool-Token` | Retrieve one notification |
 | `POST` | `/admin/reset` | `X-Admin-Key` | Reset deterministic demo data |
+| `POST` | `/admin/next-response` | `X-Admin-Key` | Queue deterministic specialist response |
+| `GET` | `/admin/failure-mode` | `X-Admin-Key` | Read failure simulation config |
+| `POST` | `/admin/failure-mode` | `X-Admin-Key` | Enable or disable failure simulation |
 
-Deprecated compatibility endpoints remain for current demo/core integration: `/assignment-requests`, `/assignment-requests/{request_id}`, `/assignment-requests/{request_id}/respond`, `/notifications`, `/notifications/{notification_id}`, `/admin/next-response`, and `/admin/failure-mode`.
+Deprecated compatibility endpoints remain for current demo/core integration: `/assignment-requests`, `/assignment-requests/{request_id}`, `/assignment-requests/{request_id}/respond`, `/notifications`, and `/notifications/{notification_id}`.
 
 ## Request Examples
 
@@ -109,9 +112,12 @@ Create assignment request:
 ```json
 {
   "request_id": "AR-001",
+  "run_id": "RUN-001",
   "incident_id": "INC-001",
   "specialist_id": "SPEC-001",
+  "reservation_id": "RES-001",
   "message": "Please review and accept this incident assignment.",
+  "idempotency_key": "assign-RUN-001-INC-001-SPEC-001",
   "expires_in_seconds": 900
 }
 ```
@@ -163,7 +169,7 @@ Error envelope:
 
 ## Assignment Requests
 
-Fields: `request_id`, `incident_id`, `specialist_id`, `message`, `status`, `created_at`, `expires_at`, `responded_at`, `response_note`, and `updated_at`. Internal numeric IDs are not exposed.
+Fields: `request_id`, `run_id`, `incident_id`, `specialist_id`, `reservation_id`, `message`, `status`, `idempotency_key`, `created_at`, `expires_at`, `responded_at`, `response_note`, `response_reason`, and `updated_at`. Internal numeric IDs are not exposed.
 
 Statuses:
 
@@ -171,11 +177,20 @@ Statuses:
 - `ACCEPTED`
 - `REJECTED`
 - `EXPIRED`
+- `FAILED`
 - `CANCELLED`
 
-`PENDING` requests can be accepted or rejected until `expires_at`. `ACCEPTED`, `REJECTED`, `EXPIRED`, and `CANCELLED` are final states. Repeating the same final response returns the stored result unchanged and preserves the original response note. An opposite response after a final response returns `COMMUNICATION_409`.
+`PENDING` requests can be accepted or rejected until `expires_at`. `ACCEPTED`, `REJECTED`, `EXPIRED`, `FAILED`, and `CANCELLED` are final states. Repeating the same final response returns the stored result unchanged and preserves the original response reason. An opposite response after a final response returns `COMMUNICATION_409`.
 
 Expiration is lazy: expired pending requests are normalized to `EXPIRED` during list, get, and respond operations. No background scheduler is used in the MVP.
+
+`idempotency_key` prevents duplicate assignment request creation. A replay with the same key and same payload returns the existing assignment request with HTTP 200. Reusing the same key with a different payload returns `COMMUNICATION_409`.
+
+## Specialist Response Simulation
+
+`POST /admin/next-response` queues a deterministic response for polling demos. The body supports `specialist_id`, optional `incident_id`, `status` (`ACCEPTED` or `REJECTED`), optional `reason`, optional `response_delay_seconds`, and `apply_once` (default `true`). Matching queued responses are applied during `GET /communication/api/v1/assignment-requests/{request_id}` after the delay has elapsed. One-time responses are consumed after the first match.
+
+`POST /admin/failure-mode` accepts `enabled`, `failure_type`, `status_code`, `delay_seconds`, `affected_endpoint`, and `scope`. It can simulate controlled failures for assignment or notification endpoints. `POST /admin/reset` clears queued responses and resets failure mode to a clean disabled state.
 
 ## Notifications
 

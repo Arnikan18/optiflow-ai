@@ -16,14 +16,18 @@ class AssignmentRequest(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     request_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    run_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     specialist_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    reservation_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     message: Mapped[str] = mapped_column(String(2000), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     response_note: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    response_reason: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -35,7 +39,7 @@ class AssignmentRequest(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'CANCELLED')",
+            "status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'FAILED', 'CANCELLED')",
             name="ck_assignment_requests_status",
         ),
         Index("ix_assignment_requests_status_expires", "status", "expires_at"),
@@ -86,10 +90,14 @@ class ConfiguredResponse(Base):
 
     configuration_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     specialist_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    incident_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     next_status: Mapped[str] = mapped_column(String, nullable=False)
     response_reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     delay_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    apply_once: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    consumed_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 class FailureMode(Base):
@@ -97,7 +105,12 @@ class FailureMode(Base):
 
     mode_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     mode: Mapped[str] = mapped_column(String, nullable=False)
+    failure_type: Mapped[str] = mapped_column(String, nullable=False, default="TIMEOUT")
     enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False, default=503)
+    delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     delay_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    affected_endpoint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    scope: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     remaining_failures: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

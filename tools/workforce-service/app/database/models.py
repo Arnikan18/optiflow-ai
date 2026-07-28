@@ -68,6 +68,7 @@ class Reservation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     reservation_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    run_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     specialist_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("specialists.specialist_id", ondelete="RESTRICT"),
@@ -76,10 +77,12 @@ class Reservation(Base):
     )
     incident_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancellation_reason: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -91,7 +94,7 @@ class Reservation(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED')",
+            "status IN ('TENTATIVE', 'CONFIRMED', 'CANCELLED', 'EXPIRED')",
             name="ck_reservations_status",
         ),
         Index("ix_reservations_specialist_incident_status", "specialist_id", "incident_id", "status"),

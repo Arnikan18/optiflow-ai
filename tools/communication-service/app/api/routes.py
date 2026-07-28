@@ -1,15 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, Query, Response
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database.models import FailureMode
 from app.database.session import get_db
 from app.middleware.authentication import verify_tool_token
 from app.schemas.requests import (
     AdminConfiguredResponseRequest,
+    AdminFailureModeRequest,
     AssignmentRequestCreateRequest,
     AssignmentResponseRequest,
     LegacyAssignmentCreateRequest,
@@ -20,6 +19,8 @@ from app.schemas.requests import (
 from app.schemas.responses import (
     AssignmentRequestListData,
     AssignmentRequestResponse,
+    ConfiguredResponseData,
+    FailureModeData,
     NotificationListData,
     NotificationResponse,
     ResetResponseData,
@@ -27,15 +28,18 @@ from app.schemas.responses import (
 )
 from app.services.assignment_service import (
     CommunicationError,
+    configure_failure_mode,
     assignment_to_legacy_dict,
     configure_legacy_response,
     create_assignment_request,
     create_legacy_assignment_request,
     get_assignment_request,
+    get_failure_mode,
     list_assignment_requests,
     reset_communication,
     respond_to_assignment_request,
 )
+from app.services.failure_service import apply_failure_mode
 from app.services.notification_service import (
     create_legacy_notification,
     create_notification,
@@ -68,9 +72,14 @@ def _notification_data(notification) -> dict:
 @router.post("/assignment-requests", status_code=201)
 async def create_assignment_request_record(
     payload: AssignmentRequestCreateRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    assignment_request = await create_assignment_request(db, payload)
+    await apply_failure_mode(db, "assignment:create")
+    assignment_request, created = await create_assignment_request(db, payload)
+    if not created:
+        response.status_code = 200
+        return success_response(_assignment_data(assignment_request), message="Assignment request already exists")
     return success_response(_assignment_data(assignment_request), message="Assignment request created successfully")
 
 
@@ -88,6 +97,7 @@ async def get_assignment_requests(
     search: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    await apply_failure_mode(db, "assignment:list")
     result = await list_assignment_requests(
         db,
         page=page,
@@ -113,6 +123,7 @@ async def get_assignment_requests(
 
 @router.get("/assignment-requests/{request_id}")
 async def get_assignment_request_by_id(request_id: str, db: AsyncSession = Depends(get_db)):
+    await apply_failure_mode(db, "assignment:get")
     assignment_request = await get_assignment_request(db, request_id)
     return success_response(_assignment_data(assignment_request))
 
@@ -123,6 +134,7 @@ async def respond_to_assignment_request_record(
     payload: AssignmentResponseRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    await apply_failure_mode(db, "assignment:respond")
     assignment_request = await respond_to_assignment_request(db, request_id, payload)
     return success_response(_assignment_data(assignment_request), message="Assignment response recorded successfully")
 
@@ -133,6 +145,7 @@ async def create_notification_record(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    await apply_failure_mode(db, "notification:create")
     result = await create_notification(db, payload)
     if not result.created:
         response.status_code = 200
@@ -155,6 +168,7 @@ async def get_notifications(
     search: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
+    await apply_failure_mode(db, "notification:list")
     result = await list_notifications(
         db,
         page=page,
@@ -179,6 +193,7 @@ async def get_notifications(
 
 @router.get("/notifications/{notification_id}")
 async def get_notification_by_id(notification_id: str, db: AsyncSession = Depends(get_db)):
+    await apply_failure_mode(db, "notification:get")
     notification = await get_notification(db, notification_id)
     return success_response(_notification_data(notification))
 
@@ -198,6 +213,63 @@ async def reset_communication_database(db: AsyncSession = Depends(get_db)):
     return success_response(data.model_dump(mode="json"), message="Communication database reset successfully")
 
 
+@admin_router.post("/admin/next-response", dependencies=[Depends(verify_admin_key)])
+async def configure_next_response(payload: AdminConfiguredResponseRequest, db: AsyncSession = Depends(get_db)):
+    delay_seconds = payload.response_delay_seconds
+    if payload.delayMs is not None:
+        delay_seconds = int(payload.delayMs / 1000)
+
+    configured = await configure_legacy_response(
+        db,
+        specialist_id=payload.specialist_id,
+        incident_id=payload.incident_id,
+        status=payload.status,
+        reason=payload.reason,
+        delay_seconds=delay_seconds,
+        apply_once=payload.apply_once,
+    )
+    data = ConfiguredResponseData(
+        specialist_id=configured.specialist_id,
+        incident_id=configured.incident_id,
+        status=configured.next_status,
+        reason=configured.response_reason,
+        response_delay_seconds=configured.delay_seconds,
+        apply_once=bool(configured.apply_once),
+        active=bool(configured.active),
+    )
+    return success_response(data.model_dump(mode="json"), message="Queued response configured")
+
+
+def _failure_mode_data(mode) -> dict:
+    return FailureModeData(
+        enabled=bool(mode.enabled),
+        failure_type=mode.failure_type,
+        status_code=mode.status_code,
+        delay_seconds=mode.delay_seconds,
+        affected_endpoint=mode.affected_endpoint,
+        scope=mode.scope,
+    ).model_dump(mode="json")
+
+
+@admin_router.get("/admin/failure-mode", dependencies=[Depends(verify_admin_key)])
+async def read_failure_mode(db: AsyncSession = Depends(get_db)):
+    return success_response(_failure_mode_data(await get_failure_mode(db)))
+
+
+@admin_router.post("/admin/failure-mode", dependencies=[Depends(verify_admin_key)])
+async def update_failure_mode(payload: AdminFailureModeRequest, db: AsyncSession = Depends(get_db)):
+    mode = await configure_failure_mode(
+        db,
+        enabled=payload.enabled,
+        failure_type=payload.failure_type,
+        status_code=payload.status_code,
+        delay_seconds=payload.delay_seconds,
+        affected_endpoint=payload.affected_endpoint,
+        scope=payload.scope,
+    )
+    return success_response(_failure_mode_data(mode), message="Failure mode updated")
+
+
 @legacy_router.get("/assignment-requests", deprecated=True)
 async def get_legacy_assignment_requests(db: AsyncSession = Depends(get_db)):
     result = await list_assignment_requests(db, page=1, page_size=100)
@@ -215,6 +287,8 @@ async def create_legacy_assignment_request_record(
         incident_id=payload.escalationId,
         message=payload.message,
         idempotency_key=payload.idempotencyKey,
+        run_id=payload.runId,
+        reservation_id=payload.reservationId,
     )
     return assignment_to_legacy_dict(assignment_request)
 
@@ -266,34 +340,4 @@ async def get_legacy_notification(notification_id: str, db: AsyncSession = Depen
     return notification_to_legacy_dict(notification)
 
 
-@legacy_router.post("/admin/next-response", deprecated=True)
-async def configure_next_response(payload: AdminConfiguredResponseRequest, db: AsyncSession = Depends(get_db)):
-    configured = await configure_legacy_response(
-        db,
-        specialist_id=payload.specialistId,
-        status=payload.status,
-        reason=payload.reason,
-        delay_ms=payload.delayMs,
-    )
-    return {
-        "status": "success",
-        "specialistId": configured.specialist_id,
-        "nextStatus": configured.next_status,
-    }
-
-
-@legacy_router.post("/admin/failure-mode", deprecated=True)
-async def configure_failure_mode(data: dict, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(FailureMode).limit(1))
-    fm = result.scalar_one_or_none()
-    if not fm:
-        fm = FailureMode(mode=data.get("mode", "TIMEOUT"), enabled=0, updated_at="")
-
-    fm.mode = data.get("mode", "TIMEOUT")
-    fm.enabled = 1 if data.get("enabled", False) else 0
-    fm.delay_ms = data.get("delayMs", 5000)
-    fm.remaining_failures = data.get("failureCount", 2)
-    fm.updated_at = datetime.now(timezone.utc).isoformat()
-    db.add(fm)
-    await db.commit()
-    return {"status": "success", "mode": fm.mode, "enabled": bool(fm.enabled)}
+    get_failure_mode,

@@ -35,7 +35,7 @@ app/
 | `LOG_LEVEL` | Structured log threshold | `INFO` |
 | `TOOL_SHARED_TOKEN` | Required as `X-Tool-Token` on Workforce APIs | `change-me` |
 | `ADMIN_API_KEY` | Required as `X-Admin-Key` on `POST /admin/reset` | unset |
-| `RESERVATION_TTL_SECONDS` | Default pending reservation TTL | `300` |
+| `RESERVATION_TTL_SECONDS` | Default tentative reservation TTL | `300` |
 | `MIN_RESERVATION_TTL_SECONDS` | Minimum accepted TTL | `30` |
 | `MAX_RESERVATION_TTL_SECONDS` | Maximum accepted TTL | `3600` |
 | `ENABLE_SEED_DATA` | Standard seed toggle alias | unset |
@@ -88,7 +88,7 @@ If the Windows temp directory is restricted, set `TMP` and `TEMP` to a writable 
 | `GET` | `/workforce/api/v1/specialists` | `X-Tool-Token` | List specialists |
 | `GET` | `/workforce/api/v1/specialists/available` | `X-Tool-Token` | List operationally available specialists |
 | `GET` | `/workforce/api/v1/specialists/{specialist_id}` | `X-Tool-Token` | Retrieve one specialist |
-| `POST` | `/workforce/api/v1/reservations` | `X-Tool-Token` | Create pending reservation |
+| `POST` | `/workforce/api/v1/reservations` | `X-Tool-Token` | Create tentative reservation |
 | `GET` | `/workforce/api/v1/reservations/{reservation_id}` | `X-Tool-Token` | Retrieve reservation |
 | `PATCH` | `/workforce/api/v1/reservations/{reservation_id}/confirm` | `X-Tool-Token` | Confirm reservation |
 | `DELETE` | `/workforce/api/v1/reservations/{reservation_id}` | `X-Tool-Token` | Cancel or release reservation |
@@ -103,8 +103,10 @@ Create reservation:
 ```json
 {
   "reservation_id": "RES-001",
+  "run_id": "RUN-001",
   "specialist_id": "SPEC-MAYA",
   "incident_id": "INC-ALPHA-001",
+  "idempotency_key": "reserve-RUN-001-INC-ALPHA-001-SPEC-MAYA",
   "expires_in_seconds": 300
 }
 ```
@@ -144,7 +146,7 @@ Skills are stored as normalized child rows in `specialist_skills`. Input is trim
 Effective workload:
 
 ```text
-effective_workload = current_workload + active_unexpired_pending_reservations
+effective_workload = current_workload + active_unexpired_tentative_reservations
 ```
 
 Available capacity:
@@ -159,16 +161,16 @@ A specialist is operationally available only when `active` is true, `availabilit
 
 Statuses:
 
-- `PENDING`
+- `TENTATIVE`
 - `CONFIRMED`
 - `CANCELLED`
 - `EXPIRED`
 
-`PENDING` reservations consume one unit of effective capacity until they expire or are cancelled. `CONFIRMED` reservations increment `current_workload` exactly once. `CANCELLED` and `EXPIRED` reservations do not consume capacity. `DELETE` cancels pending reservations and releases confirmed reservations without physically deleting history.
+`TENTATIVE` reservations consume one unit of effective capacity until they expire or are cancelled. `CONFIRMED` reservations increment `current_workload` exactly once. `CANCELLED` and `EXPIRED` reservations do not consume capacity. `DELETE` cancels tentative reservations and releases confirmed reservations without physically deleting history.
 
-Duplicate active reservations for the same `specialist_id` and `incident_id` return `WORKFORCE_409`. A new reservation is allowed after the earlier one is `CANCELLED` or `EXPIRED`. Duplicate `reservation_id` always returns `WORKFORCE_409`.
+Duplicate active reservations for the same `specialist_id` and `incident_id` return `WORKFORCE_409`. A new reservation is allowed after the earlier one is `CANCELLED` or `EXPIRED`. `idempotency_key` prevents duplicate reservation creation; a replay with the same key and same payload returns the existing reservation with HTTP 200, while reusing the key for a different payload returns `WORKFORCE_409`. Duplicate `reservation_id` without a matching idempotency replay returns `WORKFORCE_409`.
 
-Expiration is lazy: expired pending reservations are excluded from capacity calculations and normalized to `EXPIRED` during reservation operations. No background scheduler is used in the MVP.
+Expiration is lazy: expired tentative reservations are excluded from capacity calculations and normalized to `EXPIRED` during reservation operations. No background scheduler is used in the MVP.
 
 ## Listing And Filters
 
@@ -194,11 +196,11 @@ Seed reservations:
 
 | Reservation | Specialist | Incident | Status |
 | --- | --- | --- | --- |
-| `RES-MAYA-PENDING` | `SPEC-MAYA` | `INC-ALPHA-001` | `PENDING` |
+| `RES-MAYA-TENTATIVE` | `SPEC-MAYA` | `INC-ALPHA-001` | `TENTATIVE` |
 | `RES-DANIEL-CONFIRMED` | `SPEC-DANIEL` | `INC-NOVA-001` | `CONFIRMED` |
 | `RES-NIMAL-CONFIRMED` | `SPEC-NIMAL` | `INC-MEDI-001` | `CONFIRMED` |
 | `RES-PRIYA-CANCELLED` | `SPEC-PRIYA` | `INC-CANCELLED-001` | `CANCELLED` |
-| `RES-DANIEL-EXPIRED` | `SPEC-DANIEL` | `INC-EXPIRED-001` | expired `PENDING`, lazily normalized |
+| `RES-DANIEL-EXPIRED` | `SPEC-DANIEL` | `INC-EXPIRED-001` | expired `TENTATIVE`, lazily normalized |
 
 ## Error Codes
 
