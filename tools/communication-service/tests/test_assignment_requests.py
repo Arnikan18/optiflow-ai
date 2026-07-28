@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timezone
 
 
@@ -52,6 +53,9 @@ def test_create_assignment_request_success_duplicate_and_validation(client, auth
     assert created["request_id"] == "AR-TEST-001"
     assert created["incident_id"] == "INC-TEST-001"
     assert created["specialist_id"] == "SPEC-MAYA"
+    assert created["run_id"] is None
+    assert created["reservation_id"] is None
+    assert created["idempotency_key"] is None
     assert created["status"] == "PENDING"
     assert created["responded_at"] is None
 
@@ -76,6 +80,36 @@ def test_create_assignment_request_success_duplicate_and_validation(client, auth
             422,
             "COMMUNICATION_422",
         )
+
+
+def test_create_assignment_request_idempotency_replay_and_payload_mismatch(client, auth_headers):
+    payload = assignment_payload(
+        request_id="AR-IDEM-001",
+        incident_id="INC-IDEM-001",
+        run_id="RUN-IDEM-001",
+        reservation_id="RES-IDEM-001",
+        idempotency_key="assign-idem-001",
+    )
+    created = assert_success(
+        client.post("/communication/api/v1/assignment-requests", json=payload, headers=auth_headers),
+        201,
+    )
+    replay = assert_success(
+        client.post("/communication/api/v1/assignment-requests", json=payload, headers=auth_headers),
+        200,
+    )
+    assert replay == created
+    assert replay["run_id"] == "RUN-IDEM-001"
+    assert replay["reservation_id"] == "RES-IDEM-001"
+    assert replay["idempotency_key"] == "assign-idem-001"
+
+    mismatch = dict(payload)
+    mismatch["incident_id"] = "INC-IDEM-CHANGED"
+    assert_error(
+        client.post("/communication/api/v1/assignment-requests", json=mismatch, headers=auth_headers),
+        409,
+        "COMMUNICATION_409",
+    )
 
 
 def test_list_assignment_requests_filters_metadata_and_order(client, auth_headers):
@@ -182,6 +216,7 @@ def test_respond_accept_reject_idempotent_and_conflict(client, auth_headers):
     assert accepted["status"] == "ACCEPTED"
     assert accepted["responded_at"] is not None
     assert accepted["response_note"] == "First note"
+    assert accepted["response_reason"] == "First note"
 
     repeat = assert_success(
         client.post(
@@ -219,6 +254,151 @@ def test_respond_accept_reject_idempotent_and_conflict(client, auth_headers):
         )
     )
     assert rejected["status"] == "REJECTED"
+
+
+def test_admin_queued_accept_reject_delay_and_one_time_consumption(client, auth_headers, admin_headers):
+    accepted_config = assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-MAYA",
+                "incident_id": "INC-QUEUE-ACCEPT",
+                "status": "ACCEPTED",
+                "reason": "Queued acceptance",
+            },
+            headers=admin_headers,
+        )
+    )
+    assert accepted_config["status"] == "ACCEPTED"
+    assert accepted_config["apply_once"] is True
+
+    created = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-QUEUE-ACCEPT", incident_id="INC-QUEUE-ACCEPT"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    assert created["status"] == "PENDING"
+    accepted = assert_success(
+        client.get("/communication/api/v1/assignment-requests/AR-QUEUE-ACCEPT", headers=auth_headers)
+    )
+    assert accepted["status"] == "ACCEPTED"
+    assert accepted["response_reason"] == "Queued acceptance"
+
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-MAYA",
+                "incident_id": "INC-QUEUE-REJECT",
+                "status": "REJECTED",
+                "reason": "Queued rejection",
+            },
+            headers=admin_headers,
+        )
+    )
+    assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-QUEUE-REJECT", incident_id="INC-QUEUE-REJECT"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    rejected = assert_success(
+        client.get("/communication/api/v1/assignment-requests/AR-QUEUE-REJECT", headers=auth_headers)
+    )
+    assert rejected["status"] == "REJECTED"
+    assert rejected["response_reason"] == "Queued rejection"
+
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-MAYA",
+                "status": "ACCEPTED",
+                "reason": "One time only",
+            },
+            headers=admin_headers,
+        )
+    )
+    assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-ONCE-001", incident_id="INC-ONCE-001"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    first = assert_success(client.get("/communication/api/v1/assignment-requests/AR-ONCE-001", headers=auth_headers))
+    assert first["status"] == "ACCEPTED"
+    assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-ONCE-002", incident_id="INC-ONCE-002"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    second = assert_success(client.get("/communication/api/v1/assignment-requests/AR-ONCE-002", headers=auth_headers))
+    assert second["status"] == "PENDING"
+
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-MAYA",
+                "incident_id": "INC-DELAY-001",
+                "status": "ACCEPTED",
+                "reason": "Delayed acceptance",
+                "response_delay_seconds": 1,
+            },
+            headers=admin_headers,
+        )
+    )
+    assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-DELAY-001", incident_id="INC-DELAY-001"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    pending = assert_success(client.get("/communication/api/v1/assignment-requests/AR-DELAY-001", headers=auth_headers))
+    assert pending["status"] == "PENDING"
+    time.sleep(1.1)
+    delayed = assert_success(client.get("/communication/api/v1/assignment-requests/AR-DELAY-001", headers=auth_headers))
+    assert delayed["status"] == "ACCEPTED"
+
+
+def test_admin_failure_mode_enable_disable(client, auth_headers, admin_headers):
+    initial = assert_success(client.get("/admin/failure-mode", headers=admin_headers))
+    assert initial["enabled"] is False
+
+    enabled = assert_success(
+        client.post(
+            "/admin/failure-mode",
+            json={
+                "enabled": True,
+                "failure_type": "HTTP_ERROR",
+                "status_code": 503,
+                "affected_endpoint": "assignment:get",
+            },
+            headers=admin_headers,
+        )
+    )
+    assert enabled["enabled"] is True
+    assert_error(
+        client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers),
+        503,
+        "COMMUNICATION_503",
+    )
+
+    disabled = assert_success(client.post("/admin/failure-mode", json={"enabled": False}, headers=admin_headers))
+    assert disabled["enabled"] is False
+    assert_success(client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers))
 
 
 def test_respond_rejects_invalid_missing_expired_and_cancelled(client, auth_headers):

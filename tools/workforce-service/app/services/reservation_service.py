@@ -16,7 +16,7 @@ from app.schemas.requests import (
 from app.services.specialist_service import WorkforceError
 
 
-ACTIVE_RESERVATION_STATUSES = ("PENDING", "CONFIRMED")
+ACTIVE_RESERVATION_STATUSES = ("TENTATIVE", "CONFIRMED")
 
 
 def _database_error() -> WorkforceError:
@@ -28,14 +28,14 @@ def is_expired(reservation: Reservation, now_utc: datetime | None = None) -> boo
     expires_at = reservation.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    return reservation.status == "PENDING" and now_utc >= expires_at.astimezone(timezone.utc)
+    return reservation.status == "TENTATIVE" and now_utc >= expires_at.astimezone(timezone.utc)
 
 
 async def expire_pending_reservations(session: AsyncSession, now_utc: datetime | None = None) -> int:
     now_utc = now_utc or datetime.now(timezone.utc)
     result = await session.execute(
         update(Reservation)
-        .where(Reservation.status == "PENDING", Reservation.expires_at <= now_utc)
+        .where(Reservation.status == "TENTATIVE", Reservation.expires_at <= now_utc)
         .values(status="EXPIRED", updated_at=now_utc)
     )
     return int(result.rowcount or 0)
@@ -45,7 +45,7 @@ async def _active_pending_count(session: AsyncSession, specialist_id: str, now_u
     result = await session.execute(
         select(func.count(Reservation.id)).where(
             Reservation.specialist_id == specialist_id,
-            Reservation.status == "PENDING",
+            Reservation.status == "TENTATIVE",
             Reservation.expires_at > now_utc,
         )
     )
@@ -72,11 +72,34 @@ def _validate_ttl(expires_in_seconds: int | None) -> int:
     return ttl
 
 
-async def create_reservation(session: AsyncSession, payload: ReservationCreateRequest) -> Reservation:
+def _same_reservation_create_payload(existing: Reservation, payload: ReservationCreateRequest) -> bool:
+    return (
+        existing.reservation_id == payload.reservation_id
+        and existing.run_id == payload.run_id
+        and existing.specialist_id == payload.specialist_id
+        and existing.incident_id == payload.incident_id
+    )
+
+
+async def create_reservation(session: AsyncSession, payload: ReservationCreateRequest) -> tuple[Reservation, bool]:
     now_utc = datetime.now(timezone.utc)
     ttl = _validate_ttl(payload.expires_in_seconds)
     try:
         await expire_pending_reservations(session, now_utc)
+
+        if payload.idempotency_key:
+            existing_by_key = await session.execute(
+                select(Reservation).where(Reservation.idempotency_key == payload.idempotency_key)
+            )
+            existing = existing_by_key.scalar_one_or_none()
+            if existing is not None:
+                if not _same_reservation_create_payload(existing, payload):
+                    raise WorkforceError(
+                        409,
+                        "WORKFORCE_409",
+                        "Idempotency key already used for a different reservation",
+                    )
+                return existing, False
 
         duplicate_id = await session.execute(
             select(Reservation.id).where(Reservation.reservation_id == payload.reservation_id)
@@ -96,7 +119,7 @@ async def create_reservation(session: AsyncSession, payload: ReservationCreateRe
                 Reservation.incident_id == payload.incident_id,
                 or_(
                     Reservation.status == "CONFIRMED",
-                    and_(Reservation.status == "PENDING", Reservation.expires_at > now_utc),
+                    and_(Reservation.status == "TENTATIVE", Reservation.expires_at > now_utc),
                 ),
             )
         )
@@ -109,9 +132,11 @@ async def create_reservation(session: AsyncSession, payload: ReservationCreateRe
 
         reservation = Reservation(
             reservation_id=payload.reservation_id,
+            run_id=payload.run_id,
             specialist_id=payload.specialist_id,
             incident_id=payload.incident_id,
-            status="PENDING",
+            status="TENTATIVE",
+            idempotency_key=payload.idempotency_key,
             created_at=now_utc,
             expires_at=now_utc + timedelta(seconds=ttl),
             updated_at=now_utc,
@@ -119,7 +144,7 @@ async def create_reservation(session: AsyncSession, payload: ReservationCreateRe
         session.add(reservation)
         await session.commit()
         await session.refresh(reservation)
-        return reservation
+        return reservation, True
     except WorkforceError:
         await session.rollback()
         raise
@@ -204,7 +229,11 @@ async def confirm_reservation(session: AsyncSession, reservation_id: str) -> Res
         raise _database_error() from exc
 
 
-async def cancel_reservation(session: AsyncSession, reservation_id: str) -> Reservation:
+async def cancel_reservation(
+    session: AsyncSession,
+    reservation_id: str,
+    cancellation_reason: str | None = None,
+) -> Reservation:
     now_utc = datetime.now(timezone.utc)
     try:
         normalized_id = normalize_reservation_id(reservation_id)
@@ -213,7 +242,7 @@ async def cancel_reservation(session: AsyncSession, reservation_id: str) -> Rese
         if reservation is None:
             raise WorkforceError(404, "WORKFORCE_404", "Reservation not found")
 
-        if reservation.status == "PENDING" and is_expired(reservation, now_utc):
+        if reservation.status == "TENTATIVE" and is_expired(reservation, now_utc):
             reservation.status = "EXPIRED"
             reservation.updated_at = now_utc
             session.add(reservation)
@@ -232,6 +261,8 @@ async def cancel_reservation(session: AsyncSession, reservation_id: str) -> Rese
 
         reservation.status = "CANCELLED"
         reservation.cancelled_at = now_utc
+        if cancellation_reason:
+            reservation.cancellation_reason = cancellation_reason
         reservation.updated_at = now_utc
         session.add(reservation)
         await session.commit()
@@ -271,13 +302,17 @@ async def create_legacy_tentative_reservation(
     specialist_id: str,
     incident_id: str,
     reservation_id: str | None = None,
+    run_id: str | None = None,
 ) -> Reservation:
     specialist_id = normalize_specialist_id(specialist_id)
     incident_id = normalize_incident_id(incident_id)
     reservation_id = normalize_reservation_id(reservation_id or f"RES-{specialist_id}-{incident_id}")
     payload = ReservationCreateRequest(
         reservation_id=reservation_id,
+        run_id=run_id,
+        idempotency_key=reservation_id,
         specialist_id=specialist_id,
         incident_id=incident_id,
     )
-    return await create_reservation(session, payload)
+    reservation, _ = await create_reservation(session, payload)
+    return reservation

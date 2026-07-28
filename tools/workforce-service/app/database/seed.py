@@ -95,10 +95,10 @@ def build_seed_reservations() -> list[Reservation]:
     created_at = _utc_datetime("2026-07-22T10:00:00Z")
     return [
         Reservation(
-            reservation_id="RES-MAYA-PENDING",
+            reservation_id="RES-MAYA-TENTATIVE",
             specialist_id="SPEC-MAYA",
             incident_id="INC-ALPHA-001",
-            status="PENDING",
+            status="TENTATIVE",
             created_at=created_at,
             expires_at=_utc_datetime("2099-07-24T10:05:00Z"),
             updated_at=created_at,
@@ -137,7 +137,7 @@ def build_seed_reservations() -> list[Reservation]:
             reservation_id="RES-DANIEL-EXPIRED",
             specialist_id="SPEC-DANIEL",
             incident_id="INC-EXPIRED-001",
-            status="PENDING",
+            status="TENTATIVE",
             created_at=created_at,
             expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
             updated_at=created_at,

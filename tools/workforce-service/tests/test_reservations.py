@@ -32,7 +32,9 @@ def test_create_reservation_success_duplicate_and_capacity(client, auth_headers)
     assert created["reservation_id"] == "RES-TEST-001"
     assert created["specialist_id"] == "SPEC-DANIEL"
     assert created["incident_id"] == "INC-TEST-001"
-    assert created["status"] == "PENDING"
+    assert created["run_id"] is None
+    assert created["idempotency_key"] is None
+    assert created["status"] == "TENTATIVE"
     assert created["confirmed_at"] is None
 
     assert_error(
@@ -87,6 +89,34 @@ def test_create_reservation_success_duplicate_and_capacity(client, auth_headers)
     )
 
 
+def test_create_reservation_idempotency_replay_and_payload_mismatch(client, auth_headers):
+    payload = reservation_payload(
+        reservation_id="RES-IDEM-001",
+        incident_id="INC-IDEM-001",
+        run_id="RUN-IDEM-001",
+        idempotency_key="res-idem-001",
+    )
+    created = assert_success(
+        client.post("/workforce/api/v1/reservations", json=payload, headers=auth_headers),
+        201,
+    )
+    replay = assert_success(
+        client.post("/workforce/api/v1/reservations", json=payload, headers=auth_headers),
+        200,
+    )
+    assert replay == created
+    assert replay["run_id"] == "RUN-IDEM-001"
+    assert replay["idempotency_key"] == "res-idem-001"
+
+    mismatch = dict(payload)
+    mismatch["incident_id"] = "INC-IDEM-CHANGED"
+    assert_error(
+        client.post("/workforce/api/v1/reservations", json=mismatch, headers=auth_headers),
+        409,
+        "WORKFORCE_409",
+    )
+
+
 def test_reservation_allows_new_after_cancel_and_after_expiry(client, auth_headers):
     created = assert_success(
         client.post(
@@ -116,12 +146,12 @@ def test_reservation_allows_new_after_cancel_and_after_expiry(client, auth_heade
         ),
         201,
     )
-    assert after_expiry["status"] == "PENDING"
+    assert after_expiry["status"] == "TENTATIVE"
 
 
 def test_get_reservation_existing_missing_and_expired(client, auth_headers):
-    pending = assert_success(client.get("/workforce/api/v1/reservations/RES-MAYA-PENDING", headers=auth_headers))
-    assert pending["status"] == "PENDING"
+    pending = assert_success(client.get("/workforce/api/v1/reservations/RES-MAYA-TENTATIVE", headers=auth_headers))
+    assert pending["status"] == "TENTATIVE"
 
     expired = assert_success(client.get("/workforce/api/v1/reservations/RES-DANIEL-EXPIRED", headers=auth_headers))
     assert expired["status"] == "EXPIRED"
@@ -205,9 +235,13 @@ def test_cancel_pending_release_confirmed_repeat_and_missing(client, auth_header
         201,
     )
     cancelled = assert_success(
-        client.delete(f"/workforce/api/v1/reservations/{pending['reservation_id']}", headers=auth_headers)
+        client.delete(
+            f"/workforce/api/v1/reservations/{pending['reservation_id']}?cancellation_reason=No%20longer%20needed",
+            headers=auth_headers,
+        )
     )
     assert cancelled["status"] == "CANCELLED"
+    assert cancelled["cancellation_reason"] == "No longer needed"
     repeated = assert_success(
         client.delete(f"/workforce/api/v1/reservations/{pending['reservation_id']}", headers=auth_headers)
     )

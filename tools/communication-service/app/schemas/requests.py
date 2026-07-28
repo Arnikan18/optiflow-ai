@@ -4,14 +4,16 @@ from typing import Annotated
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-ASSIGNMENT_STATUSES = {"PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "CANCELLED"}
+ASSIGNMENT_STATUSES = {"PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "FAILED", "CANCELLED"}
 ASSIGNMENT_RESPONSES = {"ACCEPTED", "REJECTED"}
 NOTIFICATION_CHANNELS = {"EMAIL", "SMS", "IN_APP", "WEBHOOK"}
 NOTIFICATION_STATUSES = {"PENDING", "DELIVERED", "FAILED"}
 
 RequestId = Annotated[str, Field(min_length=1, max_length=64)]
+RunId = Annotated[str, Field(min_length=1, max_length=64)]
 IncidentId = Annotated[str, Field(min_length=1, max_length=64)]
 SpecialistId = Annotated[str, Field(min_length=1, max_length=64)]
+ReservationId = Annotated[str, Field(min_length=1, max_length=64)]
 NotificationId = Annotated[str, Field(min_length=1, max_length=64)]
 Recipient = Annotated[str, Field(min_length=1, max_length=500)]
 Message = Annotated[str, Field(min_length=1, max_length=2000)]
@@ -31,12 +33,20 @@ def normalize_request_id(value: str) -> str:
     return normalize_identifier(value, "request_id")
 
 
+def normalize_run_id(value: str) -> str:
+    return normalize_identifier(value, "run_id")
+
+
 def normalize_incident_id(value: str) -> str:
     return normalize_identifier(value, "incident_id")
 
 
 def normalize_specialist_id(value: str) -> str:
     return normalize_identifier(value, "specialist_id")
+
+
+def normalize_reservation_id(value: str) -> str:
+    return normalize_identifier(value, "reservation_id")
 
 
 def normalize_notification_id(value: str) -> str:
@@ -121,9 +131,12 @@ def validate_sms(value: str) -> str:
 
 class AssignmentRequestCreateRequest(BaseModel):
     request_id: RequestId
+    run_id: RunId | None = None
     incident_id: IncidentId
     specialist_id: SpecialistId
+    reservation_id: ReservationId | None = None
     message: Message
+    idempotency_key: IdempotencyKey | None = None
     expires_in_seconds: int | None = Field(default=None, ge=30, le=86400)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -132,6 +145,13 @@ class AssignmentRequestCreateRequest(BaseModel):
     @classmethod
     def validate_request_id(cls, value: str) -> str:
         return normalize_request_id(value)
+
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
 
     @field_validator("incident_id")
     @classmethod
@@ -143,15 +163,32 @@ class AssignmentRequestCreateRequest(BaseModel):
     def validate_specialist_id(cls, value: str) -> str:
         return normalize_specialist_id(value)
 
+    @field_validator("reservation_id")
+    @classmethod
+    def validate_reservation_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_reservation_id(value)
+
     @field_validator("message")
     @classmethod
     def validate_message(cls, value: str) -> str:
         return normalize_message(value)
 
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("idempotency_key cannot be empty")
+        return normalized
+
 
 class AssignmentResponseRequest(BaseModel):
     response: str
-    response_note: ResponseNote | None = None
+    response_note: ResponseNote | None = Field(default=None, validation_alias=AliasChoices("response_note", "responseReason", "response_reason"))
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -230,6 +267,8 @@ class NotificationCreateRequest(BaseModel):
 class LegacyAssignmentCreateRequest(BaseModel):
     specialistId: SpecialistId
     escalationId: IncidentId
+    runId: RunId | None = None
+    reservationId: ReservationId | None = None
     message: str | None = None
     requestedMinutes: int | None = Field(default=None, ge=1, le=1440)
     idempotencyKey: str | None = Field(default=None, max_length=128)
@@ -245,6 +284,20 @@ class LegacyAssignmentCreateRequest(BaseModel):
     @classmethod
     def validate_incident_id(cls, value: str) -> str:
         return normalize_incident_id(value)
+
+    @field_validator("runId")
+    @classmethod
+    def validate_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
+
+    @field_validator("reservationId")
+    @classmethod
+    def validate_reservation_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_reservation_id(value)
 
 
 class LegacyAssignmentResponseRequest(BaseModel):
@@ -280,21 +333,63 @@ class LegacyNotificationCreateRequest(BaseModel):
 
 
 class AdminConfiguredResponseRequest(BaseModel):
-    specialistId: SpecialistId | None = None
+    specialist_id: SpecialistId | None = Field(default=None, validation_alias=AliasChoices("specialist_id", "specialistId"))
+    incident_id: IncidentId | None = Field(default=None, validation_alias=AliasChoices("incident_id", "incidentId", "escalationId"))
     status: str = "ACCEPTED"
     reason: str | None = None
-    delayMs: int = Field(default=0, ge=0, le=60000)
+    response_delay_seconds: int = Field(
+        default=0,
+        ge=0,
+        le=3600,
+        validation_alias=AliasChoices("response_delay_seconds", "responseDelaySeconds", "delaySeconds"),
+    )
+    delayMs: int | None = Field(default=None, ge=0, le=60000)
+    apply_once: bool = Field(default=True, validation_alias=AliasChoices("apply_once", "applyOnce"))
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    @field_validator("specialistId")
+    @field_validator("specialist_id")
     @classmethod
     def validate_specialist_id(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return normalize_specialist_id(value)
 
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_incident_id(value)
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: str) -> str:
         return normalize_assignment_response(value)
+
+
+class AdminFailureModeRequest(BaseModel):
+    enabled: bool = False
+    failure_type: str = Field(default="HTTP_ERROR", validation_alias=AliasChoices("failure_type", "failureType", "mode"))
+    status_code: int = Field(default=503, ge=400, le=599, validation_alias=AliasChoices("status_code", "statusCode"))
+    delay_seconds: int = Field(default=0, ge=0, le=60, validation_alias=AliasChoices("delay_seconds", "delaySeconds"))
+    affected_endpoint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("affected_endpoint", "affectedEndpoint"),
+    )
+    scope: str | None = None
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    @field_validator("failure_type")
+    @classmethod
+    def validate_failure_type(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not normalized:
+            raise ValueError("failure_type cannot be empty")
+        return normalized
+
+    @field_validator("affected_endpoint", "scope")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)

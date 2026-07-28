@@ -33,6 +33,7 @@ def build_seed_assignment_requests() -> list[AssignmentRequest]:
             expires_at=_utc_datetime("2099-07-24T10:15:00Z"),
             responded_at=_utc_datetime("2026-07-22T10:05:00Z"),
             response_note="Available now.",
+            response_reason="Available now.",
             updated_at=_utc_datetime("2026-07-22T10:05:00Z"),
         ),
         AssignmentRequest(
@@ -45,6 +46,7 @@ def build_seed_assignment_requests() -> list[AssignmentRequest]:
             expires_at=_utc_datetime("2099-07-24T10:15:00Z"),
             responded_at=_utc_datetime("2026-07-22T10:10:00Z"),
             response_note="Capacity is already committed.",
+            response_reason="Capacity is already committed.",
             updated_at=_utc_datetime("2026-07-22T10:10:00Z"),
         ),
         AssignmentRequest(
@@ -151,28 +153,6 @@ def build_seed_notifications() -> list[Notification]:
     ]
 
 
-def build_seed_configured_responses() -> list[ConfiguredResponse]:
-    updated_at = datetime.now(timezone.utc).isoformat()
-    return [
-        ConfiguredResponse(
-            specialist_id="SPEC-MAYA",
-            next_status="ACCEPTED",
-            response_reason="Configured demo acceptance",
-            delay_ms=0,
-            active=1,
-            updated_at=updated_at,
-        ),
-        ConfiguredResponse(
-            specialist_id="SPEC-NIMAL",
-            next_status="REJECTED",
-            response_reason="Configured demo rejection",
-            delay_ms=0,
-            active=1,
-            updated_at=updated_at,
-        ),
-    ]
-
-
 async def ensure_failure_mode(session: AsyncSession) -> None:
     result = await session.execute(select(FailureMode).limit(1))
     if result.scalar_one_or_none() is not None:
@@ -181,8 +161,13 @@ async def ensure_failure_mode(session: AsyncSession) -> None:
     session.add(
         FailureMode(
             mode="TIMEOUT",
+            failure_type="TIMEOUT",
             enabled=0,
+            status_code=503,
+            delay_seconds=0,
             delay_ms=5000,
+            affected_endpoint=None,
+            scope=None,
             remaining_failures=0,
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
@@ -193,11 +178,11 @@ async def seed_database(session: AsyncSession) -> dict[str, int]:
     await session.execute(delete(Notification))
     await session.execute(delete(AssignmentRequest))
     await session.execute(delete(ConfiguredResponse))
+    await session.execute(delete(FailureMode))
 
     assignments = build_seed_assignment_requests()
     notifications = build_seed_notifications()
     session.add_all(assignments)
-    session.add_all(build_seed_configured_responses())
     await session.flush()
     session.add_all(notifications)
     await ensure_failure_mode(session)
@@ -216,7 +201,6 @@ async def seed_communication_if_empty(session: AsyncSession) -> dict[str, int]:
     assignments = build_seed_assignment_requests()
     notifications = build_seed_notifications()
     session.add_all(assignments)
-    session.add_all(build_seed_configured_responses())
     await session.flush()
     session.add_all(notifications)
     await session.commit()
