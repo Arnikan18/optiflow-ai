@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     saga_poll_interval_seconds: float = 1.0
 
     
-    optimization_strategy: str = "greedy"
+    optimization_strategy: str = "cp-sat"
     solver_time_limit_seconds: float = 3.0
     
     sse_heartbeat_seconds: int = 15

@@ -150,12 +150,13 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_VERSION: ${APP_VERSION:-4.0}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://optiflow:change-me@postgres:5432/optiflow}
-      CRM_SERVICE_URL: ${CRM_SERVICE_URL:-http://crm-service:8101}
-      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL:-http://incident-service:8102}
-      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL:-http://workforce-service:8103}
-      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:8104}
+      DATABASE_URL: postgresql+psycopg://optiflow:change-me@postgres:5432/optiflow
+      CRM_SERVICE_URL: http://crm-service:8101
+      INCIDENT_SERVICE_URL: http://incident-service:8102
+      WORKFORCE_SERVICE_URL: http://workforce-service:8103
+      COMMUNICATION_SERVICE_URL: http://communication-service:8104
       TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
     ports:
       - "${CORE_API_PORT:-8000}:8000"
     volumes:
