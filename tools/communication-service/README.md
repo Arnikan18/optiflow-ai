@@ -102,6 +102,7 @@ If the Windows temp directory is restricted, set `TMP` and `TEMP` to a writable 
 | `POST` | `/admin/next-response` | `X-Admin-Key` | Queue deterministic specialist response |
 | `GET` | `/admin/failure-mode` | `X-Admin-Key` | Read failure simulation config |
 | `POST` | `/admin/failure-mode` | `X-Admin-Key` | Enable or disable failure simulation |
+| `GET` | `/admin/simulation-state` | `X-Admin-Key` | Read queued responses, active failures, and pending assignments |
 
 Deprecated compatibility endpoints remain for current demo/core integration: `/assignment-requests`, `/assignment-requests/{request_id}`, `/assignment-requests/{request_id}/respond`, `/notifications`, and `/notifications/{notification_id}`.
 
@@ -188,9 +189,9 @@ Expiration is lazy: expired pending requests are normalized to `EXPIRED` during 
 
 ## Specialist Response Simulation
 
-`POST /admin/next-response` queues a deterministic response for polling demos. The body supports `specialist_id`, optional `incident_id`, `status` (`ACCEPTED` or `REJECTED`), optional `reason`, optional `response_delay_seconds`, and `apply_once` (default `true`). Matching queued responses are applied during `GET /communication/api/v1/assignment-requests/{request_id}` after the delay has elapsed. One-time responses are consumed after the first match.
+`POST /admin/next-response` queues a deterministic response for polling demos. The body supports `specialist_id`, optional `incident_id`, `status` (`ACCEPTED` or `REJECTED`), optional `reason`, optional `response_delay_seconds`, `apply_once` (default `true`), and optional `expires_after_seconds`. Matching queued responses are applied during `GET /communication/api/v1/assignment-requests/{request_id}` after the delay has elapsed. More specific rules match before generic rules. One-time responses are consumed after the first match, and expired responses are disabled before matching.
 
-`POST /admin/failure-mode` accepts `enabled`, `failure_type`, `status_code`, `delay_seconds`, `affected_endpoint`, and `scope`. It can simulate controlled failures for assignment or notification endpoints. `POST /admin/reset` clears queued responses and resets failure mode to a clean disabled state.
+`POST /admin/failure-mode` accepts `enabled`, `failure_type`, `status_code`, `delay_seconds`, `affected_endpoint`, `scope`, `apply_once`, optional `expires_after_seconds`, and optional `message`. Supported `failure_type` values are `HTTP_ERROR`, `TIMEOUT`, `DELAY`, `CONNECTION_FAILURE`, and `INVALID_RESPONSE`. It can simulate controlled failures for assignment or notification endpoints. `GET /admin/failure-mode` returns active rules. `GET /admin/simulation-state` returns queued responses, active failures, pending assignment requests, last reset time, and seed status. `POST /admin/reset` clears queued responses and resets failure mode to a clean disabled state.
 
 ## Notifications
 

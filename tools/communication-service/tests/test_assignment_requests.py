@@ -271,6 +271,8 @@ def test_admin_queued_accept_reject_delay_and_one_time_consumption(client, auth_
     )
     assert accepted_config["status"] == "ACCEPTED"
     assert accepted_config["apply_once"] is True
+    assert accepted_config["simulation_rule_id"] >= 1
+    assert accepted_config["active"] is True
 
     created = assert_success(
         client.post(
@@ -350,6 +352,32 @@ def test_admin_queued_accept_reject_delay_and_one_time_consumption(client, auth_
             "/admin/next-response",
             json={
                 "specialist_id": "SPEC-MAYA",
+                "status": "REJECTED",
+                "reason": "Persistent rejection",
+                "apply_once": False,
+            },
+            headers=admin_headers,
+        )
+    )
+    for index in (1, 2):
+        assert_success(
+            client.post(
+                "/communication/api/v1/assignment-requests",
+                json=assignment_payload(request_id=f"AR-PERSIST-{index}", incident_id=f"INC-PERSIST-{index}"),
+                headers=auth_headers,
+            ),
+            201,
+        )
+        persistent = assert_success(
+            client.get(f"/communication/api/v1/assignment-requests/AR-PERSIST-{index}", headers=auth_headers)
+        )
+        assert persistent["status"] == "REJECTED"
+
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-MAYA",
                 "incident_id": "INC-DELAY-001",
                 "status": "ACCEPTED",
                 "reason": "Delayed acceptance",
@@ -372,10 +400,41 @@ def test_admin_queued_accept_reject_delay_and_one_time_consumption(client, auth_
     delayed = assert_success(client.get("/communication/api/v1/assignment-requests/AR-DELAY-001", headers=auth_headers))
     assert delayed["status"] == "ACCEPTED"
 
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={
+                "specialist_id": "SPEC-DANIEL",
+                "incident_id": "INC-EXPIRED-RULE",
+                "status": "ACCEPTED",
+                "expires_after_seconds": 1,
+            },
+            headers=admin_headers,
+        )
+    )
+    time.sleep(1.1)
+    assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(
+                request_id="AR-EXPIRED-RULE",
+                incident_id="INC-EXPIRED-RULE",
+                specialist_id="SPEC-DANIEL",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    expired_rule = assert_success(
+        client.get("/communication/api/v1/assignment-requests/AR-EXPIRED-RULE", headers=auth_headers)
+    )
+    assert expired_rule["status"] == "PENDING"
+
 
 def test_admin_failure_mode_enable_disable(client, auth_headers, admin_headers):
     initial = assert_success(client.get("/admin/failure-mode", headers=admin_headers))
     assert initial["enabled"] is False
+    assert initial["active_rules"] == []
 
     enabled = assert_success(
         client.post(
@@ -390,6 +449,7 @@ def test_admin_failure_mode_enable_disable(client, auth_headers, admin_headers):
         )
     )
     assert enabled["enabled"] is True
+    assert enabled["simulation_rule_id"] >= 1
     assert_error(
         client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers),
         503,
@@ -399,6 +459,96 @@ def test_admin_failure_mode_enable_disable(client, auth_headers, admin_headers):
     disabled = assert_success(client.post("/admin/failure-mode", json={"enabled": False}, headers=admin_headers))
     assert disabled["enabled"] is False
     assert_success(client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers))
+
+
+def test_admin_failure_modes_one_time_delay_timeout_and_state(client, auth_headers, admin_headers):
+    assert_error(
+        client.post(
+            "/admin/failure-mode",
+            json={"enabled": True, "failure_type": "NOT_SUPPORTED"},
+            headers=admin_headers,
+        ),
+        422,
+        "COMMUNICATION_422",
+    )
+
+    one_time = assert_success(
+        client.post(
+            "/admin/failure-mode",
+            json={
+                "enabled": True,
+                "failure_type": "HTTP_ERROR",
+                "status_code": 502,
+                "affected_endpoint": "assignment:get",
+                "apply_once": True,
+                "message": "One failure only",
+            },
+            headers=admin_headers,
+        )
+    )
+    assert one_time["remaining_uses"] == 1
+    assert_error(
+        client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers),
+        502,
+        "COMMUNICATION_502",
+    )
+    assert_success(client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers))
+
+    timeout = assert_success(
+        client.post(
+            "/admin/failure-mode",
+            json={
+                "enabled": True,
+                "failure_type": "TIMEOUT",
+                "affected_endpoint": "assignment:get",
+                "apply_once": True,
+            },
+            headers=admin_headers,
+        )
+    )
+    assert timeout["failure_type"] == "TIMEOUT"
+    assert_error(
+        client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers),
+        504,
+        "COMMUNICATION_504",
+    )
+
+    delay = assert_success(
+        client.post(
+            "/admin/failure-mode",
+            json={
+                "enabled": True,
+                "failure_type": "DELAY",
+                "delay_seconds": 1,
+                "affected_endpoint": "assignment:get",
+                "apply_once": True,
+            },
+            headers=admin_headers,
+        )
+    )
+    assert delay["failure_type"] == "DELAY"
+    started = time.perf_counter()
+    assert_success(client.get("/communication/api/v1/assignment-requests/AR-PENDING-001", headers=auth_headers))
+    assert time.perf_counter() - started >= 1
+
+    assert_success(
+        client.post(
+            "/admin/next-response",
+            json={"specialist_id": "SPEC-MAYA", "status": "ACCEPTED", "reason": "State visible"},
+            headers=admin_headers,
+        )
+    )
+    state = assert_success(client.get("/admin/simulation-state", headers=admin_headers))
+    assert "queued_specialist_responses" in state
+    assert "active_failure_modes" in state
+    assert any(item["request_id"] == "AR-PENDING-001" for item in state["pending_assignment_requests"])
+
+    reset = assert_success(client.post("/admin/reset", headers=admin_headers))
+    assert reset == {"assignment_request_count": 5, "notification_count": 5}
+    state_after_reset = assert_success(client.get("/admin/simulation-state", headers=admin_headers))
+    assert state_after_reset["queued_specialist_responses"] == []
+    assert state_after_reset["active_failure_modes"] == []
+    assert state_after_reset["last_reset_at"] is not None
 
 
 def test_respond_rejects_invalid_missing_expired_and_cancelled(client, auth_headers):

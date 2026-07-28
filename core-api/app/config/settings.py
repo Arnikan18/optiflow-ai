@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.1-8b-instant"
     prompt_version: str = "4.0"
     
-    crm_service_url: str
-    incident_service_url: str
-    workforce_service_url: str
-    communication_service_url: str
-    tool_shared_token: str
+    crm_service_url: str = "http://crm-service:8101"
+    incident_service_url: str = "http://incident-service:8102"
+    workforce_service_url: str = "http://workforce-service:8103"
+    communication_service_url: str = "http://communication-service:8104"
+    tool_shared_token: str = "change-me"
     admin_api_key: str = ""
     
     tool_timeout_seconds: float = 3.0
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     sse_heartbeat_seconds: int = 15
     demo_mode: bool = True
     demo_step_delay_ms: int = 250
+    demo_portfolio_timeout_seconds: float = 3.0
+    demo_health_timeout_seconds: float = 2.0
+    demo_allow_failure_injection: bool = True
     
     model_config = SettingsConfigDict(
         env_file=".env",

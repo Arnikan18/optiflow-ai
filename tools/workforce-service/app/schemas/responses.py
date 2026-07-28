@@ -39,6 +39,28 @@ class SpecialistListData(BaseModel):
     total_pages: int = Field(ge=0)
 
 
+class WorkloadResponse(BaseModel):
+    specialist_id: str
+    assigned_count: int = Field(ge=0)
+    tentative_reservation_count: int = Field(ge=0)
+    confirmed_reservation_count: int = Field(ge=0)
+    available_capacity: int = Field(ge=0)
+    utilisation_percentage: float = Field(ge=0)
+    updated_at: datetime
+
+    @field_serializer("updated_at")
+    def serialize_datetime(self, value: datetime) -> str:
+        return serialize_datetime_value(value) or ""
+
+
+class WorkloadListData(BaseModel):
+    workloads: list[WorkloadResponse]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
+    total_items: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+
+
 class ReservationResponse(BaseModel):
     reservation_id: str
     run_id: str | None

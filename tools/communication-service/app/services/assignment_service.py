@@ -22,6 +22,9 @@ from app.schemas.requests import (
 )
 
 
+_LAST_RESET_AT: str | None = None
+
+
 class CommunicationError(Exception):
     def __init__(self, status_code: int, error_code: str, message: str) -> None:
         self.status_code = status_code
@@ -47,10 +50,29 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _utc_now_iso() -> str:
+    return _utc_now().isoformat()
+
+
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _expires_at_from_seconds(seconds: int | None, now_utc: datetime) -> str | None:
+    if seconds is None:
+        return None
+    return (now_utc + timedelta(seconds=seconds)).isoformat()
 
 
 def is_expired(request: AssignmentRequest, now_utc: datetime | None = None) -> bool:
@@ -66,6 +88,21 @@ async def expire_pending_assignment_requests(session: AsyncSession, now_utc: dat
         .values(status="EXPIRED", updated_at=now_utc)
     )
     return int(result.rowcount or 0)
+
+
+async def deactivate_expired_simulation_rules(session: AsyncSession, now_utc: datetime | None = None) -> None:
+    now_utc = now_utc or _utc_now()
+    now_iso = now_utc.isoformat()
+    await session.execute(
+        update(ConfiguredResponse)
+        .where(ConfiguredResponse.active == 1, ConfiguredResponse.expires_at.is_not(None), ConfiguredResponse.expires_at <= now_iso)
+        .values(active=0, updated_at=now_iso)
+    )
+    await session.execute(
+        update(FailureMode)
+        .where(FailureMode.enabled == 1, FailureMode.expires_at.is_not(None), FailureMode.expires_at <= now_iso)
+        .values(enabled=0, updated_at=now_iso)
+    )
 
 
 def _validate_ttl(expires_in_seconds: int | None) -> int:
@@ -254,7 +291,9 @@ async def list_assignment_requests(
 async def _matching_configured_response(
     session: AsyncSession,
     request: AssignmentRequest,
+    now_utc: datetime,
 ) -> ConfiguredResponse | None:
+    await deactivate_expired_simulation_rules(session, now_utc)
     result = await session.execute(
         select(ConfiguredResponse)
         .where(
@@ -280,7 +319,7 @@ async def apply_configured_response_if_due(
     if request.status != "PENDING" or is_expired(request, now_utc):
         return request
 
-    configured = await _matching_configured_response(session, request)
+    configured = await _matching_configured_response(session, request, now_utc)
     if configured is None:
         return request
 
@@ -381,7 +420,9 @@ async def respond_to_assignment_request(
 
 async def reset_communication(session: AsyncSession) -> dict[str, int]:
     try:
+        global _LAST_RESET_AT
         counts = await seed_database(session)
+        _LAST_RESET_AT = _utc_now_iso()
         return counts
     except SQLAlchemyError as exc:
         await session.rollback()
@@ -398,40 +439,27 @@ async def configure_legacy_response(
     delay_seconds: int = 0,
     delay_ms: int | None = None,
     apply_once: bool = True,
+    expires_after_seconds: int | None = None,
 ) -> ConfiguredResponse:
-    now_iso = _utc_now().isoformat()
+    now_utc = _utc_now()
+    now_iso = now_utc.isoformat()
     try:
         if delay_ms is not None:
             delay_seconds = int(delay_ms / 1000)
 
-        result = await session.execute(
-            select(ConfiguredResponse).where(
-                ConfiguredResponse.specialist_id == specialist_id,
-                ConfiguredResponse.incident_id == incident_id,
-                ConfiguredResponse.active == 1,
-            )
+        configured = ConfiguredResponse(
+            specialist_id=specialist_id,
+            incident_id=incident_id,
+            next_status=status,
+            response_reason=reason,
+            delay_seconds=delay_seconds,
+            delay_ms=delay_ms or delay_seconds * 1000,
+            apply_once=1 if apply_once else 0,
+            active=1,
+            created_at=now_iso,
+            expires_at=_expires_at_from_seconds(expires_after_seconds, now_utc),
+            updated_at=now_iso,
         )
-        configured = result.scalar_one_or_none()
-        if configured is None:
-            configured = ConfiguredResponse(
-                specialist_id=specialist_id,
-                incident_id=incident_id,
-                next_status=status,
-                response_reason=reason,
-                delay_seconds=delay_seconds,
-                delay_ms=delay_ms or delay_seconds * 1000,
-                apply_once=1 if apply_once else 0,
-                active=1,
-                updated_at=now_iso,
-            )
-        configured.next_status = status
-        configured.response_reason = reason
-        configured.delay_seconds = delay_seconds
-        configured.delay_ms = delay_ms or delay_seconds * 1000
-        configured.apply_once = 1 if apply_once else 0
-        configured.active = 1
-        configured.consumed_at = None
-        configured.updated_at = now_iso
         session.add(configured)
         await session.commit()
         await session.refresh(configured)
@@ -471,8 +499,12 @@ async def get_failure_mode(session: AsyncSession) -> FailureMode:
         delay_ms=0,
         affected_endpoint=None,
         scope=None,
+        apply_once=0,
+        message=None,
+        created_at=_utc_now_iso(),
+        expires_at=None,
         remaining_failures=None,
-        updated_at=_utc_now().isoformat(),
+        updated_at=_utc_now_iso(),
     )
     session.add(mode)
     await session.commit()
@@ -489,8 +521,13 @@ async def configure_failure_mode(
     delay_seconds: int,
     affected_endpoint: str | None,
     scope: str | None,
+    apply_once: bool = False,
+    expires_after_seconds: int | None = None,
+    message: str | None = None,
 ) -> FailureMode:
     try:
+        now_utc = _utc_now()
+        now_iso = now_utc.isoformat()
         mode = await get_failure_mode(session)
         mode.enabled = 1 if enabled else 0
         mode.mode = failure_type
@@ -500,11 +537,76 @@ async def configure_failure_mode(
         mode.delay_ms = delay_seconds * 1000
         mode.affected_endpoint = affected_endpoint
         mode.scope = scope
-        mode.updated_at = _utc_now().isoformat()
+        mode.apply_once = 1 if apply_once else 0
+        mode.remaining_failures = 1 if enabled and apply_once else None
+        mode.message = message
+        if enabled:
+            mode.created_at = now_iso
+            mode.expires_at = _expires_at_from_seconds(expires_after_seconds, now_utc)
+        else:
+            mode.expires_at = None
+        mode.updated_at = now_iso
         session.add(mode)
         await session.commit()
         await session.refresh(mode)
         return mode
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def list_queued_response_rules(session: AsyncSession, active_only: bool = False) -> list[ConfiguredResponse]:
+    now_utc = _utc_now()
+    try:
+        await deactivate_expired_simulation_rules(session, now_utc)
+        stmt = select(ConfiguredResponse).order_by(ConfiguredResponse.configuration_id.asc())
+        if active_only:
+            stmt = stmt.where(ConfiguredResponse.active == 1)
+        result = await session.execute(stmt)
+        rules = list(result.scalars().all())
+        await session.commit()
+        return rules
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def list_active_failure_modes(session: AsyncSession) -> list[FailureMode]:
+    now_utc = _utc_now()
+    try:
+        await deactivate_expired_simulation_rules(session, now_utc)
+        result = await session.execute(select(FailureMode).where(FailureMode.enabled == 1).order_by(FailureMode.mode_id.asc()))
+        rules = list(result.scalars().all())
+        await session.commit()
+        return rules
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def get_simulation_state(session: AsyncSession) -> dict[str, object]:
+    now_utc = _utc_now()
+    try:
+        await deactivate_expired_simulation_rules(session, now_utc)
+        await expire_pending_assignment_requests(session, now_utc)
+        responses = await session.execute(select(ConfiguredResponse).order_by(ConfiguredResponse.configuration_id.asc()))
+        failures = await session.execute(select(FailureMode).where(FailureMode.enabled == 1).order_by(FailureMode.mode_id.asc()))
+        assignments = await session.execute(
+            select(AssignmentRequest)
+            .where(AssignmentRequest.status == "PENDING", AssignmentRequest.expires_at > now_utc)
+            .order_by(AssignmentRequest.created_at.asc(), AssignmentRequest.request_id.asc())
+        )
+        response_rules = list(responses.scalars().all())
+        failure_rules = list(failures.scalars().all())
+        pending_assignments = list(assignments.scalars().all())
+        await session.commit()
+        return {
+            "queued_specialist_responses": response_rules,
+            "active_failure_modes": failure_rules,
+            "pending_assignment_requests": pending_assignments,
+            "last_reset_at": _LAST_RESET_AT,
+            "demo_seed_status": "SEEDED",
+        }
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc

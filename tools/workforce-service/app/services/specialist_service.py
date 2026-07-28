@@ -47,6 +47,40 @@ class SpecialistListResult:
     total_pages: int
 
 
+@dataclass(frozen=True)
+class WorkloadView:
+    specialist: Specialist
+    tentative_reservation_count: int
+    confirmed_reservation_count: int
+
+    @property
+    def assigned_count(self) -> int:
+        return self.specialist.current_workload
+
+    @property
+    def effective_workload(self) -> int:
+        return self.specialist.current_workload + self.tentative_reservation_count
+
+    @property
+    def available_capacity(self) -> int:
+        return max(self.specialist.capacity - self.effective_workload, 0)
+
+    @property
+    def utilisation_percentage(self) -> float:
+        if self.specialist.capacity <= 0:
+            return 0.0
+        return round((self.effective_workload / self.specialist.capacity) * 100, 2)
+
+
+@dataclass(frozen=True)
+class WorkloadListResult:
+    workloads: list[WorkloadView]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
 def _database_error() -> WorkforceError:
     return WorkforceError(503, "WORKFORCE_503", "Workforce database operation failed")
 
@@ -62,6 +96,19 @@ def _active_pending_subquery(now_utc: datetime):
 
 def _pending_count_expr(pending_subquery):
     return func.coalesce(pending_subquery.c.pending_count, 0)
+
+
+def _confirmed_count_subquery():
+    return (
+        select(Reservation.specialist_id, func.count(Reservation.id).label("confirmed_count"))
+        .where(Reservation.status == "CONFIRMED")
+        .group_by(Reservation.specialist_id)
+        .subquery()
+    )
+
+
+def _confirmed_count_expr(confirmed_subquery):
+    return func.coalesce(confirmed_subquery.c.confirmed_count, 0)
 
 
 async def _skills_by_specialist(session: AsyncSession, specialist_ids: list[str]) -> dict[str, list[str]]:
@@ -183,6 +230,49 @@ async def list_specialists(
     )
 
 
+async def list_workloads(session: AsyncSession, *, page: int, page_size: int) -> WorkloadListResult:
+    now_utc = datetime.now(timezone.utc)
+    tentative = _active_pending_subquery(now_utc)
+    confirmed = _confirmed_count_subquery()
+    tentative_count = _pending_count_expr(tentative)
+    confirmed_count = _confirmed_count_expr(confirmed)
+
+    try:
+        total_result = await session.execute(select(func.count(Specialist.id)))
+        total_items = total_result.scalar_one() or 0
+        total_pages = ceil(total_items / page_size) if total_items else 0
+        result = await session.execute(
+            select(
+                Specialist,
+                tentative_count.label("tentative_count"),
+                confirmed_count.label("confirmed_count"),
+            )
+            .outerjoin(tentative, Specialist.specialist_id == tentative.c.specialist_id)
+            .outerjoin(confirmed, Specialist.specialist_id == confirmed.c.specialist_id)
+            .group_by(Specialist.id, tentative_count, confirmed_count)
+            .order_by(Specialist.specialist_id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    except SQLAlchemyError as exc:
+        raise _database_error() from exc
+
+    return WorkloadListResult(
+        workloads=[
+            WorkloadView(
+                specialist=specialist,
+                tentative_reservation_count=int(tentative_value or 0),
+                confirmed_reservation_count=int(confirmed_value or 0),
+            )
+            for specialist, tentative_value, confirmed_value in result.all()
+        ],
+        page=page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+    )
+
+
 async def get_specialist(session: AsyncSession, specialist_id: str) -> SpecialistView:
     try:
         normalized_id = normalize_specialist_id(specialist_id)
@@ -249,4 +339,16 @@ def specialist_view_to_legacy_dict(view: SpecialistView) -> dict:
         "operationallyAvailable": view.operationally_available,
         "created_at": specialist.created_at,
         "updated_at": specialist.updated_at,
+    }
+
+
+def workload_view_to_dict(view: WorkloadView) -> dict:
+    return {
+        "specialist_id": view.specialist.specialist_id,
+        "assigned_count": view.assigned_count,
+        "tentative_reservation_count": view.tentative_reservation_count,
+        "confirmed_reservation_count": view.confirmed_reservation_count,
+        "available_capacity": view.available_capacity,
+        "utilisation_percentage": view.utilisation_percentage,
+        "updated_at": view.specialist.updated_at,
     }

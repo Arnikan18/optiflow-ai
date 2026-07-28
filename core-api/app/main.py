@@ -30,6 +30,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from app.demo.routes import legacy_router as demo_legacy_router
+from app.demo.routes import router as demo_router
+
+app.include_router(demo_router)
+app.include_router(demo_legacy_router)
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Basic health check verifying FastAPI process viability."""
@@ -95,53 +101,6 @@ async def system_health_v1(db: AsyncSession = Depends(get_db)):
 @app.get("/api/system/health", deprecated=True)
 async def system_health_legacy(db: AsyncSession = Depends(get_db)):
     return await execute_health_aggregation(db)
-
-
-async def execute_portfolio_aggregation() -> dict:
-    client = ToolClient()
-    
-    # Fetch customer list, incidents list, specialists list, and assignment requests list concurrently
-    tasks = [
-        client.get_customers(),
-        client.get_incidents(),
-        client.get_specialists(),
-        client.get_assignment_requests()
-    ]
-    
-    try:
-        results = await asyncio.gather(*tasks)
-        
-        # Customers wrapper maps: {"customers": [...]}
-        # Incidents wrapper maps: {"incidents": [...]}
-        # Specialists wrapper maps: {"specialists": [...]}
-        # Assignment requests wrapper maps: {"assignment_requests": [...]}
-        customers_list = results[0].get("customers", []) if results[0] else []
-        incidents_list = results[1].get("incidents", []) if results[1] else []
-        specialists_list = results[2].get("specialists", []) if results[2] else []
-        requests_list = results[3].get("assignment_requests", []) if results[3] else []
-        
-        return {
-            "customers": customers_list,
-            "escalations": incidents_list, # Map to 'escalations' for portfolio backward compatibility in React
-            "specialists": specialists_list,
-            "assignmentRequests": requests_list
-        }
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to aggregate downstream portfolio data: {str(e)}"
-        )
-
-# GET /api/v1/demo/portfolio & legacy GET /api/demo/portfolio
-@app.get("/api/v1/demo/portfolio")
-async def get_demo_portfolio_v1():
-    return await execute_portfolio_aggregation()
-
-@app.get("/api/demo/portfolio", deprecated=True)
-async def get_demo_portfolio_legacy():
-    return await execute_portfolio_aggregation()
 
 
 async def execute_system_reset() -> dict:

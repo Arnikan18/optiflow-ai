@@ -97,6 +97,8 @@ class ConfiguredResponse(Base):
     delay_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     apply_once: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[str] = mapped_column(String, nullable=False, default=lambda: utc_now().isoformat())
+    expires_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     consumed_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -112,5 +114,9 @@ class FailureMode(Base):
     delay_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     affected_endpoint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     scope: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    apply_once: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False, default=lambda: utc_now().isoformat())
+    expires_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     remaining_failures: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
