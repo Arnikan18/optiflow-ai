@@ -190,6 +190,138 @@ def test_confirm_reservation_idempotent_and_workload_increment(client, auth_head
     assert after_repeat["current_workload"] == after["current_workload"]
 
 
+def verification_payload(**overrides):
+    payload = {
+        "reservation_id": "RES-VERIFY-OK",
+        "expected_run_id": "RUN-VERIFY-001",
+        "expected_incident_id": "INC-VERIFY-001",
+        "expected_specialist_id": "SPEC-DANIEL",
+        "expected_status": "CONFIRMED",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_verify_confirmed_reservation_and_mismatches(client, auth_headers):
+    created = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations",
+            json=reservation_payload(
+                reservation_id="RES-VERIFY-OK",
+                incident_id="INC-VERIFY-001",
+                run_id="RUN-VERIFY-001",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    assert_success(client.patch(f"/workforce/api/v1/reservations/{created['reservation_id']}/confirm", headers=auth_headers))
+
+    verified = assert_success(
+        client.post("/workforce/api/v1/reservations/verify", json=verification_payload(), headers=auth_headers)
+    )
+    assert verified["verified"] is True
+    assert verified["result"] == "verified"
+    assert verified["current_status"] == "CONFIRMED"
+    assert verified["failed_checks"] == []
+
+    wrong_specialist = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(expected_specialist_id="SPEC-MAYA"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_specialist["verified"] is False
+    assert wrong_specialist["result"] == "inconsistent"
+    assert "specialist_id_mismatch" in wrong_specialist["failed_checks"]
+
+    wrong_incident = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(expected_incident_id="INC-WRONG"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_incident["verified"] is False
+    assert "incident_id_mismatch" in wrong_incident["failed_checks"]
+
+
+def test_verify_tentative_cancelled_expired_and_unknown_reservations(client, auth_headers):
+    tentative = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations",
+            json=reservation_payload(
+                reservation_id="RES-VERIFY-PENDING",
+                incident_id="INC-VERIFY-PENDING",
+                specialist_id="SPEC-MAYA",
+                run_id="RUN-VERIFY-PENDING",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    pending = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(
+                reservation_id=tentative["reservation_id"],
+                expected_run_id="RUN-VERIFY-PENDING",
+                expected_incident_id="INC-VERIFY-PENDING",
+                expected_specialist_id="SPEC-MAYA",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert pending["verified"] is False
+    assert pending["result"] == "pending"
+    assert "status_not_confirmed" in pending["failed_checks"]
+
+    cancelled_seed = assert_success(client.get("/workforce/api/v1/reservations/RES-PRIYA-CANCELLED", headers=auth_headers))
+    cancelled = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(
+                reservation_id=cancelled_seed["reservation_id"],
+                expected_run_id="RUN-CANCELLED",
+                expected_incident_id=cancelled_seed["incident_id"],
+                expected_specialist_id=cancelled_seed["specialist_id"],
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert cancelled["verified"] is False
+    assert cancelled["result"] == "cancelled"
+    assert "reservation_cancelled" in cancelled["failed_checks"]
+
+    expired = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(
+                reservation_id="RES-DANIEL-EXPIRED",
+                expected_run_id="RUN-EXPIRED",
+                expected_incident_id="INC-EXPIRED-001",
+                expected_specialist_id="SPEC-DANIEL",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert expired["verified"] is False
+    assert expired["result"] == "expired"
+    assert "reservation_expired" in expired["failed_checks"]
+
+    unknown = assert_success(
+        client.post(
+            "/workforce/api/v1/reservations/verify",
+            json=verification_payload(reservation_id="RES-UNKNOWN"),
+            headers=auth_headers,
+        )
+    )
+    assert unknown["verified"] is False
+    assert unknown["result"] == "not_found"
+    assert unknown["actual_values"] is None
+
+
 def test_confirm_rejects_cancelled_expired_inactive_and_capacity(client, auth_headers):
     assert_error(
         client.patch("/workforce/api/v1/reservations/RES-PRIYA-CANCELLED/confirm", headers=auth_headers),

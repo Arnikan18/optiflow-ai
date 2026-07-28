@@ -104,12 +104,36 @@ class ToolClient:
             json_body={"status": incident_status}
         )
 
-    async def assign_incident_specialist(self, incident_id: str, specialist_id: str) -> Dict[str, Any]:
+    async def assign_incident_specialist(
+        self,
+        incident_id: str,
+        specialist_id: str,
+        run_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        body = {"specialist_id": specialist_id}
+        if run_id:
+            body["run_id"] = run_id
+        if idempotency_key:
+            body["idempotency_key"] = idempotency_key
         return await self._request(
             "POST",
             settings.incident_service_url,
             f"/incident/api/v1/incidents/{incident_id}/assign",
-            json_body={"specialist_id": specialist_id}
+            json_body=body
+        )
+
+    async def verify_incident_assignment(self, incident_id: str, expected_run_id: str, expected_specialist_id: str) -> Dict[str, Any]:
+        body = {
+            "incident_id": incident_id,
+            "expected_run_id": expected_run_id,
+            "expected_specialist_id": expected_specialist_id,
+        }
+        return await self._request(
+            "POST",
+            settings.incident_service_url,
+            "/incident/api/v1/incidents/assignment/verify",
+            json_body=body,
         )
 
     # Workforce Endpoints
@@ -129,13 +153,25 @@ class ToolClient:
     async def get_specialist(self, specialist_id: str) -> Dict[str, Any]:
         return await self._request("GET", settings.workforce_service_url, f"/workforce/api/v1/specialists/{specialist_id}")
 
-    async def create_reservation(self, reservation_id: str, specialist_id: str, incident_id: str, expires_in_seconds: int = 300) -> Dict[str, Any]:
+    async def create_reservation(
+        self,
+        reservation_id: str,
+        specialist_id: str,
+        incident_id: str,
+        expires_in_seconds: int = 300,
+        run_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
         body = {
             "reservation_id": reservation_id,
             "specialist_id": specialist_id,
             "incident_id": incident_id,
             "expires_in_seconds": expires_in_seconds
         }
+        if run_id:
+            body["run_id"] = run_id
+        if idempotency_key:
+            body["idempotency_key"] = idempotency_key
         return await self._request("POST", settings.workforce_service_url, "/workforce/api/v1/reservations", json_body=body)
 
     async def get_reservation(self, reservation_id: str) -> Dict[str, Any]:
@@ -147,6 +183,28 @@ class ToolClient:
     async def cancel_reservation(self, reservation_id: str) -> Dict[str, Any]:
         return await self._request("DELETE", settings.workforce_service_url, f"/workforce/api/v1/reservations/{reservation_id}")
 
+    async def verify_reservation(
+        self,
+        reservation_id: str,
+        expected_run_id: str,
+        expected_incident_id: str,
+        expected_specialist_id: str,
+        expected_status: str = "CONFIRMED",
+    ) -> Dict[str, Any]:
+        body = {
+            "reservation_id": reservation_id,
+            "expected_run_id": expected_run_id,
+            "expected_incident_id": expected_incident_id,
+            "expected_specialist_id": expected_specialist_id,
+            "expected_status": expected_status,
+        }
+        return await self._request(
+            "POST",
+            settings.workforce_service_url,
+            "/workforce/api/v1/reservations/verify",
+            json_body=body,
+        )
+
     # Communication Endpoints
     async def get_assignment_requests(self) -> Dict[str, Any]:
         return await self._request("GET", settings.communication_service_url, "/communication/api/v1/assignment-requests")
@@ -154,7 +212,17 @@ class ToolClient:
     async def get_assignment_request(self, request_id: str) -> Dict[str, Any]:
         return await self._request("GET", settings.communication_service_url, f"/communication/api/v1/assignment-requests/{request_id}")
 
-    async def create_assignment_request(self, request_id: str, incident_id: str, specialist_id: str, message: str, expires_in_seconds: int = 300) -> Dict[str, Any]:
+    async def create_assignment_request(
+        self,
+        request_id: str,
+        incident_id: str,
+        specialist_id: str,
+        message: str,
+        expires_in_seconds: int = 300,
+        run_id: Optional[str] = None,
+        reservation_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
         body = {
             "request_id": request_id,
             "incident_id": incident_id,
@@ -162,6 +230,12 @@ class ToolClient:
             "message": message,
             "expires_in_seconds": expires_in_seconds
         }
+        if run_id:
+            body["run_id"] = run_id
+        if reservation_id:
+            body["reservation_id"] = reservation_id
+        if idempotency_key:
+            body["idempotency_key"] = idempotency_key
         return await self._request("POST", settings.communication_service_url, "/communication/api/v1/assignment-requests", json_body=body)
 
     async def respond_to_assignment_request(self, request_id: str, response: str, response_note: Optional[str] = None) -> Dict[str, Any]:
@@ -170,6 +244,28 @@ class ToolClient:
             "response_note": response_note
         }
         return await self._request("POST", settings.communication_service_url, f"/communication/api/v1/assignment-requests/{request_id}/respond", json_body=body)
+
+    async def verify_assignment_request(
+        self,
+        assignment_request_id: str,
+        expected_run_id: str,
+        expected_incident_id: str,
+        expected_specialist_id: str,
+        expected_status: str = "ACCEPTED",
+    ) -> Dict[str, Any]:
+        body = {
+            "assignment_request_id": assignment_request_id,
+            "expected_run_id": expected_run_id,
+            "expected_incident_id": expected_incident_id,
+            "expected_specialist_id": expected_specialist_id,
+            "expected_status": expected_status,
+        }
+        return await self._request(
+            "POST",
+            settings.communication_service_url,
+            "/communication/api/v1/assignment-requests/verify",
+            json_body=body,
+        )
 
     async def create_notification(self, notification_id: str, recipient: str, channel: str, message: str, related_request_id: Optional[str] = None, idempotency_key: Optional[str] = None) -> Dict[str, Any]:
         body = {

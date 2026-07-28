@@ -9,6 +9,7 @@ from app.database.models import Reservation, Specialist, SpecialistSkill
 from app.database.seed import build_seed_reservations, build_seed_specialists, ensure_failure_mode
 from app.schemas.requests import (
     ReservationCreateRequest,
+    ReservationVerificationRequest,
     normalize_incident_id,
     normalize_reservation_id,
     normalize_specialist_id,
@@ -176,6 +177,85 @@ async def get_reservation(session: AsyncSession, reservation_id: str) -> Reserva
         return reservation
     except WorkforceError:
         raise
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def verify_reservation(session: AsyncSession, payload: ReservationVerificationRequest) -> dict:
+    checked_at = datetime.now(timezone.utc)
+    expected_values = {
+        "run_id": payload.expected_run_id,
+        "incident_id": payload.expected_incident_id,
+        "specialist_id": payload.expected_specialist_id,
+        "status": payload.expected_status,
+    }
+
+    try:
+        result = await session.execute(select(Reservation).where(Reservation.reservation_id == payload.reservation_id))
+        reservation = result.scalar_one_or_none()
+        if reservation is None:
+            return {
+                "verified": False,
+                "result": "not_found",
+                "reservation_id": payload.reservation_id,
+                "expected_values": expected_values,
+                "actual_values": None,
+                "failed_checks": ["reservation_not_found"],
+                "checked_at": checked_at,
+                "current_status": None,
+            }
+
+        if is_expired(reservation, checked_at):
+            reservation.status = "EXPIRED"
+            reservation.updated_at = checked_at
+            session.add(reservation)
+            await session.commit()
+            await session.refresh(reservation)
+
+        actual_values = {
+            "run_id": reservation.run_id,
+            "incident_id": reservation.incident_id,
+            "specialist_id": reservation.specialist_id,
+            "status": reservation.status,
+            "expires_at": reservation.expires_at,
+            "cancelled_at": reservation.cancelled_at,
+        }
+        failed_checks: list[str] = []
+        if reservation.run_id != payload.expected_run_id:
+            failed_checks.append("run_id_mismatch")
+        if reservation.incident_id != payload.expected_incident_id:
+            failed_checks.append("incident_id_mismatch")
+        if reservation.specialist_id != payload.expected_specialist_id:
+            failed_checks.append("specialist_id_mismatch")
+        if reservation.status != payload.expected_status:
+            failed_checks.append("status_not_confirmed")
+        if reservation.status == "EXPIRED":
+            failed_checks.append("reservation_expired")
+        if reservation.status == "CANCELLED":
+            failed_checks.append("reservation_cancelled")
+
+        if reservation.status == "TENTATIVE":
+            result_status = "pending"
+        elif reservation.status == "EXPIRED":
+            result_status = "expired"
+        elif reservation.status == "CANCELLED":
+            result_status = "cancelled"
+        elif failed_checks:
+            result_status = "inconsistent"
+        else:
+            result_status = "verified"
+
+        return {
+            "verified": result_status == "verified",
+            "result": result_status,
+            "reservation_id": reservation.reservation_id,
+            "expected_values": expected_values,
+            "actual_values": actual_values,
+            "failed_checks": failed_checks,
+            "checked_at": checked_at,
+            "current_status": reservation.status,
+        }
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc

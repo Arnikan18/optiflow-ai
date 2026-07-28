@@ -8,10 +8,17 @@ from app.database.session import get_db
 from app.middleware.authentication import verify_tool_token
 from app.schemas.requests import (
     IncidentAssignmentRequest,
+    IncidentAssignmentVerificationRequest,
     IncidentCreateRequest,
     IncidentStatusUpdateRequest,
 )
-from app.schemas.responses import IncidentListData, IncidentResponse, ResetResponseData, success_response
+from app.schemas.responses import (
+    IncidentAssignmentVerificationResponse,
+    IncidentListData,
+    IncidentResponse,
+    ResetResponseData,
+    success_response,
+)
 from app.services.incident_service import (
     IncidentError,
     assign_specialist,
@@ -22,6 +29,7 @@ from app.services.incident_service import (
     list_legacy_escalations,
     reset_incidents,
     update_incident_status,
+    verify_incident_assignment,
 )
 
 
@@ -110,6 +118,15 @@ async def assign_incident_specialist(
 ):
     incident = await assign_specialist(db, incident_id, payload)
     return success_response(_incident_data(incident), message="Incident assignment updated successfully")
+
+
+@router.post("/incidents/assignment/verify")
+async def verify_incident_assignment_record(
+    payload: IncidentAssignmentVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await verify_incident_assignment(db, payload)
+    return success_response(IncidentAssignmentVerificationResponse(**data).model_dump(mode="json"))
 
 
 def verify_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:

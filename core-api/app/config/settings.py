@@ -32,9 +32,13 @@ class Settings(BaseSettings):
     saga_poll_max_attempts: int = 5
     saga_poll_interval_seconds: float = 1.0
 
-    
-    optimization_strategy: str = "cp-sat"
-    solver_time_limit_seconds: float = 3.0
+    optimizer_provider: str = "cp_sat"
+    cp_sat_time_limit_seconds: float = 5.0
+    cp_sat_random_seed: int = 42
+    generate_all_optimization_profiles: bool = True
+    optimizer_allow_fallback: bool = False
+    optimization_strategy: str | None = None
+    solver_time_limit_seconds: float | None = None
     
     sse_heartbeat_seconds: int = 15
     demo_mode: bool = True

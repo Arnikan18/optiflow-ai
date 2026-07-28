@@ -20,13 +20,16 @@ class IncidentResponse(BaseModel):
     status: str
     sla_deadline: datetime
     assigned_specialist_id: str | None
+    assignment_run_id: str | None = None
+    assignment_idempotency_key: str | None = None
+    assigned_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
-    @field_serializer("sla_deadline", "created_at", "updated_at")
-    def serialize_datetime(self, value: datetime) -> str:
+    @field_serializer("sla_deadline", "assigned_at", "created_at", "updated_at")
+    def serialize_datetime(self, value: datetime | None) -> str | None:
         return serialize_datetime_value(value)
 
 
@@ -40,6 +43,21 @@ class IncidentListData(BaseModel):
 
 class ResetResponseData(BaseModel):
     seeded_records: int
+
+
+class IncidentAssignmentVerificationResponse(BaseModel):
+    verified: bool
+    result: str
+    incident_id: str
+    expected_values: dict[str, str]
+    actual_values: dict[str, Any] | None
+    failed_checks: list[str]
+    checked_at: datetime
+    assignment_status: str | None
+
+    @field_serializer("checked_at")
+    def serialize_checked_at(self, value: datetime) -> str:
+        return serialize_datetime_value(value) or ""
 
 
 def success_response(data: Any, message: str = "Request completed successfully") -> dict[str, Any]:

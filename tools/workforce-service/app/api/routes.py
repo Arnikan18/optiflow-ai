@@ -14,9 +14,11 @@ from app.schemas.requests import (
     AdminWorkloadRequest,
     LegacyTentativeReservationRequest,
     ReservationCreateRequest,
+    ReservationVerificationRequest,
 )
 from app.schemas.responses import (
     ReservationResponse,
+    ReservationVerificationResponse,
     ResetResponseData,
     SpecialistListData,
     SpecialistResponse,
@@ -31,6 +33,7 @@ from app.services.reservation_service import (
     create_reservation,
     get_reservation,
     reset_workforce,
+    verify_reservation,
 )
 from app.services.specialist_service import (
     WorkforceError,
@@ -164,6 +167,12 @@ async def create_reservation_record(
 async def get_reservation_by_id(reservation_id: str, db: AsyncSession = Depends(get_db)):
     reservation = await get_reservation(db, reservation_id)
     return success_response(_reservation_data(reservation))
+
+
+@router.post("/reservations/verify")
+async def verify_reservation_record(payload: ReservationVerificationRequest, db: AsyncSession = Depends(get_db)):
+    data = await verify_reservation(db, payload)
+    return success_response(ReservationVerificationResponse(**data).model_dump(mode="json"))
 
 
 @router.patch("/reservations/{reservation_id}/confirm")

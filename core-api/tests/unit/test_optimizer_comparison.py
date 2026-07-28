@@ -69,8 +69,12 @@ def test_solver_gateway_fallback(complex_portfolio):
     customers, escalations, specialists = complex_portfolio
     
     from app.config.settings import settings
+    orig_provider = settings.optimizer_provider
     orig_strategy = settings.optimization_strategy
-    settings.optimization_strategy = "cp-sat"
+    orig_allow_fallback = settings.optimizer_allow_fallback
+    settings.optimizer_provider = "cp_sat"
+    settings.optimization_strategy = None
+    settings.optimizer_allow_fallback = True
     
     try:
         with patch("app.optimizer.cpsat.CPSatOptimizer.generate_plans", side_effect=Exception("CP-SAT crashed")):
@@ -83,4 +87,24 @@ def test_solver_gateway_fallback(complex_portfolio):
                 assert plan["metadata"]["fallback_status"] is True
                 assert plan["metadata"]["solver_type"] == "Greedy (Fallback)"
     finally:
+        settings.optimizer_provider = orig_provider
         settings.optimization_strategy = orig_strategy
+        settings.optimizer_allow_fallback = orig_allow_fallback
+
+
+def test_solver_gateway_does_not_silently_fallback(complex_portfolio):
+    customers, escalations, specialists = complex_portfolio
+
+    from app.config.settings import settings
+    orig_provider = settings.optimizer_provider
+    orig_allow_fallback = settings.optimizer_allow_fallback
+    settings.optimizer_provider = "cp_sat"
+    settings.optimizer_allow_fallback = False
+
+    try:
+        with patch("app.optimizer.cpsat.CPSatOptimizer.generate_plans", side_effect=Exception("CP-SAT crashed")):
+            with pytest.raises(RuntimeError, match="Optimization failed under provider"):
+                generate_optimization_plans(customers, escalations, specialists)
+    finally:
+        settings.optimizer_provider = orig_provider
+        settings.optimizer_allow_fallback = orig_allow_fallback

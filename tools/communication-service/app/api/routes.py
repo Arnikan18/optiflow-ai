@@ -10,6 +10,7 @@ from app.schemas.requests import (
     AdminConfiguredResponseRequest,
     AdminFailureModeRequest,
     AssignmentRequestCreateRequest,
+    AssignmentRequestVerificationRequest,
     AssignmentResponseRequest,
     LegacyAssignmentCreateRequest,
     LegacyAssignmentResponseRequest,
@@ -19,6 +20,7 @@ from app.schemas.requests import (
 from app.schemas.responses import (
     AssignmentRequestListData,
     AssignmentRequestResponse,
+    AssignmentRequestVerificationResponse,
     ConfiguredResponseData,
     FailureModeData,
     FailureModeStateData,
@@ -42,6 +44,7 @@ from app.services.assignment_service import (
     list_assignment_requests,
     reset_communication,
     respond_to_assignment_request,
+    verify_assignment_request,
 )
 from app.services.failure_service import apply_failure_mode
 from app.services.notification_service import (
@@ -130,6 +133,16 @@ async def get_assignment_request_by_id(request_id: str, db: AsyncSession = Depen
     await apply_failure_mode(db, "assignment:get")
     assignment_request = await get_assignment_request(db, request_id)
     return success_response(_assignment_data(assignment_request))
+
+
+@router.post("/assignment-requests/verify")
+async def verify_assignment_request_record(
+    payload: AssignmentRequestVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    await apply_failure_mode(db, "assignment:verify")
+    data = await verify_assignment_request(db, payload)
+    return success_response(AssignmentRequestVerificationResponse(**data).model_dump(mode="json"))
 
 
 @router.post("/assignment-requests/{request_id}/respond")

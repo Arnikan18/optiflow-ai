@@ -23,6 +23,9 @@ class Incident(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True, default="OPEN")
     sla_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     assigned_specialist_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    assignment_run_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    assignment_idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -41,6 +44,7 @@ class Incident(Base):
             name="ck_incidents_status",
         ),
         Index("ix_incidents_sla_status", "sla_deadline", "status"),
+        Index("ix_incidents_assignment_run", "incident_id", "assignment_run_id"),
     )
 
 

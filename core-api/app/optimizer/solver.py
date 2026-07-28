@@ -56,22 +56,30 @@ def generate_optimization_plans(
     specialists: List[Dict[str, Any]],
     excluded_pairs: List[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    """Gateway entry point that delegates to the configured Strategy via the Factory with transparent greedy fallback."""
+    """Gateway entry point that delegates to the configured optimizer strategy."""
     from app.optimizer.factory import OptimizerFactory
     from app.optimizer.greedy import GreedyOptimizer
     from app.config.settings import settings
     
     excluded_pairs = excluded_pairs or []
-    strategy = settings.optimization_strategy or "greedy"
+    strategy = settings.optimizer_provider or settings.optimization_strategy or "cp_sat"
     try:
         optimizer = OptimizerFactory.get_optimizer(strategy)
+        logger.info("Selected optimizer provider: %s", strategy)
         plans = optimizer.generate_plans(customers, escalations, specialists, excluded_pairs=excluded_pairs)
         return plans
     except Exception as e:
-        logger.warning(f"Optimization execution failed under strategy '{strategy}': {str(e)}. Falling back to GreedyOptimizer.")
-        # Run greedy optimizer fallback
+        if not settings.optimizer_allow_fallback:
+            logger.error("Optimization execution failed under provider '%s': %s", strategy, str(e))
+            raise RuntimeError(f"Optimization failed under provider '{strategy}': {str(e)}") from e
+
+        logger.warning(
+            "Optimization execution failed under provider '%s': %s. Explicit fallback enabled; using GreedyOptimizer.",
+            strategy,
+            str(e),
+        )
         greedy = GreedyOptimizer()
-        plans = greedy.generate_plans(customers, escalations, specialists)
+        plans = greedy.generate_plans(customers, escalations, specialists, excluded_pairs=excluded_pairs)
         for plan in plans:
             if "metadata" not in plan:
                 plan["metadata"] = {}

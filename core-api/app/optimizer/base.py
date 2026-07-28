@@ -9,7 +9,8 @@ class BaseOptimizer(ABC):
         self,
         customers: List[Dict[str, Any]],
         escalations: List[Dict[str, Any]],
-        specialists: List[Dict[str, Any]]
+        specialists: List[Dict[str, Any]],
+        excluded_pairs: List[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Generates candidate optimization plans given the input entities."""
         pass

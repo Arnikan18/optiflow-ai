@@ -32,9 +32,11 @@ app = FastAPI(
 
 from app.demo.routes import legacy_router as demo_legacy_router
 from app.demo.routes import router as demo_router
+from app.execution.routes import router as execution_router
 
 app.include_router(demo_router)
 app.include_router(demo_legacy_router)
+app.include_router(execution_router)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
