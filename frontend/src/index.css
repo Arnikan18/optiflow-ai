@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────────────────────────
+   OptiFlow AI — "Amber Neural" Design System
+   Dark ops-room aesthetic: deep navy + amber authority + cyan data
+   ──────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg-void:    #f4f1e8;
+  --bg-abyss:   #fffdf8;
+  --bg-deep:    #f8f5ed;
+  --bg-surface: #ece7db;
+  --bg-elevated:#ffffff;
+
+  --border-dim:   #ded8ca;
+  --border-base:  #c3bbab;
+  --border-bright:#817868;
+
+  --amber:        #f05a2a;
+  --amber-bright: #ff7448;
+  --cyan:         #147d75;
+  --emerald:      #2e7d4f;
+  --rose:         #c53e4c;
+  --violet:       #6654a5;
+  --orange:       #d9772f;
+
+  --text-primary:   #1d2926;
+  --text-secondary: #59635f;
+  --text-muted:     #8a918d;
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: 'Manrope', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
+::-webkit-scrollbar-thumb { background: var(--border-base); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+/* ── Grid background ──────────────────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(var(--border-dim) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-dim) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Glow effects ─────────────────────────────────────────────── */
+.glow-amber {
+  box-shadow: 0 12px 30px rgba(240,90,42,0.2);
+}
+.glow-cyan {
+  box-shadow: 0 12px 30px rgba(20,125,117,0.16);
+}
+.glow-emerald {
+  box-shadow: 0 12px 30px rgba(46,125,79,0.14);
+}
+
+/* ── Status dot animations ────────────────────────────────────── */
+@keyframes ping-amber {
+  0%   { transform: scale(1);   opacity: 1; }
+  75%  { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes ping-cyan {
+  0%   { transform: scale(1);   opacity: 1; }
+  75%  { transform: scale(2);   opacity: 0; }
+  100% { transform: scale(2);   opacity: 0; }
+}
+
+.dot-ping-amber::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: ping-amber 1.8s ease-out infinite;
+}
+.dot-ping-cyan::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: ping-cyan 1.5s ease-out infinite;
+}
+
+/* ── Enter animations ─────────────────────────────────────────── */
+@keyframes scan-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-scan-in  { animation: scan-in  0.35s ease-out forwards; }
+.animate-fade-up  { animation: fade-up  0.4s  ease-out forwards; }
+.animate-fade-in  { animation: fade-in  0.3s  ease-out forwards; }
+.animate-scale-in { animation: scale-in 0.3s  ease-out forwards; }
+
+/* ── Stagger delay helpers ────────────────────────────────────── */
+.delay-50  { animation-delay: 50ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* ── Scanner line (decorative) ────────────────────────────────── */
+@keyframes scan-sweep {
+  0%   { top: -2px; opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+.scan-sweep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  animation: scan-sweep 3s linear infinite;
+  pointer-events: none;
+}
+
+/* ── Markdown rendering overrides ─────────────────────────────── */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  color: var(--amber-bright);
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-body ul { list-style: disc; padding-left: 1.25rem; }
+.markdown-body li { margin-bottom: 0.25rem; color: var(--text-secondary); }
+.markdown-body p  { color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.6; }
+.markdown-body strong { color: var(--text-primary); }
+.markdown-body code {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  color: var(--amber-bright);
+}
+
+/* ── Timeline connector ───────────────────────────────────────── */
+.timeline-line {
+  position: absolute;
+  left: 19px;
+  top: 40px;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, var(--border-base), transparent);
+}
+
+/* OptiFlow route language */
+.paper-noise {
+  background-image:
+    radial-gradient(rgba(29, 41, 38, 0.075) 0.65px, transparent 0.65px);
+  background-size: 7px 7px;
+}
+
+.route-track {
+  position: relative;
+}
+
+.route-track::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 22px;
+  bottom: 22px;
+  width: 2px;
+  background: var(--border-dim);
+}
+
+.route-track-active::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 22px;
+  height: var(--route-progress, 0%);
+  width: 2px;
+  background: var(--cyan);
+  transition: height 700ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.flow-dash {
+  background-image: linear-gradient(
+    90deg,
+    var(--cyan) 50%,
+    transparent 50%
+  );
+  background-size: 16px 2px;
+  animation: flow-dash 900ms linear infinite;
+}
+
+@keyframes flow-dash {
+  to { background-position: 16px 0; }
+}
+
+@keyframes route-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(240,90,42,.28); }
+  50% { transform: scale(1.04); box-shadow: 0 0 0 9px rgba(240,90,42,0); }
+}
+
+.route-pulse {
+  animation: route-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes travel {
+  0% { transform: translateX(-8px); opacity: 0; }
+  15%, 80% { opacity: 1; }
+  100% { transform: translateX(72px); opacity: 0; }
+}
+
+.travel-dot {
+  animation: travel 2.4s ease-in-out infinite;
+}
+
+.focus-ring:focus-visible {
+  outline: 3px solid rgba(240, 90, 42, 0.24);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
