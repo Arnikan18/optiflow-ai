@@ -27,7 +27,9 @@ class AgentState(TypedDict, total=False):
     active_policies: Dict[str, Any]
     required_evidence: List[Dict[str, Any]]
     collected_evidence: List[Dict[str, Any]]
+    confidence_report: Optional[Dict[str, Any]]
     source_freshness: Dict[str, Any]
+
     data_conflicts: List[Dict[str, Any]]
     missing_fields: List[str]
     consequence_estimates: List[Dict[str, Any]]
