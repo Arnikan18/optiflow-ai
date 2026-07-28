@@ -297,10 +297,15 @@ async def cancel_run(run_id: str, db: AsyncSession = Depends(get_db)):
         text("UPDATE agent_runs SET status = 'CANCELLED', current_node = 'cancel' WHERE run_id = :r"),
         {"r": run_id}
     )
-    await db.execute(
-        text("INSERT INTO run_events (event_id, run_id, sequence_number, event_type, source, summary, state_version, created_at) "
-             "VALUES (:ev, :r, 99, 'RUN_CANCELLED', 'cancel_run', 'Run was manually cancelled by the manager.', 1, :dt)"),
-        {"ev": str(uuid.uuid4()), "r": run_id, "dt": datetime.utcnow()}
+    from app.database.persistence import save_run_event
+    await save_run_event(
+        session=db,
+        run_id=run_id,
+        sequence_number=99,
+        event_type="RUN_CANCELLED",
+        source="cancel_run",
+        summary="Run was manually cancelled by the manager.",
+        state_version=1
     )
     await db.commit()
     return {"status": "success", "message": "Run cancelled successfully."}

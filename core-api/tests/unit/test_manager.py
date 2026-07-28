@@ -28,7 +28,9 @@ def test_get_run_status_not_found():
 
 def test_approve_run_route_not_found():
     with patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
-        mock_execute.return_value.fetchone.return_value = None
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = None
+        mock_execute.return_value = mock_result
         response = client.post("/api/v1/runs/RUN-MISSING-123/approve", json={"approval_status": "APPROVED"})
         assert response.status_code == 404
         assert response.json()["detail"] == "Run not found"
@@ -36,7 +38,9 @@ def test_approve_run_route_not_found():
 def test_approve_run_route_success():
     with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume, \
          patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
-        mock_execute.return_value.fetchone.return_value = ("WAITING_FOR_APPROVAL",)
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ("WAITING_FOR_APPROVAL",)
+        mock_execute.return_value = mock_result
         response = client.post("/api/v1/runs/RUN-EXIST-999/approve", json={
             "approval_status": "APPROVED",
             "recommended_plan": {"plan_id": "PLAN-BALANCED"}
@@ -48,7 +52,9 @@ def test_approve_run_route_success():
 def test_clarify_run_route_success():
     with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume, \
          patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute:
-        mock_execute.return_value.fetchone.return_value = ("WAITING_FOR_CLARIFICATION",)
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ("WAITING_FOR_CLARIFICATION",)
+        mock_execute.return_value = mock_result
         response = client.post("/api/v1/runs/RUN-EXIST-999/clarify", json={
             "clarification_reply": "Here is the details"
         })
