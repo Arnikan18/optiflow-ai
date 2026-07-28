@@ -230,15 +230,23 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Run not found")
         
-    checkpoint = await load_last_checkpoint(run_id)
-    candidate_plans = checkpoint.get("candidate_plans", []) if checkpoint else []
+    checkpoint = await load_last_checkpoint(run_id) or {}
+    candidate_plans = checkpoint.get("candidate_plans", [])
     
     return {
         "run_id": row[0],
         "status": row[1],
         "current_node": row[2],
         "recommended_plan_id": row[3],
-        "candidate_plans": candidate_plans
+        "candidate_plans": candidate_plans,
+        "confidence_report": checkpoint.get("confidence_report"),
+        "autonomy_risk_report": checkpoint.get("autonomy_risk_report"),
+        "replan_count": checkpoint.get("replan_count", 0),
+        "excluded_specialist_incidents": checkpoint.get("excluded_specialist_incidents", []),
+        "structured_goal": checkpoint.get("structured_goal"),
+        "selected_tools": checkpoint.get("selected_tools", []),
+        "business_summary": checkpoint.get("business_summary"),
+        "change_summary": checkpoint.get("change_summary")
     }
 
 @app.post("/api/v1/runs/{run_id}/approve")

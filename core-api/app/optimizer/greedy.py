@@ -11,10 +11,18 @@ class GreedyOptimizer(BaseOptimizer):
         self,
         customers: List[Dict[str, Any]],
         escalations: List[Dict[str, Any]],
-        specialists: List[Dict[str, Any]]
+        specialists: List[Dict[str, Any]],
+        excluded_pairs: List[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         # Import resolving helpers directly from app.optimizer.solver to avoid circular loops
         from app.optimizer.solver import score_incident_priority, resolve_required_skills
+
+        excluded_pairs = excluded_pairs or []
+        excluded_set = {
+            (ep["incident_id"], ep["specialist_id"])
+            for ep in excluded_pairs
+            if ep.get("incident_id") and ep.get("specialist_id")
+        }
 
         customers_map = {c.get("customer_id"): c for c in customers if c.get("customer_id")}
         
@@ -48,6 +56,8 @@ class GreedyOptimizer(BaseOptimizer):
             best_ratio = 999.0
             
             for spec in specs_balanced:
+                if (inc_id, spec["specialist_id"]) in excluded_set:
+                    continue
                 if req_skills:
                     has_skill = any(s in spec["skills"] for s in req_skills)
                     if not has_skill:
@@ -123,6 +133,8 @@ class GreedyOptimizer(BaseOptimizer):
             best_margin = -1
             
             for spec in specs_sla:
+                if (inc_id, spec["specialist_id"]) in excluded_set:
+                    continue
                 if req_skills:
                     has_skill = any(s in spec["skills"] for s in req_skills)
                     if not has_skill:

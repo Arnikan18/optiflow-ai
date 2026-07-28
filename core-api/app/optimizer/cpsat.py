@@ -131,7 +131,11 @@ class CPSatOptimizer(BaseOptimizer):
             inc_id = inc.get("incident_id")
             cust_id = inc.get("customer_id")
             cust = customers_map.get(cust_id)
-            arr = int((cust.get("arr") or 0.0) / 1000) if cust else 0  # In thousands to fit CP-SAT scale
+            try:
+                arr_val = float(cust.get("arr") or 0.0) if cust else 0.0
+            except (ValueError, TypeError):
+                arr_val = 0.0
+            arr = int(arr_val / 1000) if cust else 0  # In thousands to fit CP-SAT scale
             
             for spec in specialists:
                 spec_id = spec.get("specialist_id")
