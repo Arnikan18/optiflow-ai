@@ -23,6 +23,14 @@ _FRESHNESS_THRESHOLDS: dict[str, int] = {
     "communication": 30,
 }
 
+# Grade boundary scores (inclusive lower bounds).
+# HIGH >= 90, MEDIUM >= 70, LOW >= 50, CRITICAL < 50.
+_GRADE_THRESHOLDS: dict[str, float] = {
+    "HIGH": 90.0,
+    "MEDIUM": 70.0,
+    "LOW": 50.0,
+}
+
 
 def _compute_confidence(
     missing_fields: list[str],
@@ -75,12 +83,12 @@ def _compute_confidence(
 
 
 def _grade(score: float) -> str:
-    """Map numeric score to a human-readable quality grade."""
-    if score >= 90:
+    """Map numeric score to a human-readable quality grade using _GRADE_THRESHOLDS."""
+    if score >= _GRADE_THRESHOLDS["HIGH"]:
         return "HIGH"
-    elif score >= 70:
+    elif score >= _GRADE_THRESHOLDS["MEDIUM"]:
         return "MEDIUM"
-    elif score >= 50:
+    elif score >= _GRADE_THRESHOLDS["LOW"]:
         return "LOW"
     return "CRITICAL"
 
