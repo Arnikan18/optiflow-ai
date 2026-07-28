@@ -120,3 +120,41 @@ async def test_manager_resume_run_clarification():
         assert mock_state["goal_text"] == "Optimize (Clarification: Tier 1)"
         assert mock_state["structured_goal"]["ambiguities"] == []
         mock_create_task.assert_called_once()
+
+def test_get_run_status_success():
+    with patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute, \
+         patch("app.main.load_last_checkpoint") as mock_load:
+         
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = ("RUN-EXIST-123", "WAITING_FOR_APPROVAL", "pause_for_approval", "PLAN-BALANCED")
+        mock_execute.return_value = mock_result
+        
+        mock_load.return_value = {
+            "candidate_plans": [{"plan_id": "PLAN-BALANCED"}],
+            "confidence_report": {"score": 95.0, "grade": "HIGH"},
+            "autonomy_risk_report": {"risk_level": "STANDARD"},
+            "replan_count": 1,
+            "excluded_specialist_incidents": [],
+            "structured_goal": {"objectives": ["SLA_PROTECTION"]},
+            "selected_tools": [{"toolName": "crm-service", "selected": True}],
+            "business_summary": "Summary markdown",
+            "change_summary": "Change markdown"
+        }
+        
+        response = client.get("/api/v1/runs/RUN-EXIST-123")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["run_id"] == "RUN-EXIST-123"
+        assert data["status"] == "WAITING_FOR_APPROVAL"
+        assert data["current_node"] == "pause_for_approval"
+        assert data["recommended_plan_id"] == "PLAN-BALANCED"
+        assert data["candidate_plans"] == [{"plan_id": "PLAN-BALANCED"}]
+        assert data["confidence_report"] == {"score": 95.0, "grade": "HIGH"}
+        assert data["autonomy_risk_report"] == {"risk_level": "STANDARD"}
+        assert data["replan_count"] == 1
+        assert data["excluded_specialist_incidents"] == []
+        assert data["structured_goal"] == {"objectives": ["SLA_PROTECTION"]}
+        assert data["selected_tools"] == [{"toolName": "crm-service", "selected": True}]
+        assert data["business_summary"] == "Summary markdown"
+        assert data["change_summary"] == "Change markdown"
+
