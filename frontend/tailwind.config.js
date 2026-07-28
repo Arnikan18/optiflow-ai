@@ -8,43 +8,43 @@ export default {
     extend: {
       colors: {
         // Depth layers — dark ops background stack
-        void:     '#070b14',
-        abyss:    '#0d1424',
-        deep:     '#111d35',
-        surface:  '#162040',
-        elevated: '#1a2850',
+        void:     '#f4f1e8',
+        abyss:    '#fffdf8',
+        deep:     '#f8f5ed',
+        surface:  '#ece7db',
+        elevated: '#ffffff',
 
         // Structural borders
         border: {
-          dim:    '#1e3055',
-          base:   '#2d4a7a',
-          bright: '#3d5fa0',
+          dim:    '#ded8ca',
+          base:   '#c3bbab',
+          bright: '#817868',
         },
 
         // Accent palette — "Amber Neural"
         ops: {
-          amber:        '#f59e0b',
-          'amber-bright': '#fbbf24',
-          'amber-dim':  'rgba(245,158,11,0.08)',
-          cyan:         '#06b6d4',
-          'cyan-bright':'#22d3ee',
-          emerald:      '#10b981',
-          rose:         '#f43f5e',
-          violet:       '#8b5cf6',
-          orange:       '#f97316',
+          amber:        '#f05a2a',
+          'amber-bright': '#ff7448',
+          'amber-dim':  'rgba(240,90,42,0.08)',
+          cyan:         '#147d75',
+          'cyan-bright':'#0d968a',
+          emerald:      '#2e7d4f',
+          rose:         '#c53e4c',
+          violet:       '#6654a5',
+          orange:       '#d9772f',
         },
 
         // Text hierarchy
         ink: {
-          primary:   '#e2e8f0',
-          secondary: '#94a3b8',
-          muted:     '#475569',
-          ghost:     '#1e3055',
+          primary:   '#1d2926',
+          secondary: '#59635f',
+          muted:     '#8a918d',
+          ghost:     '#b9bdb8',
         },
       },
       fontFamily: {
-        sans: ['Space Grotesk', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
+        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'monospace'],
       },
       animation: {
         'pulse-amber': 'pulse-amber 2s ease-in-out infinite',
@@ -72,12 +72,12 @@ export default {
         },
       },
       boxShadow: {
-        'amber-glow': '0 0 20px rgba(245,158,11,0.25), 0 0 40px rgba(245,158,11,0.08)',
-        'cyan-glow':  '0 0 16px rgba(6,182,212,0.25)',
-        'card':       '0 2px 16px rgba(0,0,0,0.4)',
+        'amber-glow': '0 12px 30px rgba(240,90,42,0.20)',
+        'cyan-glow':  '0 10px 26px rgba(20,125,117,0.16)',
+        'card':       '0 14px 40px rgba(48,53,47,0.08)',
       },
       backgroundImage: {
-        'grid-ops': "linear-gradient(rgba(45,74,122,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(45,74,122,0.12) 1px, transparent 1px)",
+        'grid-ops': "linear-gradient(rgba(29,41,38,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(29,41,38,0.045) 1px, transparent 1px)",
       },
       backgroundSize: {
         'grid-ops': '48px 48px',

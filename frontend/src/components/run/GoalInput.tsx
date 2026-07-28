@@ -4,9 +4,18 @@ import { api } from '../../api/client';
 import type { RecentRun } from '../../types/api';
 
 const DEMO_GOALS = [
-  'Optimize scheduling to protect high-ARR customers and balance workload fairly.',
-  'Assign available specialists to critical SLA incidents, prioritising Tier 1 customers.',
-  'Rebalance specialist workload to prevent burnout while maintaining SLA coverage.',
+  {
+    label: 'Protect revenue',
+    text: 'Optimize scheduling to protect high-ARR customers and balance workload fairly.',
+  },
+  {
+    label: 'Protect SLA',
+    text: 'Assign available specialists to critical SLA incidents, prioritising Tier 1 customers.',
+  },
+  {
+    label: 'Protect team',
+    text: 'Rebalance specialist workload to prevent burnout while maintaining SLA coverage.',
+  },
 ];
 
 function saveRecentRun(run_id: string, goal_text: string) {
@@ -18,10 +27,9 @@ function saveRecentRun(run_id: string, goal_text: string) {
       status: 'RECEIVED',
       created_at: new Date().toISOString(),
     };
-    const updated = [entry, ...existing].slice(0, 10);
-    localStorage.setItem('optiflow_runs', JSON.stringify(updated));
+    localStorage.setItem('optiflow_runs', JSON.stringify([entry, ...existing].slice(0, 10)));
   } catch {
-    // localStorage may be unavailable
+    // Local storage is optional.
   }
 }
 
@@ -30,9 +38,10 @@ export function GoalInput() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const isReady = goal.trim().length >= 10 && !loading;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     const trimmed = goal.trim();
     if (trimmed.length < 10) return;
 
@@ -44,91 +53,73 @@ export function GoalInput() {
       saveRecentRun(run_id, trimmed);
       navigate(`/run/${run_id}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to initiate run';
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Failed to start the decision route');
       setLoading(false);
     }
   };
 
-  const charCount = goal.length;
-  const isReady = goal.trim().length >= 10 && !loading;
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Label */}
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-mono text-ink-secondary uppercase tracking-widest">
-          Decision Goal
-        </label>
-        <span className="text-xs font-mono text-ink-muted">{charCount} chars</span>
-      </div>
-
-      {/* Textarea */}
-      <div className="relative">
+    <form onSubmit={handleSubmit} className="min-w-0">
+      <div className="rounded-2xl border border-border-base bg-deep overflow-hidden focus-within:border-ops-amber focus-within:ring-4 focus-within:ring-ops-amber/10 transition-all">
+        <label htmlFor="decision-goal" className="sr-only">Decision goal</label>
         <textarea
+          id="decision-goal"
           value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder="Describe your operational objective in plain English…&#10;&#10;e.g. 'Optimise scheduling to protect high-ARR customers and balance workload fairly.'"
-          rows={6}
+          onChange={(event) => setGoal(event.target.value)}
+          placeholder="Example: Protect Tier 1 customers from SLA breach while keeping team workload fair."
+          rows={4}
           disabled={loading}
-          className="w-full bg-deep border border-border-dim rounded-lg p-4 text-ink-primary
-            placeholder:text-ink-ghost resize-none focus:outline-none focus:border-ops-amber
-            font-sans text-sm leading-relaxed transition-colors duration-200
-            disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-transparent p-4 sm:p-5 pb-3 text-ink-primary placeholder:text-ink-muted resize-none focus:outline-none text-sm leading-relaxed disabled:opacity-50"
         />
-        {/* Bottom-right decorative corner */}
-        <div className="absolute bottom-2 right-2 text-xs font-mono text-ink-ghost pointer-events-none">
-          {isReady ? '▶ READY' : ''}
+        <div className="px-4 sm:px-5 py-3 border-t border-border-dim flex items-center justify-between gap-3">
+          <span className="text-[10px] font-mono uppercase tracking-[0.13em] text-ink-muted">
+            Include priority + limits + timeframe
+          </span>
+          <span className={`text-[10px] font-mono ${isReady ? 'text-ops-emerald' : 'text-ink-muted'}`}>
+            {goal.length}/500
+          </span>
         </div>
       </div>
 
-      {/* Example goals */}
-      <div>
-        <p className="text-xs font-mono text-ink-muted uppercase tracking-widest mb-2">
-          Quick-start examples
-        </p>
-        <div className="space-y-2">
-          {DEMO_GOALS.map((g, i) => (
+      <div className="mt-4">
+        <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-ink-muted mb-2.5">Or choose a starting point</p>
+        <div className="flex flex-wrap gap-2">
+          {DEMO_GOALS.map((example) => (
             <button
-              key={i}
+              key={example.label}
               type="button"
-              onClick={() => setGoal(g)}
-              className="w-full text-left text-xs text-ink-secondary bg-abyss border border-border-dim
-                rounded-lg px-3 py-2.5 hover:border-ops-amber/60 hover:text-ink-primary
-                hover:bg-ops-amber/5 transition-all duration-200 font-mono leading-relaxed"
+              onClick={() => setGoal(example.text)}
+              className="px-3 py-2 rounded-full border border-border-dim bg-abyss text-[11px] font-semibold text-ink-secondary hover:text-ops-amber hover:border-ops-amber/40 transition-colors focus-ring"
             >
-              <span className="text-ops-amber mr-2">{i + 1}.</span>{g}
+              {example.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="flex items-start gap-3 bg-ops-rose/8 border border-ops-rose/40 rounded-lg px-4 py-3 animate-fade-up">
-          <span className="text-ops-rose text-sm shrink-0">✗</span>
-          <p className="text-sm text-ops-rose leading-relaxed">{error}</p>
+        <div className="mt-4 rounded-xl border border-ops-rose/30 bg-ops-rose/5 px-4 py-3 text-xs text-ops-rose" role="alert">
+          {error}
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        type="submit"
-        disabled={!isReady}
-        className="w-full bg-ops-amber text-void font-bold py-3.5 px-6 rounded-lg
-          hover:bg-ops-amber-bright disabled:opacity-30 disabled:cursor-not-allowed
-          transition-all duration-200 text-sm tracking-widest uppercase flex items-center justify-center gap-3
-          glow-amber focus:outline-none focus:ring-2 focus:ring-ops-amber/50"
-      >
-        {loading ? (
-          <>
-            <span className="w-4 h-4 border-2 border-void/30 border-t-void rounded-full animate-spin" />
-            Initiating Run…
-          </>
-        ) : (
-          'Initiate Run →'
-        )}
-      </button>
+      <div className="mt-5 flex items-center gap-4">
+        <button
+          type="submit"
+          disabled={!isReady}
+          className="group flex-1 rounded-xl bg-ink-primary text-white px-5 py-3.5 text-sm font-bold hover:bg-ops-amber disabled:opacity-30 disabled:cursor-not-allowed transition-all focus-ring flex items-center justify-between"
+        >
+          <span>{loading ? 'Building your route…' : 'Build my decision route'}</span>
+          {loading ? (
+            <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          ) : (
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
+          )}
+        </button>
+        <div className="hidden sm:block text-[10px] leading-relaxed text-ink-muted max-w-[120px]">
+          Nothing changes until you approve.
+        </div>
+      </div>
     </form>
   );
 }

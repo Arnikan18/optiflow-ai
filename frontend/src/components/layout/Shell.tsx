@@ -5,51 +5,58 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isRunPage = location.pathname.startsWith('/run/');
 
   return (
-    <div className="min-h-screen bg-void flex flex-col">
-      {/* ── Top navigation bar ──────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-abyss border-b border-border-dim flex items-center justify-between px-6 h-14 shrink-0">
-        <Link to="/" className="flex items-center gap-3 group">
-          {/* Logo mark */}
-          <div className="relative w-7 h-7 shrink-0">
-            <div className="absolute inset-0 rounded bg-ops-amber/10 border border-ops-amber/30 group-hover:bg-ops-amber/20 transition-colors" />
-            <svg viewBox="0 0 28 28" fill="none" className="w-7 h-7 relative z-10">
-              <circle cx="14" cy="14" r="5" stroke="#f59e0b" strokeWidth="1.5" />
-              <path d="M14 3 L14 7 M14 21 L14 25 M3 14 L7 14 M21 14 L25 14"
-                stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="14" cy="14" r="2" fill="#f59e0b" />
-            </svg>
-          </div>
-          <span className="font-semibold text-ink-primary tracking-tight group-hover:text-ops-amber-bright transition-colors">
-            OptiFlow <span className="text-ops-amber">AI</span>
-          </span>
-        </Link>
-
-        <nav className="flex items-center gap-6">
-          {isRunPage && (
-            <Link
-              to="/"
-              className="text-xs font-mono text-ink-secondary hover:text-ink-primary transition-colors tracking-widest uppercase"
-            >
-              ← Control Room
-            </Link>
-          )}
-          <span className="text-xs font-mono text-ink-muted uppercase tracking-widest hidden sm:block">
-            Mission Control
-          </span>
-          <div className="flex items-center gap-2">
-            <div className="relative w-2 h-2 shrink-0">
-              <div className="absolute inset-0 rounded-full bg-ops-emerald" />
-              <div className="absolute inset-0 rounded-full bg-ops-emerald animate-ping opacity-75" />
+    <div className="min-h-screen bg-void flex flex-col overflow-x-hidden">
+      <header className="sticky top-0 z-50 h-16 shrink-0 border-b border-border-dim bg-abyss/95 backdrop-blur">
+        <div className="h-full max-w-[1440px] mx-auto px-5 sm:px-8 flex items-center justify-between">
+          <Link to="/" className="group flex items-center gap-3 focus-ring rounded-lg">
+            <div className="relative w-9 h-9 rounded-xl bg-ink-primary overflow-hidden shadow-card">
+              <svg viewBox="0 0 36 36" fill="none" className="w-full h-full" aria-hidden="true">
+                <path d="M8 10h8c5.5 0 5.5 8 11 8h1" stroke="#fffdf8" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M8 26h8c5.5 0 5.5-8 11-8h1" stroke="#f05a2a" strokeWidth="2.2" strokeLinecap="round" />
+                <circle cx="8" cy="10" r="2.5" fill="#fffdf8" />
+                <circle cx="8" cy="26" r="2.5" fill="#f05a2a" />
+                <circle cx="28" cy="18" r="3" fill="#fffdf8" />
+              </svg>
             </div>
-            <span className="text-xs font-mono text-ops-emerald">LIVE</span>
-          </div>
-        </nav>
+            <div>
+              <div className="text-[15px] leading-none font-extrabold tracking-[-0.03em] text-ink-primary">
+                optiflow
+              </div>
+              <div className="text-[9px] mt-1 font-mono uppercase tracking-[0.22em] text-ink-muted">
+                decision systems
+              </div>
+            </div>
+          </Link>
+
+          <nav className="flex items-center gap-3 sm:gap-6">
+            {isRunPage && (
+              <Link
+                to="/"
+                className="hidden sm:flex items-center gap-2 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors focus-ring rounded-md"
+              >
+                <span aria-hidden="true">←</span>
+                New decision
+              </Link>
+            )}
+            <div className="hidden md:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-muted">
+              <span className="w-1.5 h-1.5 rounded-full bg-ops-emerald" />
+              human governed
+            </div>
+            <div className="h-5 w-px bg-border-dim hidden md:block" />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border-dim bg-deep">
+              <span className="relative flex w-2 h-2">
+                <span className="absolute inset-0 rounded-full bg-ops-emerald animate-ping opacity-40" />
+                <span className="relative w-2 h-2 rounded-full bg-ops-emerald" />
+              </span>
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-secondary">
+                systems live
+              </span>
+            </div>
+          </nav>
+        </div>
       </header>
 
-      {/* ── Page content ────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <main className="flex-1 min-h-0 min-w-0">{children}</main>
     </div>
   );
 }

@@ -9,13 +9,6 @@ const SERVICES: Omit<ServiceHealth, 'status' | 'latency_ms'>[] = [
   { name: 'Comms',    port: 8104 },
 ];
 
-const STATUS_COLORS: Record<ServiceHealthStatus, string> = {
-  online:   'bg-ops-emerald text-ops-emerald',
-  degraded: 'bg-ops-orange text-ops-orange',
-  offline:  'bg-ops-rose text-ops-rose',
-  checking: 'bg-ink-muted text-ink-muted',
-};
-
 const STATUS_DOT: Record<ServiceHealthStatus, string> = {
   online:   'bg-ops-emerald',
   degraded: 'bg-ops-orange',
@@ -66,25 +59,29 @@ export function HealthStrip() {
   const overallOnline = services.filter((s) => s.status === 'online').length;
 
   return (
-    <div className="bg-abyss border-b border-border-dim px-6 py-2 flex items-center gap-6 overflow-x-auto">
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-xs font-mono text-ink-muted uppercase tracking-widest">System</span>
-        <span className={`text-xs font-mono font-semibold ${overallOnline === services.length ? 'text-ops-emerald' : 'text-ops-orange'}`}>
-          {overallOnline}/{services.length} ONLINE
+    <div className="bg-ink-primary text-white px-5 sm:px-8 py-2.5 flex items-center gap-5 overflow-x-auto">
+      <div className="flex items-center gap-2.5 shrink-0">
+        <span className="relative flex w-2 h-2">
+          <span className={`absolute inset-0 rounded-full ${overallOnline === services.length ? 'bg-ops-emerald' : 'bg-ops-orange'} animate-ping opacity-40`} />
+          <span className={`relative w-2 h-2 rounded-full ${overallOnline === services.length ? 'bg-ops-emerald' : 'bg-ops-orange'}`} />
+        </span>
+        <span className="text-[9px] font-mono text-white/50 uppercase tracking-[0.16em]">Evidence network</span>
+        <span className="text-[9px] font-mono font-semibold text-white">
+          {overallOnline}/{services.length} ready
         </span>
       </div>
 
-      <div className="h-4 w-px bg-border-dim shrink-0" />
+      <div className="h-4 w-px bg-white/15 shrink-0" />
 
       <div className="flex items-center gap-4">
         {services.map((svc) => (
           <div key={svc.name} className="flex items-center gap-1.5 shrink-0">
             <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[svc.status]}`} />
-            <span className={`text-xs font-mono ${STATUS_COLORS[svc.status].split(' ')[1]}`}>
+            <span className="text-[9px] font-mono text-white/60 uppercase tracking-wider">
               {svc.name}
             </span>
             {svc.latency_ms !== undefined && (
-              <span className="text-xs text-ink-muted font-mono hidden lg:block">
+              <span className="text-[9px] text-white/30 font-mono hidden lg:block">
                 {svc.latency_ms}ms
               </span>
             )}
@@ -92,13 +89,13 @@ export function HealthStrip() {
         ))}
       </div>
 
-      <div className="ml-auto shrink-0 hidden md:flex items-center gap-2">
+      <div className="ml-auto shrink-0 hidden md:flex items-center gap-3">
         {lastChecked && (
-          <span className="text-xs font-mono text-ink-muted">Checked {lastChecked}</span>
+          <span className="text-[9px] font-mono text-white/30">checked {lastChecked}</span>
         )}
         <button
           onClick={checkHealth}
-          className="text-xs font-mono text-ink-secondary hover:text-ops-amber transition-colors uppercase tracking-widest"
+          className="text-[9px] font-mono text-white/60 hover:text-white transition-colors uppercase tracking-[0.15em] focus-ring rounded"
         >
           Refresh
         </button>

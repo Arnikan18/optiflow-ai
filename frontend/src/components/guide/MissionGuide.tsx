@@ -1,180 +1,123 @@
 import type { RunStatus } from '../../types/api';
-import {
-  getActiveGuide,
-  PHASE_TIMELINE,
-  type PhaseGuide,
-} from '../../data/guideContent';
+import { getActiveGuide } from '../../data/guideContent';
 
 interface MissionGuideProps {
   status: RunStatus | null;
   currentNode: string | null;
 }
 
-const PHASE_ORDER_ID: Record<string, number> = {
-  receive: 0, interpret: 1, validate: 2, evidence: 3,
-  optimize: 4, approval: 5, executing: 6, complete: 7, failed: 7,
+const CHECKS_BY_PHASE: Record<string, string[]> = {
+  receive: ['Goal saved', 'Run ID assigned', 'Audit record opened'],
+  interpret: ['Primary objective', 'Hard constraints', 'Time horizon'],
+  validate: ['Policy conflicts', 'Missing priorities', 'Unsafe assumptions'],
+  clarify: ['Ambiguity resolved', 'Answer recorded', 'Policy fit restored'],
+  evidence: ['Customer impact', 'SLA urgency', 'Skills and capacity', 'Data freshness'],
+  optimize: ['Hard constraints', 'Coverage and ARR', 'Workload fairness', 'Alternative trade-offs'],
+  approval: ['Recommendation evidence', 'Trade-offs', 'Unassigned work', 'Your explicit approval'],
+  executing: ['Capacity reserved', 'Incident assigned', 'Notification delivered', 'Receipt confirmed'],
+  complete: ['Every write confirmed', 'Final metrics captured', 'Audit trail closed'],
+  failed: ['Partial writes rolled back', 'Failure point recorded', 'Systems left consistent'],
 };
 
-function getPhaseIndexFromGuide(guide: PhaseGuide): number {
-  return PHASE_ORDER_ID[guide.id] ?? 0;
-}
+const MANUAL_MOVE: Record<string, string> = {
+  receive: 'Write down the goal, owner, time, and a unique reference.',
+  interpret: 'Underline the priority, circle every limit, and write the decision timeframe.',
+  validate: 'Ask whether the goal breaks policy or leaves a critical choice unspecified.',
+  clarify: 'Get a precise answer from the decision owner before collecting evidence.',
+  evidence: 'Compare customer value, SLA deadline, required skill, and current capacity.',
+  optimize: 'Create at least two viable assignments and state the cost of each one.',
+  approval: 'Choose the trade-off you accept and record who authorised it.',
+  executing: 'Apply one change at a time and verify it before continuing.',
+  complete: 'Record what changed, who was notified, and any work left unassigned.',
+  failed: 'Stop, reverse partial changes, and document the exact failure point.',
+};
 
-function PhaseRow({
-  phase,
-  state,
+function GuideSection({
+  marker,
+  title,
+  children,
 }: {
-  phase: { id: string; label: string; icon: string };
-  state: 'done' | 'active' | 'pending' | 'failed';
+  marker: string;
+  title: string;
+  children: React.ReactNode;
 }) {
-  const base = 'flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-300';
-
-  if (state === 'active') {
-    return (
-      <div className={`${base} bg-ops-amber/10 border border-ops-amber/30`}>
-        <div className="relative w-5 h-5 shrink-0">
-          <div className="w-5 h-5 rounded-full bg-ops-amber flex items-center justify-center text-void text-xs font-bold">
-            <span className="animate-spin-slow">⟳</span>
-          </div>
-        </div>
-        <span className="text-xs font-mono text-ops-amber-bright font-semibold">{phase.label}</span>
-      </div>
-    );
-  }
-  if (state === 'done') {
-    return (
-      <div className={`${base} opacity-60`}>
-        <div className="w-5 h-5 rounded-full bg-ops-emerald/20 border border-ops-emerald/40 flex items-center justify-center text-ops-emerald text-xs shrink-0">
-          ✓
-        </div>
-        <span className="text-xs font-mono text-ink-secondary line-through">{phase.label}</span>
-      </div>
-    );
-  }
-  if (state === 'failed') {
-    return (
-      <div className={`${base} bg-ops-rose/10 border border-ops-rose/30`}>
-        <div className="w-5 h-5 rounded-full bg-ops-rose/20 border border-ops-rose/40 flex items-center justify-center text-ops-rose text-xs shrink-0">✗</div>
-        <span className="text-xs font-mono text-ops-rose">{phase.label}</span>
-      </div>
-    );
-  }
   return (
-    <div className={`${base} opacity-40`}>
-      <div className="w-5 h-5 rounded-full border border-border-base flex items-center justify-center text-ink-muted text-xs shrink-0">
-        {phase.icon}
+    <section className="px-5 py-5 border-b border-border-dim last:border-b-0">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-[9px] font-mono font-semibold text-ops-amber">{marker}</span>
+        <h3 className="text-[9px] font-mono font-semibold uppercase tracking-[0.17em] text-ink-muted">{title}</h3>
       </div>
-      <span className="text-xs font-mono text-ink-muted">{phase.label}</span>
-    </div>
+      {children}
+    </section>
   );
 }
 
 export function MissionGuide({ status, currentNode }: MissionGuideProps) {
   const guide = getActiveGuide(status, currentNode);
-  const activeIndex = getPhaseIndexFromGuide(guide);
-  const isFailed = status === 'FAILED';
+  const checks = CHECKS_BY_PHASE[guide.id] ?? [];
 
   return (
-    <aside className="w-full h-full bg-abyss border-l border-border-dim flex flex-col overflow-y-auto">
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="px-5 pt-5 pb-4 border-b border-border-dim shrink-0">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-ops-amber animate-pulse-amber" />
-          <span className="text-xs font-mono text-ops-amber uppercase tracking-widest font-semibold">
-            Mission Guide
-          </span>
-        </div>
-        <p className="text-xs text-ink-muted leading-relaxed">
-          Real-time walkthrough of every agent phase. Expand each section to understand what's happening and what decisions you need to make.
-        </p>
-      </div>
-
-      {/* ── Phase timeline ─────────────────────────────────────── */}
-      <div className="px-3 py-4 border-b border-border-dim space-y-1 shrink-0">
-        <p className="text-xs font-mono text-ink-muted uppercase tracking-widest mb-3 px-2">
-          Agent Lifecycle
-        </p>
-        {PHASE_TIMELINE.map((phase, i) => {
-          let state: 'done' | 'active' | 'pending' | 'failed' = 'pending';
-          if (isFailed && i === activeIndex) state = 'failed';
-          else if (i < activeIndex) state = 'done';
-          else if (i === activeIndex) state = 'active';
-          return <PhaseRow key={phase.id} phase={phase} state={state} />;
-        })}
-      </div>
-
-      {/* ── Active guide panel ─────────────────────────────────── */}
-      <div className="flex-1 px-5 py-5 space-y-5 overflow-y-auto">
-        {/* Phase label */}
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{guide.icon}</span>
-          <h3 className="font-semibold text-sm text-ink-primary">{guide.label}</h3>
-        </div>
-
-        {/* What's happening */}
-        <GuideSection title="What's Happening" color="cyan">
-          {guide.whatIsHappening}
-        </GuideSection>
-
-        {/* Why it matters */}
-        <GuideSection title="Why It Matters" color="amber">
-          {guide.whyItMatters}
-        </GuideSection>
-
-        {/* What to watch */}
-        <GuideSection title="What to Watch" color="violet">
-          {guide.whatToWatch}
-        </GuideSection>
-
-        {/* Action prompt — only when manager needs to act */}
-        {guide.actionPrompt && (
-          <div className="rounded-lg border border-ops-amber/40 bg-ops-amber/8 p-4">
-            <p className="text-xs font-mono text-ops-amber uppercase tracking-widest mb-2 font-semibold">
-              ▶ Your Action Required
-            </p>
-            <p className="text-sm text-ops-amber-bright leading-relaxed">
-              {guide.actionPrompt}
-            </p>
+    <div className="w-full">
+      <div className="px-5 py-5 bg-ink-primary text-white">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[9px] font-mono text-[#ff8a64] uppercase tracking-[0.18em] font-semibold">Step briefing</p>
+            <h2 className="font-bold text-base mt-1">{guide.label}</h2>
           </div>
-        )}
+          <div className="w-9 h-9 rounded-full border border-white/15 flex items-center justify-center">
+            <span className="w-2 h-2 rounded-full bg-[#ff8a64] animate-pulse" />
+          </div>
+        </div>
+        <p className="text-xs text-white/60 leading-relaxed mt-4">
+          Read this panel to follow the logic or repeat the step manually.
+        </p>
+      </div>
 
-        {/* Key concept */}
-        <div className="rounded-lg border border-border-dim bg-deep p-4 space-y-2">
-          <p className="text-xs font-mono text-ink-muted uppercase tracking-widest">
-            Key Concept
-          </p>
-          <p className="text-xs font-semibold text-ops-cyan-bright font-mono">
-            {guide.keyConcept.term}
-          </p>
-          <p className="text-xs text-ink-secondary leading-relaxed">
-            {guide.keyConcept.definition}
-          </p>
+      <GuideSection marker="01" title="What is happening">
+        <p className="text-xs text-ink-secondary leading-relaxed">{guide.whatIsHappening}</p>
+      </GuideSection>
+
+      <GuideSection marker="02" title="Checks in this step">
+        <ul className="space-y-2.5">
+          {checks.map((check, index) => (
+            <li key={check} className="flex items-center gap-3">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] ${
+                index === 0 ? 'bg-ops-cyan text-white' : 'bg-deep border border-border-dim text-ink-muted'
+              }`}>
+                {index === 0 ? '✓' : index + 1}
+              </span>
+              <span className="text-xs font-semibold text-ink-secondary">{check}</span>
+            </li>
+          ))}
+        </ul>
+      </GuideSection>
+
+      <GuideSection marker="03" title="Why it matters">
+        <p className="text-xs text-ink-secondary leading-relaxed">{guide.whyItMatters}</p>
+      </GuideSection>
+
+      <GuideSection marker="04" title="If you did this manually">
+        <div className="rounded-xl bg-deep border border-border-dim p-4">
+          <p className="text-xs text-ink-primary font-semibold leading-relaxed">{MANUAL_MOVE[guide.id]}</p>
+        </div>
+      </GuideSection>
+
+      {guide.actionPrompt && (
+        <section className="m-4 rounded-xl bg-ops-amber text-white p-4 shadow-amber-glow">
+          <p className="text-[9px] font-mono font-semibold uppercase tracking-[0.16em] text-white/70">Your move</p>
+          <p className="text-xs font-semibold leading-relaxed mt-2">{guide.actionPrompt}</p>
+        </section>
+      )}
+
+      <div className="px-5 py-4 bg-deep border-t border-border-dim">
+        <div className="flex gap-3">
+          <span className="text-ops-cyan text-sm">i</span>
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-[0.14em] text-ink-muted">{guide.keyConcept.term}</p>
+            <p className="text-[11px] leading-relaxed text-ink-secondary mt-1.5">{guide.keyConcept.definition}</p>
+          </div>
         </div>
       </div>
-    </aside>
-  );
-}
-
-function GuideSection({
-  title,
-  color,
-  children,
-}: {
-  title: string;
-  color: 'cyan' | 'amber' | 'violet';
-  children: string;
-}) {
-  const colorMap = {
-    cyan:   'text-ops-cyan',
-    amber:  'text-ops-amber',
-    violet: 'text-ops-violet',
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <p className={`text-xs font-mono uppercase tracking-widest font-semibold ${colorMap[color]}`}>
-        {title}
-      </p>
-      <p className="text-xs text-ink-secondary leading-relaxed">{children}</p>
     </div>
   );
 }
