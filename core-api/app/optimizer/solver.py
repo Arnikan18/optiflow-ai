@@ -53,17 +53,19 @@ def resolve_required_skills(incident: Dict[str, Any]) -> List[str]:
 def generate_optimization_plans(
     customers: List[Dict[str, Any]],
     escalations: List[Dict[str, Any]],
-    specialists: List[Dict[str, Any]]
+    specialists: List[Dict[str, Any]],
+    excluded_pairs: List[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """Gateway entry point that delegates to the configured Strategy via the Factory with transparent greedy fallback."""
     from app.optimizer.factory import OptimizerFactory
     from app.optimizer.greedy import GreedyOptimizer
     from app.config.settings import settings
     
+    excluded_pairs = excluded_pairs or []
     strategy = settings.optimization_strategy or "greedy"
     try:
         optimizer = OptimizerFactory.get_optimizer(strategy)
-        plans = optimizer.generate_plans(customers, escalations, specialists)
+        plans = optimizer.generate_plans(customers, escalations, specialists, excluded_pairs=excluded_pairs)
         return plans
     except Exception as e:
         logger.warning(f"Optimization execution failed under strategy '{strategy}': {str(e)}. Falling back to GreedyOptimizer.")
