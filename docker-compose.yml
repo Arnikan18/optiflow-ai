@@ -4,11 +4,11 @@ services:
     image: postgres:16
     container_name: optiflow-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-optiflow}
-      POSTGRES_USER: ${POSTGRES_USER:-optiflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT}:${POSTGRES_CONTAINER_PORT}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -25,24 +25,24 @@ services:
     container_name: optiflow-crm
     environment:
       SERVICE_NAME: crm-service
-      SERVICE_PORT: 8101
-      ENVIRONMENT: ${APP_ENV:-development}
-      DATABASE_URL: sqlite:////app/data/crm.db
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
-      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
-      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
-      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
-      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
-      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
+      SERVICE_PORT: ${CRM_SERVICE_CONTAINER_PORT}
+      ENVIRONMENT: ${APP_ENV}
+      DATABASE_URL: ${CRM_DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      SCENARIO_ID: ${SCENARIO_ID}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE}
     ports:
-      - "${CRM_SERVICE_PORT:-8101}:8101"
+      - "${CRM_SERVICE_PORT}:${CRM_SERVICE_CONTAINER_PORT}"
     volumes:
       - crm_data:/app/data
       - ./scenarios:/app/scenarios:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8101/readiness"]
+      test: ["CMD-SHELL", "curl -f http://localhost:$${SERVICE_PORT}/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -54,26 +54,26 @@ services:
     container_name: optiflow-incident
     environment:
       SERVICE_NAME: incident-service
-      SERVICE_PORT: 8102
-      ENVIRONMENT: ${APP_ENV:-development}
-      DATABASE_URL: sqlite:////app/data/incident.db
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
-      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
-      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
-      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
-      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
-      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
-      CRM_SERVICE_URL: http://crm-service:8101
-      WORKFORCE_SERVICE_URL: http://workforce-service:8103
+      SERVICE_PORT: ${INCIDENT_SERVICE_CONTAINER_PORT}
+      ENVIRONMENT: ${APP_ENV}
+      DATABASE_URL: ${INCIDENT_DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      SCENARIO_ID: ${SCENARIO_ID}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE}
+      CRM_SERVICE_URL: ${CRM_SERVICE_URL}
+      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL}
     ports:
-      - "${INCIDENT_SERVICE_PORT:-8102}:8102"
+      - "${INCIDENT_SERVICE_PORT}:${INCIDENT_SERVICE_CONTAINER_PORT}"
     volumes:
       - incident_data:/app/data
       - ./scenarios:/app/scenarios:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8102/readiness"]
+      test: ["CMD-SHELL", "curl -f http://localhost:$${SERVICE_PORT}/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -85,26 +85,26 @@ services:
     container_name: optiflow-workforce
     environment:
       SERVICE_NAME: workforce-service
-      SERVICE_PORT: 8103
-      ENVIRONMENT: ${APP_ENV:-development}
-      DATABASE_URL: sqlite:////app/data/workforce.db
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
-      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
-      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
-      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
-      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
-      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
-      INCIDENT_SERVICE_URL: http://incident-service:8102
-      RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS:-300}
+      SERVICE_PORT: ${WORKFORCE_SERVICE_CONTAINER_PORT}
+      ENVIRONMENT: ${APP_ENV}
+      DATABASE_URL: ${WORKFORCE_DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      SCENARIO_ID: ${SCENARIO_ID}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE}
+      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL}
+      RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS}
     ports:
-      - "${WORKFORCE_SERVICE_PORT:-8103}:8103"
+      - "${WORKFORCE_SERVICE_PORT}:${WORKFORCE_SERVICE_CONTAINER_PORT}"
     volumes:
       - workforce_data:/app/data
       - ./scenarios:/app/scenarios:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8103/readiness"]
+      test: ["CMD-SHELL", "curl -f http://localhost:$${SERVICE_PORT}/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -116,28 +116,28 @@ services:
     container_name: optiflow-communication
     environment:
       SERVICE_NAME: communication-service
-      SERVICE_PORT: 8104
-      ENVIRONMENT: ${APP_ENV:-development}
-      DATABASE_URL: sqlite:////app/data/communication.db
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
-      SCENARIO_ID: ${SCENARIO_ID:-phase2-demo}
-      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA:-true}
-      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER:-X-Request-ID}
-      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH:-128}
-      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE:-100}
-      INCIDENT_SERVICE_URL: http://incident-service:8102
-      WORKFORCE_SERVICE_URL: http://workforce-service:8103
-      ASSIGNMENT_REQUEST_TTL_SECONDS: ${ASSIGNMENT_REQUEST_TTL_SECONDS:-900}
-      SIMULATED_DELIVERY_MODE: ${SIMULATED_DELIVERY_MODE:-success}
+      SERVICE_PORT: ${COMMUNICATION_SERVICE_CONTAINER_PORT}
+      ENVIRONMENT: ${APP_ENV}
+      DATABASE_URL: ${COMMUNICATION_DATABASE_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      SCENARIO_ID: ${SCENARIO_ID}
+      ENABLE_SEED_DATA: ${ENABLE_SEED_DATA}
+      REQUEST_ID_HEADER: ${REQUEST_ID_HEADER}
+      MAX_REQUEST_ID_LENGTH: ${MAX_REQUEST_ID_LENGTH}
+      MAX_PAGE_SIZE: ${MAX_PAGE_SIZE}
+      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL}
+      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL}
+      ASSIGNMENT_REQUEST_TTL_SECONDS: ${ASSIGNMENT_REQUEST_TTL_SECONDS}
+      SIMULATED_DELIVERY_MODE: ${SIMULATED_DELIVERY_MODE}
     ports:
-      - "${COMMUNICATION_SERVICE_PORT:-8104}:8104"
+      - "${COMMUNICATION_SERVICE_PORT}:${COMMUNICATION_SERVICE_CONTAINER_PORT}"
     volumes:
       - communication_data:/app/data
       - ./scenarios:/app/scenarios:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8104/readiness"]
+      test: ["CMD-SHELL", "curl -f http://localhost:$${SERVICE_PORT}/readiness"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -148,21 +148,21 @@ services:
       context: ./core-api
     container_name: optiflow-core
     environment:
-      APP_ENV: ${APP_ENV:-development}
-      APP_VERSION: ${APP_VERSION:-4.0}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://optiflow:change-me@postgres:5432/optiflow}
-      CRM_SERVICE_URL: ${CRM_SERVICE_URL:-http://crm-service:8101}
-      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL:-http://incident-service:8102}
-      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL:-http://workforce-service:8103}
-      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL:-http://communication-service:8104}
-      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN:-change-me}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-change-me-admin}
-      DEMO_MODE: ${DEMO_MODE:-true}
-      DEMO_PORTFOLIO_TIMEOUT_SECONDS: ${DEMO_PORTFOLIO_TIMEOUT_SECONDS:-3}
-      DEMO_HEALTH_TIMEOUT_SECONDS: ${DEMO_HEALTH_TIMEOUT_SECONDS:-2}
-      DEMO_ALLOW_FAILURE_INJECTION: ${DEMO_ALLOW_FAILURE_INJECTION:-true}
+      APP_ENV: ${APP_ENV}
+      APP_VERSION: ${APP_VERSION}
+      DATABASE_URL: ${DATABASE_URL}
+      CRM_SERVICE_URL: ${CRM_SERVICE_URL}
+      INCIDENT_SERVICE_URL: ${INCIDENT_SERVICE_URL}
+      WORKFORCE_SERVICE_URL: ${WORKFORCE_SERVICE_URL}
+      COMMUNICATION_SERVICE_URL: ${COMMUNICATION_SERVICE_URL}
+      TOOL_SHARED_TOKEN: ${TOOL_SHARED_TOKEN}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      DEMO_MODE: ${DEMO_MODE}
+      DEMO_PORTFOLIO_TIMEOUT_SECONDS: ${DEMO_PORTFOLIO_TIMEOUT_SECONDS}
+      DEMO_HEALTH_TIMEOUT_SECONDS: ${DEMO_HEALTH_TIMEOUT_SECONDS}
+      DEMO_ALLOW_FAILURE_INJECTION: ${DEMO_ALLOW_FAILURE_INJECTION}
     ports:
-      - "${CORE_API_PORT:-8000}:8000"
+      - "${CORE_API_PORT}:${CORE_API_CONTAINER_PORT}"
     volumes:
       - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
       - ./core-api/app:/app/app
@@ -184,9 +184,9 @@ services:
       context: ./frontend
     container_name: optiflow-frontend
     environment:
-      VITE_CORE_API_URL: ${VITE_CORE_API_URL:-http://localhost:8000}
+      VITE_CORE_API_URL: ${VITE_CORE_API_URL}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT}:${FRONTEND_CONTAINER_PORT}"
     depends_on:
       - core-api
 

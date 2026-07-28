@@ -16,4 +16,4 @@ RUN groupadd --system optiflow \
     && chown -R optiflow:optiflow /app
 USER optiflow
 EXPOSE 8104
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8104"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${SERVICE_PORT}"]
