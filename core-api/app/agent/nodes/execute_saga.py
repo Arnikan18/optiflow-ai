@@ -75,7 +75,8 @@ async def execute_saga(state: AgentState) -> dict:
     recommended = state.get("recommended_plan") or {}
     allocations = recommended.get("allocations", [])
 
-    # Carry forward any already-excluded pairs from previous replan loops.
+    # Carry forward the replan counter and any excluded pairs from previous loops.
+    current_replan_count: int = int(state.get("replan_count") or 0)
     excluded_pairs: list = list(state.get("excluded_specialist_incidents", []) or [])
 
     client = ToolClient(request_id=run_id)
@@ -281,9 +282,16 @@ async def execute_saga(state: AgentState) -> dict:
                 state_version=1,
             )
 
+    # Increment replan_count only when this execution triggered a replanning loop.
+    # generate_plans reads this value and evaluates the max_replan_count guard
+    # before running CP-SAT, so incrementing here ensures the guard is
+    # evaluated against the correct count on the very next planning cycle.
+    next_replan_count = (current_replan_count + 1) if needs_replan else current_replan_count
+
     return {
         "execution_actions": execution_actions,
         "execution_receipts": execution_receipts,
         "excluded_specialist_incidents": excluded_pairs,
         "status": status_outcome,
+        "replan_count": next_replan_count,
     }
