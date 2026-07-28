@@ -2,6 +2,7 @@ import logging
 from app.agent.state import AgentState
 from app.optimizer.solver import generate_optimization_plans
 from app.optimizer.explainer import explain_plan
+from app.config.settings import settings
 from app.database.session import async_session
 import app.database.persistence as persistence
 
@@ -13,13 +14,25 @@ async def generate_plans(state: AgentState) -> dict:
     
     ent_state = state.get("enterprise_state") or {}
     run_id = state.get("run_id", "unknown")
+    replan_count = int(state.get("replan_count") or 0)
+    excluded_pairs = list(state.get("excluded_specialist_incidents") or [])
+    
+    # Guard: prevent infinite replan loops.
+    if replan_count > settings.max_replan_count:
+        logger.warning(f"[generate_plans] Replan limit ({settings.max_replan_count}) reached for run {run_id}. Forcing completion.")
+        return {
+            "candidate_plans": [],
+            "recommended_plan": None,
+            "status": "FAILED_SAGA",
+            "replan_count": replan_count
+        }
     
     customers = ent_state.get("customers", [])
     escalations = ent_state.get("escalations", [])
     specialists = ent_state.get("specialists", [])
     
-    # Generate plans using the custom priority constraint solver
-    plans = generate_optimization_plans(customers, escalations, specialists)
+    # Generate plans — pass exclusion constraints so CP-SAT avoids rejected pairs.
+    plans = generate_optimization_plans(customers, escalations, specialists, excluded_pairs=excluded_pairs)
     
     # Generate natural language justifications for each computed plan
     for plan in plans:
@@ -37,7 +50,8 @@ async def generate_plans(state: AgentState) -> dict:
                 scenario_id="phase2-demo",
                 status="WAITING_FOR_APPROVAL",
                 current_node="generate_plans",
-                recommended_plan_id=recommended_id
+                recommended_plan_id=recommended_id,
+                replan_count=replan_count
             )
             # Check if a fallback occurred
             fallback_occurred = any(p.get("metadata", {}).get("fallback_status") for p in plans)
@@ -59,13 +73,19 @@ async def generate_plans(state: AgentState) -> dict:
                 sequence_number=5,
                 event_type="PLANS_GENERATED",
                 source="generate_plans",
-                summary="Scheduling candidate profiles successfully computed and recommended",
-                payload_dict={"plans_summary": [{"plan_id": p["plan_id"], "objective": p["objective_value"], "allocations": len(p.get("allocations", []))} for p in plans]},
+                summary=f"Scheduling candidate profiles computed (replan #{replan_count}). {len(excluded_pairs)} pair(s) excluded.",
+                payload_dict={
+                    "plans_summary": [{"plan_id": p["plan_id"], "objective": p["objective_value"], "allocations": len(p.get("allocations", []))} for p in plans],
+                    "excluded_pairs": excluded_pairs,
+                    "replan_count": replan_count
+                },
                 state_version=1
             )
             
     return {
         "candidate_plans": plans,
         "recommended_plan": recommended,
-        "status": "WAITING_FOR_APPROVAL"
+        "status": "WAITING_FOR_APPROVAL",
+        "replan_count": replan_count
     }
+

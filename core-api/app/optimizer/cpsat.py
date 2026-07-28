@@ -14,15 +14,22 @@ class CPSatOptimizer(BaseOptimizer):
         self,
         customers: List[Dict[str, Any]],
         escalations: List[Dict[str, Any]],
-        specialists: List[Dict[str, Any]]
+        specialists: List[Dict[str, Any]],
+        excluded_pairs: List[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Generates candidate optimization plans using CP-SAT portfolios."""
+        """Generates candidate optimization plans using CP-SAT portfolios.
+        
+        excluded_pairs: list of {"specialist_id": str, "incident_id": str} dicts
+        representing specialist-incident assignments that must not be made
+        (e.g. a specialist previously rejected the incident).
+        """
         from app.optimizer.profiles import DEFAULT_PROFILES, get_profile_weights
         
+        excluded_pairs = excluded_pairs or []
         plans = []
         for profile_name in DEFAULT_PROFILES.keys():
             weights = get_profile_weights(profile_name)
-            plan = self._solve_portfolio(profile_name, weights, customers, escalations, specialists)
+            plan = self._solve_portfolio(profile_name, weights, customers, escalations, specialists, excluded_pairs)
             plans.append(plan)
             
         return plans
@@ -33,15 +40,24 @@ class CPSatOptimizer(BaseOptimizer):
         weights: Dict[str, int],
         customers: List[Dict[str, Any]],
         escalations: List[Dict[str, Any]],
-        specialists: List[Dict[str, Any]]
+        specialists: List[Dict[str, Any]],
+        excluded_pairs: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Formulates and solves the portfolio allocation problem under a specific profile's weights."""
         from app.optimizer.solver import score_incident_priority, resolve_required_skills
         
-        start_time = time.perf_counter()
+        excluded_pairs = excluded_pairs or []
+        # Build a fast lookup set: {(inc_id, spec_id), ...}
+        excluded_set = {
+            (ep["incident_id"], ep["specialist_id"])
+            for ep in excluded_pairs
+            if ep.get("incident_id") and ep.get("specialist_id")
+        }
         
         # 1. Initialize CP-SAT Model
+        start_time = time.perf_counter()
         model = cp_model.CpModel()
+
         
         # Filter active incidents
         open_incidents = [
@@ -100,6 +116,13 @@ class CPSatOptimizer(BaseOptimizer):
                     if not has_skill:
                         # Enforce no assignment
                         model.Add(x[(inc_id, spec_id)] == 0)
+
+        # Constraint D: Exclusion constraints from previous replan loops.
+        # Formulation: x[i, j] == 0 for every (inc_id, spec_id) in excluded_set.
+        for (exc_inc_id, exc_spec_id) in excluded_set:
+            if (exc_inc_id, exc_spec_id) in x:
+                model.Add(x[(exc_inc_id, exc_spec_id)] == 0)
+                logger.debug(f"Exclusion constraint applied: {exc_spec_id} must not be assigned to {exc_inc_id}")
                         
         # 4. Modular Objective Components
         # Term 1: ARR matching reward

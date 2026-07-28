@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     max_graph_steps: int = 40
     max_clarification_rounds: int = 1
     max_replan_count: int = 5
+    saga_poll_max_attempts: int = 5
+    saga_poll_interval_seconds: float = 1.0
+
     
     optimization_strategy: str = "greedy"
     solver_time_limit_seconds: float = 3.0

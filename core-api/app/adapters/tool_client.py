@@ -151,6 +151,9 @@ class ToolClient:
     async def get_assignment_requests(self) -> Dict[str, Any]:
         return await self._request("GET", settings.communication_service_url, "/communication/api/v1/assignment-requests")
 
+    async def get_assignment_request(self, request_id: str) -> Dict[str, Any]:
+        return await self._request("GET", settings.communication_service_url, f"/communication/api/v1/assignment-requests/{request_id}")
+
     async def create_assignment_request(self, request_id: str, incident_id: str, specialist_id: str, message: str, expires_in_seconds: int = 300) -> Dict[str, Any]:
         body = {
             "request_id": request_id,

@@ -27,7 +27,10 @@ class AgentState(TypedDict, total=False):
     active_policies: Dict[str, Any]
     required_evidence: List[Dict[str, Any]]
     collected_evidence: List[Dict[str, Any]]
+    confidence_report: Optional[Dict[str, Any]]
+    autonomy_risk_report: Optional[Dict[str, Any]]
     source_freshness: Dict[str, Any]
+
     data_conflicts: List[Dict[str, Any]]
     missing_fields: List[str]
     consequence_estimates: List[Dict[str, Any]]
@@ -41,6 +44,8 @@ class AgentState(TypedDict, total=False):
     execution_receipts: List[Dict[str, Any]]
     monitoring_events: List[Dict[str, Any]]
     replan_count: int
+    excluded_specialist_incidents: List[Dict[str, Any]]
     created_at: str
     updated_at: str
     clarification_resolved: bool
+

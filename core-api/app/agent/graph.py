@@ -45,6 +45,20 @@ def route_after_approval(state: AgentState) -> str:
     return END
 
 
+def route_after_saga(state: AgentState) -> str:
+    """Routes the workflow after SAGA execution.
+    
+    REPLANNING: a specialist rejected or timed out — loop back to interpret_goal
+    so the CP-SAT optimizer can regenerate all four profiles with the excluded
+    specialist-incident pair as a hard constraint.
+    
+    All other outcomes (EXECUTED, FAILED_SAGA) proceed to complete_run.
+    """
+    if state.get("status") == "REPLANNING":
+        return "interpret_goal"
+    return "complete_run"
+
+
 def build_graph() -> StateGraph:
     """Creates, nodes-registers, and compiles the Version 4 StateGraph workflow."""
     graph = StateGraph(AgentState)
@@ -103,8 +117,15 @@ def build_graph() -> StateGraph:
         }
     )
     
-    # Final steps run completion
-    graph.add_edge("execute_saga", "complete_run")
+    # After SAGA: conditional routing — REPLANNING loops back, all else completes
+    graph.add_conditional_edges(
+        "execute_saga",
+        route_after_saga,
+        {
+            "interpret_goal": "interpret_goal",
+            "complete_run": "complete_run"
+        }
+    )
     graph.add_edge("complete_run", END)
     
     return graph

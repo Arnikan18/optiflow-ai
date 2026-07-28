@@ -19,3 +19,16 @@ def setup_test_database():
             
     loop.run_until_complete(create_tables())
     yield
+    
+    async def dispose_engine():
+        await engine.dispose()
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            asyncio.run(dispose_engine())
+        else:
+            loop.run_until_complete(dispose_engine())
+    except RuntimeError:
+        asyncio.run(dispose_engine())
+
+
