@@ -256,6 +256,163 @@ def test_respond_accept_reject_idempotent_and_conflict(client, auth_headers):
     assert rejected["status"] == "REJECTED"
 
 
+def assignment_verification_payload(**overrides):
+    payload = {
+        "assignment_request_id": "AR-VERIFY-OK",
+        "expected_run_id": "RUN-VERIFY-001",
+        "expected_incident_id": "INC-VERIFY-001",
+        "expected_specialist_id": "SPEC-MAYA",
+        "expected_status": "ACCEPTED",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_verify_assignment_request_accepted_and_mismatches(client, auth_headers):
+    created = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(
+                request_id="AR-VERIFY-OK",
+                incident_id="INC-VERIFY-001",
+                run_id="RUN-VERIFY-001",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    assert_success(
+        client.post(
+            f"/communication/api/v1/assignment-requests/{created['request_id']}/respond",
+            json=response_payload(response="ACCEPTED"),
+            headers=auth_headers,
+        )
+    )
+
+    verified = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(),
+            headers=auth_headers,
+        )
+    )
+    assert verified["verified"] is True
+    assert verified["result"] == "verified"
+    assert verified["current_status"] == "ACCEPTED"
+    assert verified["failed_checks"] == []
+
+    wrong_specialist = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(expected_specialist_id="SPEC-DANIEL"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_specialist["verified"] is False
+    assert wrong_specialist["result"] == "inconsistent"
+    assert "specialist_id_mismatch" in wrong_specialist["failed_checks"]
+
+    wrong_incident = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(expected_incident_id="INC-WRONG"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_incident["verified"] is False
+    assert "incident_id_mismatch" in wrong_incident["failed_checks"]
+
+
+def test_verify_assignment_request_pending_rejected_expired_and_unknown(client, auth_headers):
+    pending_request = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(
+                request_id="AR-VERIFY-PENDING",
+                incident_id="INC-VERIFY-PENDING",
+                run_id="RUN-VERIFY-PENDING",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    pending = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(
+                assignment_request_id=pending_request["request_id"],
+                expected_run_id="RUN-VERIFY-PENDING",
+                expected_incident_id="INC-VERIFY-PENDING",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert pending["verified"] is False
+    assert pending["result"] == "pending"
+    assert "request_pending" in pending["failed_checks"]
+
+    rejected_request = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(
+                request_id="AR-VERIFY-REJECTED",
+                incident_id="INC-VERIFY-REJECTED",
+                run_id="RUN-VERIFY-REJECTED",
+            ),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    assert_success(
+        client.post(
+            f"/communication/api/v1/assignment-requests/{rejected_request['request_id']}/respond",
+            json=response_payload(response="REJECTED"),
+            headers=auth_headers,
+        )
+    )
+    rejected = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(
+                assignment_request_id=rejected_request["request_id"],
+                expected_run_id="RUN-VERIFY-REJECTED",
+                expected_incident_id="INC-VERIFY-REJECTED",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert rejected["verified"] is False
+    assert rejected["result"] == "rejected"
+    assert "request_rejected" in rejected["failed_checks"]
+
+    expired = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(
+                assignment_request_id="AR-EXPIRED-001",
+                expected_run_id="RUN-EXPIRED",
+                expected_incident_id="INC-EXPIRED-001",
+                expected_specialist_id="SPEC-PRIYA",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert expired["verified"] is False
+    assert expired["result"] == "expired"
+    assert "request_expired" in expired["failed_checks"]
+
+    unknown = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests/verify",
+            json=assignment_verification_payload(assignment_request_id="AR-UNKNOWN"),
+            headers=auth_headers,
+        )
+    )
+    assert unknown["verified"] is False
+    assert unknown["result"] == "not_found"
+    assert unknown["actual_values"] is None
+
+
 def test_admin_queued_accept_reject_delay_and_one_time_consumption(client, auth_headers, admin_headers):
     accepted_config = assert_success(
         client.post(

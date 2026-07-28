@@ -49,12 +49,14 @@ def test_generate_optimization_plans():
     ]
     
     plans = generate_optimization_plans(customers, escalations, specialists)
-    assert len(plans) == 2
+    assert len(plans) == 4
     
     # Verify profiles
     profiles = {p["profile"]: p for p in plans}
     assert "Balanced" in profiles
     assert "SLA-First" in profiles
+    assert "Revenue-First" in profiles
+    assert "Fairness-First" in profiles
     
     # Verify allocations
     balanced = profiles["Balanced"]

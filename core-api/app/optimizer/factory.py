@@ -9,20 +9,19 @@ class OptimizerFactory:
     """Factory class to construct and retrieve the active optimization strategy class."""
     
     @staticmethod
-    def get_optimizer(strategy_name: str = None) -> BaseOptimizer:
+    def get_optimizer(strategy_name: str | None = None) -> BaseOptimizer:
         """Returns the appropriate BaseOptimizer strategy instance."""
         if not strategy_name:
-            strategy_name = settings.optimization_strategy or "greedy"
+            strategy_name = settings.optimizer_provider or settings.optimization_strategy or "cp_sat"
             
-        strategy_name = strategy_name.lower().strip()
-        logger.info(f"Instantiating optimizer strategy: {strategy_name}")
+        strategy_name = strategy_name.lower().strip().replace("_", "-")
+        logger.info("Instantiating optimizer strategy: %s", strategy_name)
         
-        if strategy_name == "cp-sat":
-            try:
-                from app.optimizer.cpsat import CPSatOptimizer
-                return CPSatOptimizer()
-            except (ImportError, Exception) as e:
-                logger.warning(f"Failed to load CPSatOptimizer: {str(e)}. Falling back to GreedyOptimizer.")
-                return GreedyOptimizer()
+        if strategy_name in ("cp-sat", "cpsat"):
+            from app.optimizer.cpsat import CPSatOptimizer
+            return CPSatOptimizer()
                 
-        return GreedyOptimizer()
+        if strategy_name == "greedy":
+            return GreedyOptimizer()
+
+        raise ValueError(f"Unsupported optimizer provider: {strategy_name}")

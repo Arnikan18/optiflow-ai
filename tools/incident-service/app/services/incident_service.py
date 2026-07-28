@@ -11,6 +11,7 @@ from app.database.models import Incident
 from app.database.seed import build_seed_incidents, ensure_failure_mode
 from app.schemas.requests import (
     IncidentAssignmentRequest,
+    IncidentAssignmentVerificationRequest,
     IncidentCreateRequest,
     IncidentStatusUpdateRequest,
     normalize_customer_id,
@@ -216,12 +217,31 @@ async def assign_specialist(
         raise IncidentError(409, "INCIDENT_409", "Resolved or closed incidents cannot be assigned")
 
     if incident.assigned_specialist_id == payload.specialist_id:
-        return incident
+        changed = False
+        if payload.run_id is not None and incident.assignment_run_id != payload.run_id:
+            incident.assignment_run_id = payload.run_id
+            changed = True
+        if payload.idempotency_key is not None and incident.assignment_idempotency_key != payload.idempotency_key:
+            incident.assignment_idempotency_key = payload.idempotency_key
+            changed = True
+        if not changed:
+            return incident
+        try:
+            session.add(incident)
+            await session.commit()
+            await session.refresh(incident)
+            return incident
+        except SQLAlchemyError as exc:
+            await session.rollback()
+            raise _database_error() from exc
 
     if incident.assigned_specialist_id and incident.status not in ACTIVE_STATUSES:
         raise IncidentError(409, "INCIDENT_409", "Incident cannot be reassigned in its current status")
 
     incident.assigned_specialist_id = payload.specialist_id
+    incident.assignment_run_id = payload.run_id
+    incident.assignment_idempotency_key = payload.idempotency_key
+    incident.assigned_at = datetime.now(timezone.utc)
     try:
         session.add(incident)
         await session.commit()
@@ -230,6 +250,84 @@ async def assign_specialist(
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc
+
+
+async def verify_incident_assignment(session: AsyncSession, payload: IncidentAssignmentVerificationRequest) -> dict:
+    checked_at = datetime.now(timezone.utc)
+    expected_values = {
+        "run_id": payload.expected_run_id,
+        "specialist_id": payload.expected_specialist_id,
+    }
+
+    try:
+        result = await session.execute(select(Incident).where(Incident.incident_id == payload.incident_id))
+        incident = result.scalar_one_or_none()
+    except SQLAlchemyError as exc:
+        raise _database_error() from exc
+
+    if incident is None:
+        return {
+            "verified": False,
+            "result": "not_found",
+            "incident_id": payload.incident_id,
+            "expected_values": expected_values,
+            "actual_values": None,
+            "failed_checks": ["incident_not_found"],
+            "checked_at": checked_at,
+            "assignment_status": None,
+        }
+
+    assignment_status = _assignment_status(incident)
+    actual_values = {
+        "assigned_specialist_id": incident.assigned_specialist_id,
+        "assignment_run_id": incident.assignment_run_id,
+        "assignment_idempotency_key": incident.assignment_idempotency_key,
+        "incident_status": incident.status,
+        "assigned_at": incident.assigned_at,
+    }
+
+    failed_checks: list[str] = []
+    if incident.assigned_specialist_id is None:
+        failed_checks.append("incident_unassigned")
+    elif incident.assigned_specialist_id != payload.expected_specialist_id:
+        failed_checks.append("specialist_id_mismatch")
+
+    run_matches = (
+        incident.assignment_run_id == payload.expected_run_id
+        or incident.assignment_idempotency_key == payload.expected_run_id
+    )
+    if not run_matches:
+        failed_checks.append("run_id_mismatch")
+    if assignment_status == "invalid":
+        failed_checks.append("assignment_status_invalid")
+
+    if incident.assigned_specialist_id is None:
+        result_status = "pending"
+    elif failed_checks:
+        result_status = "inconsistent"
+    else:
+        result_status = "verified"
+
+    return {
+        "verified": result_status == "verified",
+        "result": result_status,
+        "incident_id": incident.incident_id,
+        "expected_values": expected_values,
+        "actual_values": actual_values,
+        "failed_checks": failed_checks,
+        "checked_at": checked_at,
+        "assignment_status": assignment_status,
+    }
+
+
+def _assignment_status(incident: Incident) -> str:
+    if incident.assigned_specialist_id is None:
+        return "pending"
+    if incident.status in ACTIVE_STATUSES:
+        return "active"
+    if incident.status == "RESOLVED":
+        return "completed"
+    return "invalid"
 
 
 async def seed_incidents_if_empty(session: AsyncSession) -> int:

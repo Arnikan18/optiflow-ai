@@ -187,6 +187,44 @@ class AssignmentRequestCreateRequest(BaseModel):
         return normalized
 
 
+class AssignmentRequestVerificationRequest(BaseModel):
+    assignment_request_id: RequestId
+    expected_run_id: RunId
+    expected_incident_id: IncidentId
+    expected_specialist_id: SpecialistId
+    expected_status: str = "ACCEPTED"
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("assignment_request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        return normalize_request_id(value)
+
+    @field_validator("expected_run_id")
+    @classmethod
+    def validate_run_id(cls, value: str) -> str:
+        return normalize_run_id(value)
+
+    @field_validator("expected_incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("expected_specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("expected_status")
+    @classmethod
+    def validate_expected_status(cls, value: str) -> str:
+        normalized = normalize_assignment_status(value)
+        if normalized != "ACCEPTED":
+            raise ValueError("expected_status must be ACCEPTED")
+        return normalized
+
+
 class AssignmentResponseRequest(BaseModel):
     response: str
     response_note: ResponseNote | None = Field(default=None, validation_alias=AliasChoices("response_note", "responseReason", "response_reason"))

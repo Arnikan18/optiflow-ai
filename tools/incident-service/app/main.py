@@ -33,6 +33,18 @@ def _error_json(status_code: int, message: str, error_code: str) -> JSONResponse
 async def initialize_database() -> None:
     async with db_session.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if conn.dialect.name == "sqlite":
+            columns = await conn.exec_driver_sql("PRAGMA table_info(incidents)")
+            existing_columns = {row[1] for row in columns.fetchall()}
+            if "assignment_run_id" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assignment_run_id VARCHAR(64)")
+            if "assignment_idempotency_key" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assignment_idempotency_key VARCHAR(128)")
+            if "assigned_at" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assigned_at DATETIME")
+            await conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_incidents_assignment_run ON incidents (incident_id, assignment_run_id)"
+            )
 
     if get_settings().seed_on_startup:
         async with db_session.async_session() as session:

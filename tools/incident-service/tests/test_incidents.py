@@ -250,6 +250,109 @@ def test_assignment_rules(client, auth_headers):
     )
 
 
+def assignment_verification_payload(**overrides):
+    payload = {
+        "incident_id": "INC-GREEN-001",
+        "expected_run_id": "RUN-VERIFY-001",
+        "expected_specialist_id": "SPEC-DANIEL",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_verify_incident_assignment_correct_wrong_specialist_and_wrong_run(client, auth_headers):
+    assigned = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/INC-GREEN-001/assign",
+            json={
+                "specialist_id": "SPEC-DANIEL",
+                "run_id": "RUN-VERIFY-001",
+                "idempotency_key": "ASSIGN-RUN-VERIFY-001",
+            },
+            headers=auth_headers,
+        )
+    )
+    assert assigned["assigned_specialist_id"] == "SPEC-DANIEL"
+    assert assigned["assignment_run_id"] == "RUN-VERIFY-001"
+
+    verified = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(),
+            headers=auth_headers,
+        )
+    )
+    assert verified["verified"] is True
+    assert verified["result"] == "verified"
+    assert verified["assignment_status"] == "active"
+    assert verified["failed_checks"] == []
+
+    wrong_specialist = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(expected_specialist_id="SPEC-MAYA"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_specialist["verified"] is False
+    assert wrong_specialist["result"] == "inconsistent"
+    assert "specialist_id_mismatch" in wrong_specialist["failed_checks"]
+
+    wrong_run = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(expected_run_id="RUN-WRONG"),
+            headers=auth_headers,
+        )
+    )
+    assert wrong_run["verified"] is False
+    assert "run_id_mismatch" in wrong_run["failed_checks"]
+
+
+def test_verify_incident_assignment_unassigned_closed_and_unknown(client, auth_headers):
+    unassigned = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(
+                incident_id="INC-ALPHA-001",
+                expected_run_id="RUN-VERIFY-UNASSIGNED",
+                expected_specialist_id="SPEC-MAYA",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert unassigned["verified"] is False
+    assert unassigned["result"] == "pending"
+    assert "incident_unassigned" in unassigned["failed_checks"]
+
+    closed = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(
+                incident_id="INC-OMEGA-001",
+                expected_run_id="RUN-CLOSED",
+                expected_specialist_id="SPEC-DANIEL",
+            ),
+            headers=auth_headers,
+        )
+    )
+    assert closed["verified"] is False
+    assert closed["result"] == "inconsistent"
+    assert closed["assignment_status"] == "invalid"
+    assert "assignment_status_invalid" in closed["failed_checks"]
+
+    unknown = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/assignment/verify",
+            json=assignment_verification_payload(incident_id="INC-UNKNOWN"),
+            headers=auth_headers,
+        )
+    )
+    assert unknown["verified"] is False
+    assert unknown["result"] == "not_found"
+    assert unknown["actual_values"] is None
+
+
 def test_admin_reset_auth_and_determinism(client, auth_headers, admin_headers, monkeypatch):
     assert_error(client.post("/admin/reset"), 401, "INCIDENT_401")
     assert_error(client.post("/admin/reset", headers={"X-Admin-Key": "wrong"}), 401, "INCIDENT_401")

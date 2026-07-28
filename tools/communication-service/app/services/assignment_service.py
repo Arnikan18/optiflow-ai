@@ -12,6 +12,7 @@ from app.database.models import AssignmentRequest, ConfiguredResponse, FailureMo
 from app.database.seed import seed_database
 from app.schemas.requests import (
     AssignmentRequestCreateRequest,
+    AssignmentRequestVerificationRequest,
     AssignmentResponseRequest,
     normalize_assignment_status,
     normalize_datetime,
@@ -370,6 +371,78 @@ async def get_assignment_request(session: AsyncSession, request_id: str) -> Assi
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc
+
+
+async def verify_assignment_request(session: AsyncSession, payload: AssignmentRequestVerificationRequest) -> dict:
+    checked_at = _utc_now()
+    expected_values = {
+        "run_id": payload.expected_run_id,
+        "incident_id": payload.expected_incident_id,
+        "specialist_id": payload.expected_specialist_id,
+        "status": payload.expected_status,
+    }
+
+    try:
+        request = await get_assignment_request(session, payload.assignment_request_id)
+    except CommunicationError as exc:
+        if exc.status_code != 404:
+            raise
+        return {
+            "verified": False,
+            "result": "not_found",
+            "assignment_request_id": payload.assignment_request_id,
+            "expected_values": expected_values,
+            "actual_values": None,
+            "failed_checks": ["assignment_request_not_found"],
+            "checked_at": checked_at,
+            "current_status": None,
+        }
+
+    actual_values = {
+        "run_id": request.run_id,
+        "incident_id": request.incident_id,
+        "specialist_id": request.specialist_id,
+        "status": request.status,
+        "reservation_id": request.reservation_id,
+        "responded_at": request.responded_at,
+    }
+    failed_checks: list[str] = []
+    if request.run_id != payload.expected_run_id:
+        failed_checks.append("run_id_mismatch")
+    if request.incident_id != payload.expected_incident_id:
+        failed_checks.append("incident_id_mismatch")
+    if request.specialist_id != payload.expected_specialist_id:
+        failed_checks.append("specialist_id_mismatch")
+    if request.status != payload.expected_status:
+        failed_checks.append("status_not_accepted")
+    if request.status == "PENDING":
+        failed_checks.append("request_pending")
+    elif request.status == "REJECTED":
+        failed_checks.append("request_rejected")
+    elif request.status == "EXPIRED":
+        failed_checks.append("request_expired")
+
+    if request.status == "PENDING":
+        result_status = "pending"
+    elif request.status == "REJECTED":
+        result_status = "rejected"
+    elif request.status == "EXPIRED":
+        result_status = "expired"
+    elif failed_checks:
+        result_status = "inconsistent"
+    else:
+        result_status = "verified"
+
+    return {
+        "verified": result_status == "verified",
+        "result": result_status,
+        "assignment_request_id": request.request_id,
+        "expected_values": expected_values,
+        "actual_values": actual_values,
+        "failed_checks": failed_checks,
+        "checked_at": checked_at,
+        "current_status": request.status,
+    }
 
 
 async def respond_to_assignment_request(

@@ -113,6 +113,44 @@ class ReservationCreateRequest(BaseModel):
         return normalized
 
 
+class ReservationVerificationRequest(BaseModel):
+    reservation_id: ReservationId
+    expected_run_id: RunId
+    expected_incident_id: IncidentId
+    expected_specialist_id: SpecialistId
+    expected_status: str = "CONFIRMED"
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("reservation_id")
+    @classmethod
+    def validate_reservation_id(cls, value: str) -> str:
+        return normalize_reservation_id(value)
+
+    @field_validator("expected_run_id")
+    @classmethod
+    def validate_run_id(cls, value: str) -> str:
+        return normalize_run_id(value)
+
+    @field_validator("expected_incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("expected_specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("expected_status")
+    @classmethod
+    def validate_expected_status(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized != "CONFIRMED":
+            raise ValueError("expected_status must be CONFIRMED")
+        return normalized
+
+
 class LegacyTentativeReservationRequest(BaseModel):
     specialistId: SpecialistId
     escalationId: IncidentId

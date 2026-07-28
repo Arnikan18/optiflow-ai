@@ -23,6 +23,8 @@ SUPPORTED_STATUSES = {
 IncidentId = Annotated[str, Field(min_length=1, max_length=64)]
 CustomerId = Annotated[str, Field(min_length=1, max_length=64)]
 SpecialistId = Annotated[str, Field(min_length=1, max_length=64)]
+RunId = Annotated[str, Field(min_length=1, max_length=64)]
+IdempotencyKey = Annotated[str, Field(min_length=1, max_length=128)]
 IncidentTitle = Annotated[str, Field(min_length=1, max_length=200)]
 IncidentDescription = Annotated[str, Field(min_length=1, max_length=2000)]
 
@@ -44,6 +46,10 @@ def normalize_customer_id(value: str) -> str:
 
 def normalize_specialist_id(value: str) -> str:
     return normalize_identifier(value, "specialist_id")
+
+
+def normalize_run_id(value: str) -> str:
+    return normalize_identifier(value, "run_id")
 
 
 def normalize_priority(value: str) -> str:
@@ -156,10 +162,52 @@ class IncidentStatusUpdateRequest(BaseModel):
 
 class IncidentAssignmentRequest(BaseModel):
     specialist_id: SpecialistId
+    run_id: RunId | None = None
+    idempotency_key: IdempotencyKey | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @field_validator("specialist_id")
     @classmethod
     def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("idempotency_key cannot be empty")
+        return normalized
+
+
+class IncidentAssignmentVerificationRequest(BaseModel):
+    incident_id: IncidentId
+    expected_run_id: RunId
+    expected_specialist_id: SpecialistId
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("expected_run_id")
+    @classmethod
+    def validate_expected_run_id(cls, value: str) -> str:
+        return normalize_run_id(value)
+
+    @field_validator("expected_specialist_id")
+    @classmethod
+    def validate_expected_specialist_id(cls, value: str) -> str:
         return normalize_specialist_id(value)

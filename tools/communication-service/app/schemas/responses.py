@@ -34,6 +34,21 @@ class AssignmentRequestResponse(BaseModel):
         return serialize_datetime_value(value)
 
 
+class AssignmentRequestVerificationResponse(BaseModel):
+    verified: bool
+    result: str
+    assignment_request_id: str
+    expected_values: dict[str, str]
+    actual_values: dict[str, Any] | None
+    failed_checks: list[str]
+    checked_at: datetime
+    current_status: str | None
+
+    @field_serializer("checked_at")
+    def serialize_checked_at(self, value: datetime) -> str:
+        return serialize_datetime_value(value) or ""
+
+
 class AssignmentRequestListData(BaseModel):
     assignment_requests: list[AssignmentRequestResponse]
     page: int = Field(ge=1)
