@@ -253,7 +253,7 @@ def test_enterprise_assignment_e2e_workflow(clients: dict[str, ServiceClient]) -
         ),
         status_code=201,
     )
-    assert reservation["status"] == "PENDING"
+    assert reservation["status"] == "TENTATIVE"
 
     assigned_incident = _data(
         incident.post(

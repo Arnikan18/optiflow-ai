@@ -3,12 +3,12 @@ from datetime import datetime, timedelta, timezone
 from math import ceil
 from typing import Optional
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database.models import AssignmentRequest, ConfiguredResponse
+from app.database.models import AssignmentRequest, ConfiguredResponse, FailureMode
 from app.database.seed import seed_database
 from app.schemas.requests import (
     AssignmentRequestCreateRequest,
@@ -80,20 +80,50 @@ def _validate_ttl(expires_in_seconds: int | None) -> int:
     return ttl
 
 
-async def create_assignment_request(session: AsyncSession, payload: AssignmentRequestCreateRequest) -> AssignmentRequest:
+def _same_assignment_create_payload(existing: AssignmentRequest, payload: AssignmentRequestCreateRequest) -> bool:
+    return (
+        existing.request_id == payload.request_id
+        and existing.run_id == payload.run_id
+        and existing.incident_id == payload.incident_id
+        and existing.specialist_id == payload.specialist_id
+        and existing.reservation_id == payload.reservation_id
+        and existing.message == payload.message
+    )
+
+
+async def create_assignment_request(session: AsyncSession, payload: AssignmentRequestCreateRequest) -> tuple[AssignmentRequest, bool]:
     now_utc = _utc_now()
     ttl = _validate_ttl(payload.expires_in_seconds)
     try:
+        await expire_pending_assignment_requests(session, now_utc)
+
+        if payload.idempotency_key:
+            existing_by_key = await session.execute(
+                select(AssignmentRequest).where(AssignmentRequest.idempotency_key == payload.idempotency_key)
+            )
+            existing = existing_by_key.scalar_one_or_none()
+            if existing is not None:
+                if not _same_assignment_create_payload(existing, payload):
+                    raise CommunicationError(
+                        409,
+                        "COMMUNICATION_409",
+                        "Idempotency key already used for a different assignment request",
+                    )
+                return existing, False
+
         duplicate = await session.execute(select(AssignmentRequest.id).where(AssignmentRequest.request_id == payload.request_id))
         if duplicate.scalar_one_or_none() is not None:
             raise CommunicationError(409, "COMMUNICATION_409", "Assignment request identifier already exists")
 
         request = AssignmentRequest(
             request_id=payload.request_id,
+            run_id=payload.run_id,
             incident_id=payload.incident_id,
             specialist_id=payload.specialist_id,
+            reservation_id=payload.reservation_id,
             message=payload.message,
             status="PENDING",
+            idempotency_key=payload.idempotency_key,
             created_at=now_utc,
             expires_at=now_utc + timedelta(seconds=ttl),
             updated_at=now_utc,
@@ -101,7 +131,7 @@ async def create_assignment_request(session: AsyncSession, payload: AssignmentRe
         session.add(request)
         await session.commit()
         await session.refresh(request)
-        return request
+        return request, True
     except CommunicationError:
         await session.rollback()
         raise
@@ -120,6 +150,8 @@ async def create_legacy_assignment_request(
     incident_id: str,
     message: str | None,
     idempotency_key: str | None,
+    run_id: str | None = None,
+    reservation_id: str | None = None,
 ) -> AssignmentRequest:
     normalized_specialist_id = normalize_specialist_id(specialist_id)
     normalized_incident_id = normalize_incident_id(incident_id)
@@ -128,11 +160,15 @@ async def create_legacy_assignment_request(
         raise CommunicationError(422, "COMMUNICATION_422", "idempotencyKey must produce a request identifier")
     payload = AssignmentRequestCreateRequest(
         request_id=raw_request_id,
+        run_id=run_id,
         incident_id=normalized_incident_id,
         specialist_id=normalized_specialist_id,
+        reservation_id=reservation_id,
         message=message or "Please review and respond to this incident assignment request.",
+        idempotency_key=idempotency_key,
     )
-    return await create_assignment_request(session, payload)
+    request, _ = await create_assignment_request(session, payload)
+    return request
 
 
 async def list_assignment_requests(
@@ -215,6 +251,61 @@ async def list_assignment_requests(
         raise _database_error() from exc
 
 
+async def _matching_configured_response(
+    session: AsyncSession,
+    request: AssignmentRequest,
+) -> ConfiguredResponse | None:
+    result = await session.execute(
+        select(ConfiguredResponse)
+        .where(
+            ConfiguredResponse.active == 1,
+            or_(ConfiguredResponse.specialist_id.is_(None), ConfiguredResponse.specialist_id == request.specialist_id),
+            or_(ConfiguredResponse.incident_id.is_(None), ConfiguredResponse.incident_id == request.incident_id),
+        )
+        .order_by(
+            ConfiguredResponse.incident_id.is_(None),
+            ConfiguredResponse.specialist_id.is_(None),
+            ConfiguredResponse.configuration_id.asc(),
+        )
+    )
+    return result.scalars().first()
+
+
+async def apply_configured_response_if_due(
+    session: AsyncSession,
+    request: AssignmentRequest,
+    now_utc: datetime | None = None,
+) -> AssignmentRequest:
+    now_utc = now_utc or _utc_now()
+    if request.status != "PENDING" or is_expired(request, now_utc):
+        return request
+
+    configured = await _matching_configured_response(session, request)
+    if configured is None:
+        return request
+
+    due_at = _as_utc(request.created_at) + timedelta(seconds=configured.delay_seconds or 0)
+    if now_utc < due_at:
+        return request
+
+    request.status = configured.next_status
+    request.response_note = configured.response_reason
+    request.response_reason = configured.response_reason
+    request.responded_at = now_utc
+    request.updated_at = now_utc
+    session.add(request)
+
+    if configured.apply_once:
+        configured.active = 0
+        configured.consumed_at = now_utc.isoformat()
+        configured.updated_at = now_utc.isoformat()
+        session.add(configured)
+
+    await session.commit()
+    await session.refresh(request)
+    return request
+
+
 async def get_assignment_request(session: AsyncSession, request_id: str) -> AssignmentRequest:
     try:
         normalized_id = normalize_request_id(request_id)
@@ -232,6 +323,8 @@ async def get_assignment_request(session: AsyncSession, request_id: str) -> Assi
             session.add(request)
             await session.commit()
             await session.refresh(request)
+            return request
+        request = await apply_configured_response_if_due(session, request)
         return request
     except CommunicationError:
         raise
@@ -268,6 +361,7 @@ async def respond_to_assignment_request(
 
         request.status = payload.response
         request.response_note = payload.response_note
+        request.response_reason = payload.response_note
         request.responded_at = now_utc
         request.updated_at = now_utc
         session.add(request)
@@ -298,27 +392,45 @@ async def configure_legacy_response(
     session: AsyncSession,
     *,
     specialist_id: str | None,
+    incident_id: str | None = None,
     status: str,
     reason: str | None,
-    delay_ms: int,
+    delay_seconds: int = 0,
+    delay_ms: int | None = None,
+    apply_once: bool = True,
 ) -> ConfiguredResponse:
     now_iso = _utc_now().isoformat()
     try:
-        result = await session.execute(select(ConfiguredResponse).where(ConfiguredResponse.specialist_id == specialist_id))
+        if delay_ms is not None:
+            delay_seconds = int(delay_ms / 1000)
+
+        result = await session.execute(
+            select(ConfiguredResponse).where(
+                ConfiguredResponse.specialist_id == specialist_id,
+                ConfiguredResponse.incident_id == incident_id,
+                ConfiguredResponse.active == 1,
+            )
+        )
         configured = result.scalar_one_or_none()
         if configured is None:
             configured = ConfiguredResponse(
                 specialist_id=specialist_id,
+                incident_id=incident_id,
                 next_status=status,
                 response_reason=reason,
-                delay_ms=delay_ms,
+                delay_seconds=delay_seconds,
+                delay_ms=delay_ms or delay_seconds * 1000,
+                apply_once=1 if apply_once else 0,
                 active=1,
                 updated_at=now_iso,
             )
         configured.next_status = status
         configured.response_reason = reason
-        configured.delay_ms = delay_ms
+        configured.delay_seconds = delay_seconds
+        configured.delay_ms = delay_ms or delay_seconds * 1000
+        configured.apply_once = 1 if apply_once else 0
         configured.active = 1
+        configured.consumed_at = None
         configured.updated_at = now_iso
         session.add(configured)
         await session.commit()
@@ -332,11 +444,67 @@ async def configure_legacy_response(
 def assignment_to_legacy_dict(request: AssignmentRequest) -> dict:
     return {
         "requestId": request.request_id,
+        "runId": request.run_id,
         "status": request.status,
         "specialistId": request.specialist_id,
         "escalationId": request.incident_id,
+        "reservationId": request.reservation_id,
         "message": request.message,
-        "responseReason": request.response_note,
+        "responseReason": request.response_reason or request.response_note,
         "respondedAt": request.responded_at,
         "expiresAt": request.expires_at,
     }
+
+
+async def get_failure_mode(session: AsyncSession) -> FailureMode:
+    result = await session.execute(select(FailureMode).limit(1))
+    mode = result.scalar_one_or_none()
+    if mode is not None:
+        return mode
+
+    mode = FailureMode(
+        mode="HTTP_ERROR",
+        failure_type="HTTP_ERROR",
+        enabled=0,
+        status_code=503,
+        delay_seconds=0,
+        delay_ms=0,
+        affected_endpoint=None,
+        scope=None,
+        remaining_failures=None,
+        updated_at=_utc_now().isoformat(),
+    )
+    session.add(mode)
+    await session.commit()
+    await session.refresh(mode)
+    return mode
+
+
+async def configure_failure_mode(
+    session: AsyncSession,
+    *,
+    enabled: bool,
+    failure_type: str,
+    status_code: int,
+    delay_seconds: int,
+    affected_endpoint: str | None,
+    scope: str | None,
+) -> FailureMode:
+    try:
+        mode = await get_failure_mode(session)
+        mode.enabled = 1 if enabled else 0
+        mode.mode = failure_type
+        mode.failure_type = failure_type
+        mode.status_code = status_code
+        mode.delay_seconds = delay_seconds
+        mode.delay_ms = delay_seconds * 1000
+        mode.affected_endpoint = affected_endpoint
+        mode.scope = scope
+        mode.updated_at = _utc_now().isoformat()
+        session.add(mode)
+        await session.commit()
+        await session.refresh(mode)
+        return mode
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc

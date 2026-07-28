@@ -131,7 +131,7 @@ def test_duplicate_reservation_conflict_is_controlled(client, auth_headers):
         ),
         201,
     )
-    assert first["status"] == "PENDING"
+    assert first["status"] == "TENTATIVE"
     assert_error(
         client.post(
             "/workforce/api/v1/reservations",

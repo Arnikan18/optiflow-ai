@@ -13,14 +13,18 @@ from optiflow_shared.responses import (
 
 class AssignmentRequestResponse(BaseModel):
     request_id: str
+    run_id: str | None
     incident_id: str
     specialist_id: str
+    reservation_id: str | None
     message: str
     status: str
+    idempotency_key: str | None
     created_at: datetime
     expires_at: datetime
     responded_at: datetime | None
     response_note: str | None
+    response_reason: str | None
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -72,6 +76,25 @@ class NotificationListData(BaseModel):
 class ResetResponseData(BaseModel):
     assignment_request_count: int
     notification_count: int
+
+
+class ConfiguredResponseData(BaseModel):
+    specialist_id: str | None
+    incident_id: str | None
+    status: str
+    reason: str | None
+    response_delay_seconds: int
+    apply_once: bool
+    active: bool
+
+
+class FailureModeData(BaseModel):
+    enabled: bool
+    failure_type: str
+    status_code: int
+    delay_seconds: int
+    affected_endpoint: str | None
+    scope: str | None
 
 
 def success_response(data: Any, message: str = "Request completed successfully") -> dict[str, Any]:
