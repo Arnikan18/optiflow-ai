@@ -21,6 +21,9 @@ async def get_db():
 import contextlib
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.database.models import Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 
