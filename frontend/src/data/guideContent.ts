@@ -232,12 +232,19 @@ export function getActiveGuide(
   status: string | null,
   currentNode: string | null,
 ): PhaseGuide {
-  const guide = PHASE_GUIDES.find(
-    (g) =>
-      (status && g.matchStatus.includes(status as RunStatus)) ||
-      (currentNode && g.matchNodes.includes(currentNode)),
-  );
-  return guide ?? PHASE_GUIDES[0];
+  if (currentNode) {
+    const nodeGuide = PHASE_GUIDES.find((guide) => guide.matchNodes.includes(currentNode));
+    if (nodeGuide) return nodeGuide;
+  }
+
+  if (status) {
+    const statusGuide = PHASE_GUIDES.find(
+      (guide) => guide.matchStatus.includes(status as RunStatus),
+    );
+    if (statusGuide) return statusGuide;
+  }
+
+  return PHASE_GUIDES[0];
 }
 
 // ─── All phases in order, for the phase timeline ──────────────────────────

@@ -2,11 +2,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useRunStatus } from '../hooks/useRunStatus';
 import { useRunStream } from '../hooks/useRunStream';
 import { EventTimeline } from '../components/run/EventTimeline';
+import { PlaybackControls } from '../components/run/PlaybackControls';
 import { PlanWorkspace } from '../components/approval/PlanWorkspace';
 import { ClarifyPanel } from '../components/clarification/ClarifyPanel';
 import { SummaryPanel } from '../components/completion/SummaryPanel';
 import { MissionGuide } from '../components/guide/MissionGuide';
 import { getActiveGuide, PHASE_TIMELINE } from '../data/guideContent';
+import { useGuidedPlayback } from '../hooks/useGuidedPlayback';
 import type { RunStatus } from '../types/api';
 
 const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
@@ -83,14 +85,33 @@ export function RunCockpitPage() {
   const navigate = useNavigate();
   const { data: runData, error, loading, refetch } = useRunStatus(runId);
   const { events, connected, usingFallback } = useRunStream(runId);
+  const playback = useGuidedPlayback(events, {
+    minimumDwellMs: 1_800,
+    resetKey: runId,
+  });
 
   const status = runData?.status ?? null;
   const badge = status ? STATUS_BADGE[status] : null;
-  const guide = getActiveGuide(status, runData?.current_node ?? null);
+  const streamUnavailable = usingFallback && events.length === 0;
+  const presentationCaughtUp = playback.isCaughtUp || streamUnavailable;
+  const latestVisibleEvent = playback.visibleEvents.at(-1);
+  const liveGuide = getActiveGuide(status, runData?.current_node ?? null);
+  const guide = !presentationCaughtUp && latestVisibleEvent
+    ? getActiveGuide(null, latestVisibleEvent.source)
+    : liveGuide;
+  const presentationStatus: RunStatus | null = presentationCaughtUp
+    ? status
+    : guide.id === 'receive'
+      ? 'RECEIVED'
+      : 'RUNNING';
+  const presentationNode = presentationCaughtUp
+    ? runData?.current_node ?? null
+    : latestVisibleEvent?.source ?? null;
 
-  const isApproval = status === 'WAITING_FOR_APPROVAL';
-  const isClarification = status === 'WAITING_FOR_CLARIFICATION';
-  const isTerminal = status === 'COMPLETED' || status === 'FAILED';
+  const isApproval = presentationCaughtUp && status === 'WAITING_FOR_APPROVAL';
+  const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
+  const isTerminal = presentationCaughtUp
+    && (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED');
 
   if (!runId) {
     return (
@@ -152,6 +173,11 @@ export function RunCockpitPage() {
           </div>
           <RouteRail activeId={guide.id} failed={status === 'FAILED'} />
         </div>
+        <PlaybackControls
+          playback={playback}
+          backendStatus={status}
+          presentationLabel={guide.label}
+        />
       </section>
 
       <div className="max-w-[1440px] mx-auto px-5 sm:px-8 py-6 lg:py-8">
@@ -185,13 +211,18 @@ export function RunCockpitPage() {
               ) : isTerminal ? (
                 <SummaryPanel runData={runData} events={events} />
               ) : (
-                <EventTimeline events={events} status={status} connected={connected} usingFallback={usingFallback} />
+                <EventTimeline
+                  events={playback.visibleEvents}
+                  status={presentationStatus}
+                  connected={connected}
+                  usingFallback={usingFallback}
+                />
               )}
             </div>
           </main>
 
           <aside className="lg:sticky lg:top-24 rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
-            <MissionGuide status={status} currentNode={runData?.current_node ?? null} />
+            <MissionGuide status={presentationStatus} currentNode={presentationNode} />
           </aside>
         </div>
       </div>
