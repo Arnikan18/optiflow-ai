@@ -4,6 +4,7 @@ import { useRunStatus } from '../hooks/useRunStatus';
 import { useRunStream } from '../hooks/useRunStream';
 import { EventTimeline } from '../components/run/EventTimeline';
 import { PlaybackControls } from '../components/run/PlaybackControls';
+import { CausalEvidenceMap } from '../components/run/CausalEvidenceMap';
 import {
   DecisionJourneyRail,
   normalizeJourneyStage,
@@ -221,6 +222,7 @@ export function RunCockpitPage() {
             </div>
 
             <div className="p-5 sm:p-7 min-h-[520px]">
+              <CausalEvidenceMap phaseId={briefingGuide.id} events={briefingEvents} />
               {isReviewingStage ? (
                 <EventTimeline
                   events={reviewedEvents}
