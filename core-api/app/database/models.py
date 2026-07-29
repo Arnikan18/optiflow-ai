@@ -12,7 +12,7 @@ class BusinessGoal(Base):
     goal_id: Mapped[str] = mapped_column(String(100), primary_key=True)
     original_text: Mapped[str] = mapped_column(Text, nullable=False)
     structured_goal_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    objective_profile: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    objective_profile: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     time_horizon_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     policy_version: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     prompt_template_version: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

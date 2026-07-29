@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS business_goals (
     goal_id VARCHAR(100) PRIMARY KEY,
     original_text TEXT NOT NULL,
     structured_goal_json JSONB,
-    objective_profile VARCHAR(100),
+    objective_profile TEXT,
     time_horizon_minutes INTEGER,
     policy_version VARCHAR(100),
     prompt_template_version VARCHAR(50),
