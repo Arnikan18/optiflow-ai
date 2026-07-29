@@ -5,6 +5,28 @@ from app.optimizer.explainer import (
     generate_deterministic_fallback_explanation,
     explain_plan
 )
+from app.llm_settings.service import (
+    RuntimeCredential,
+    RuntimeLLMSettings,
+    RuntimeProvider,
+)
+
+
+def runtime_settings(configured: bool) -> RuntimeLLMSettings:
+    if not configured:
+        return RuntimeLLMSettings(1, "rules_only", None, {}, "rules_only")
+    return RuntimeLLMSettings(
+        1,
+        "ai_assisted",
+        "gemini",
+        {
+            "gemini": RuntimeProvider(
+                "gemini-3.6-flash",
+                (RuntimeCredential("Primary", "test-key", 0),),
+            )
+        },
+        "database",
+    )
 
 @pytest.fixture
 def sample_data():
@@ -60,49 +82,45 @@ def test_generate_deterministic_fallback_explanation(sample_data):
 
 def test_explain_plan_fallback_no_config(sample_data):
     plan, ent_state = sample_data
-    
-    # Force settings mock to lack keys
-    with patch("app.optimizer.explainer.settings") as mock_settings:
-        mock_settings.llm_provider = "gemini"
-        mock_settings.gemini_api_key = None
-        mock_settings.gemini_model = None
-        
-        explanation = explain_plan("Balanced", plan, ent_state)
-        # Should return deterministic fallback
-        assert "### Plan Justification: Balanced Profile" in explanation
+
+    explanation = explain_plan(
+        "Balanced",
+        plan,
+        ent_state,
+        runtime_settings=runtime_settings(False),
+    )
+    assert "### Plan Justification: Balanced Profile" in explanation
 
 def test_explain_plan_llm_success(sample_data):
     plan, ent_state = sample_data
     
-    with patch("app.optimizer.explainer.settings") as mock_settings, \
-         patch("app.optimizer.explainer.get_llm_provider") as mock_get_provider:
-         
-        mock_settings.llm_provider = "gemini"
-        mock_settings.gemini_api_key = "key"
-        mock_settings.gemini_model = "model"
-        
+    with patch("app.optimizer.explainer.get_llm_provider") as mock_get_provider:
         mock_provider = MagicMock()
         mock_provider.generate_text.return_value = "Mocked LLM Justification"
         mock_get_provider.return_value = mock_provider
         
-        explanation = explain_plan("Balanced", plan, ent_state)
+        explanation = explain_plan(
+            "Balanced",
+            plan,
+            ent_state,
+            runtime_settings=runtime_settings(True),
+        )
         assert explanation == "Mocked LLM Justification"
         mock_provider.generate_text.assert_called_once()
 
 def test_explain_plan_llm_error_fallback(sample_data):
     plan, ent_state = sample_data
     
-    with patch("app.optimizer.explainer.settings") as mock_settings, \
-         patch("app.optimizer.explainer.get_llm_provider") as mock_get_provider:
-         
-        mock_settings.llm_provider = "gemini"
-        mock_settings.gemini_api_key = "key"
-        mock_settings.gemini_model = "model"
-        
+    with patch("app.optimizer.explainer.get_llm_provider") as mock_get_provider:
         mock_provider = MagicMock()
         mock_provider.generate_text.side_effect = Exception("API connection timeout")
         mock_get_provider.return_value = mock_provider
         
-        explanation = explain_plan("Balanced", plan, ent_state)
+        explanation = explain_plan(
+            "Balanced",
+            plan,
+            ent_state,
+            runtime_settings=runtime_settings(True),
+        )
         # Should catch exception and gracefully return fallback
         assert "### Plan Justification: Balanced Profile" in explanation

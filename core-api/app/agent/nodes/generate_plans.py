@@ -36,7 +36,13 @@ async def generate_plans(state: AgentState) -> dict:
     
     # Generate natural language justifications for each computed plan
     for plan in plans:
-        plan["explanation"] = explain_plan(plan["profile"], plan, ent_state)
+        plan["explanation"] = explain_plan(
+            plan["profile"],
+            plan,
+            ent_state,
+            provider_name=state.get("llm_provider"),
+            model_name=state.get("llm_model"),
+        )
         
     # Recommend the plan with the highest objective value
     recommended = max(plans, key=lambda p: p["objective_value"]) if plans else None

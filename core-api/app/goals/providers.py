@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import List
+from typing import Callable, List, Sequence, TypeVar
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -184,10 +184,111 @@ You must output a JSON object with this exact structure:
         )
         return chat_completion.choices[0].message.content
 
-def get_llm_provider(provider_name: str, settings) -> LLMProvider:
+
+ResultT = TypeVar("ResultT")
+
+
+def is_retryable_provider_error(error: Exception) -> bool:
+    """Return whether another credential may recover the provider request."""
+    status_code = getattr(error, "status_code", None)
+    if status_code in {401, 403, 408, 409, 429}:
+        return True
+    if isinstance(status_code, int) and status_code >= 500:
+        return True
+    message = str(error).lower()
+    retryable_markers = (
+        "authentication",
+        "api key",
+        "connection",
+        "credential",
+        "deadline",
+        "exhausted",
+        "forbidden",
+        "overloaded",
+        "quota",
+        "rate limit",
+        "rate_limit",
+        "service unavailable",
+        "timeout",
+        "timed out",
+        "unauthorized",
+    )
+    return any(marker in message for marker in retryable_markers)
+
+
+class FailoverLLMProvider(LLMProvider):
+    """Tries same-provider credentials in priority order for recoverable failures."""
+
+    def __init__(self, providers: Sequence[LLMProvider]):
+        if not providers:
+            raise ValueError("At least one LLM provider credential is required.")
+        self.providers = tuple(providers)
+
+    def _attempt(self, operation: Callable[[LLMProvider], ResultT]) -> ResultT:
+        last_error: Exception | None = None
+        for index, provider in enumerate(self.providers):
+            try:
+                return operation(provider)
+            except Exception as error:
+                last_error = error
+                has_backup = index < len(self.providers) - 1
+                if not has_backup or not is_retryable_provider_error(error):
+                    break
+                logger.warning(
+                    "LLM credential priority %s failed recoverably; trying backup.",
+                    index,
+                )
+        raise RuntimeError("All eligible LLM credentials failed.") from last_error
+
+    def interpret_goal(self, goal_text: str) -> StructuredGoal:
+        return self._attempt(lambda provider: provider.interpret_goal(goal_text))
+
+    def generate_text(self, prompt: str, temperature: float = 0.7) -> str:
+        return self._attempt(
+            lambda provider: provider.generate_text(prompt, temperature)
+        )
+
+
+def build_llm_provider(
+    provider_name: str,
+    model_name: str,
+    api_keys: Sequence[str],
+) -> LLMProvider:
     provider_name_lower = provider_name.strip().lower()
+    providers: list[LLMProvider] = []
+    for api_key in api_keys:
+        if provider_name_lower == "groq":
+            providers.append(GroqLLMProvider(api_key=api_key, model_name=model_name))
+        elif provider_name_lower == "gemini":
+            providers.append(GeminiLLMProvider(api_key=api_key, model_name=model_name))
+        else:
+            raise ValueError(f"Unsupported LLM provider: {provider_name}")
+    if len(providers) == 1:
+        return providers[0]
+    return FailoverLLMProvider(providers)
+
+
+def get_llm_provider(
+    provider_name: str,
+    settings=None,
+    *,
+    model_name: str | None = None,
+    api_keys: Sequence[str] | None = None,
+) -> LLMProvider:
+    """Build a provider from runtime credentials or legacy environment settings."""
+    provider_name_lower = provider_name.strip().lower()
+    if api_keys is not None and model_name:
+        return build_llm_provider(provider_name_lower, model_name, api_keys)
+    if settings is None:
+        raise ValueError("Provider settings are required.")
     if provider_name_lower == "groq":
-        return GroqLLMProvider(api_key=settings.groq_api_key, model_name=settings.groq_model)
-    else:
-        # Default to Gemini
-        return GeminiLLMProvider(api_key=settings.gemini_api_key, model_name=settings.gemini_model)
+        return build_llm_provider(
+            provider_name_lower,
+            settings.groq_model,
+            [settings.groq_api_key],
+        )
+    return build_llm_provider(
+        "gemini",
+        settings.gemini_model,
+        [settings.gemini_api_key],
+    )

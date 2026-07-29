@@ -11,7 +11,9 @@ SETTINGS_SCHEMA_VERSION: Final[int] = 1
 
 SUPPORTED_MODELS: Final[dict[str, tuple[str, ...]]] = {
     "gemini": (
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
@@ -26,7 +28,7 @@ SUPPORTED_MODELS: Final[dict[str, tuple[str, ...]]] = {
 }
 
 DEFAULT_MODELS: Final[dict[str, str]] = {
-    "gemini": "gemini-2.5-flash",
+    "gemini": "gemini-3.6-flash",
     "groq": "llama-3.1-8b-instant",
 }
 

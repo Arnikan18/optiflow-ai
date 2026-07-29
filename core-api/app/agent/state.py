@@ -15,6 +15,9 @@ class AgentState(TypedDict, total=False):
     run_id: str
     status: str
     goal_text: str
+    llm_mode: str
+    llm_provider: str
+    llm_model: str
     structured_goal: Optional[Dict[str, Any]]
     evidence_requirements: List[Dict[str, Any]]
     selected_tools: List[Dict[str, Any]]

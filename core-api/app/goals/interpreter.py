@@ -10,7 +10,7 @@ import re
 from typing import List
 from optiflow_shared.enums import ObjectiveType
 from optiflow_shared.tool_contracts import StructuredGoal, TimeHorizon
-from app.config.settings import settings
+from app.llm_settings.service import RuntimeLLMSettings, llm_settings_service
 
 logger = logging.getLogger("core-api.interpreter")
 
@@ -94,7 +94,12 @@ from pydantic import BaseModel
 from app.goals.providers import get_llm_provider
 
 
-def interpret_goal_text(goal_text: str) -> StructuredGoal:
+def interpret_goal_text(
+    goal_text: str,
+    runtime_settings: RuntimeLLMSettings | None = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
+) -> StructuredGoal:
     """Parses goal text into a StructuredGoal.
     
     Attempts to call the configured LLM provider (Gemini or Groq) using a structured JSON schema,
@@ -113,19 +118,31 @@ def interpret_goal_text(goal_text: str) -> StructuredGoal:
             interpretation_notes=["Empty goal text input"]
         )
 
-    provider_name = settings.llm_provider or "gemini"
-    api_key = settings.groq_api_key if provider_name.lower() == "groq" else settings.gemini_api_key
-    model = settings.groq_model if provider_name.lower() == "groq" else settings.gemini_model
-    
-    if not api_key or not model:
-        logger.info(f"{provider_name} API key or model is not configured. Falling back to rule-based interpreter.")
+    runtime = runtime_settings or llm_settings_service.current()
+    selected = runtime.provider_for(provider_name, model_name)
+    if selected is None:
+        logger.info(
+            "AI-assisted goal interpretation is not configured. "
+            "Falling back to rule-based interpreter."
+        )
         notes = ["LIMITED_CAPABILITY_MODE", "Fallback rule-based interpreter applied due to missing config"]
         return interpret_goal_text_fallback(goal_text, notes)
 
+    selected_name, provider_settings = selected
     try:
-        provider = get_llm_provider(provider_name, settings)
+        provider = get_llm_provider(
+            selected_name,
+            model_name=provider_settings.model_name,
+            api_keys=[item.api_key for item in provider_settings.credentials],
+        )
         return provider.interpret_goal(goal_text)
     except Exception as e:
-        logger.warning(f"{provider_name} interpretation failed: {str(e)}. Executing rule-based fallback.")
-        notes = ["LIMITED_CAPABILITY_MODE", f"Fallback applied due to {provider_name} API failure: {str(e)}"]
+        logger.warning(
+            "%s interpretation failed. Executing rule-based fallback.",
+            selected_name,
+        )
+        notes = [
+            "LIMITED_CAPABILITY_MODE",
+            f"Fallback applied because {selected_name} was unavailable",
+        ]
         return interpret_goal_text_fallback(goal_text, notes)

@@ -218,3 +218,51 @@ def test_provider_generate_text():
         assert res == "Mocked Groq text completion"
         mock_groq_client.chat.completions.create.assert_called_once()
 
+
+def test_provider_uses_backup_key_after_retryable_primary_failure():
+    from app.goals.providers import build_llm_provider
+    from unittest.mock import MagicMock, patch
+
+    failed_client = MagicMock()
+    failed_error = RuntimeError("429 quota exhausted")
+    failed_error.status_code = 429
+    failed_client.chat.completions.create.side_effect = failed_error
+
+    successful_client = MagicMock()
+    completion = MagicMock()
+    completion.choices[0].message.content = "Backup succeeded"
+    successful_client.chat.completions.create.return_value = completion
+
+    with patch(
+        "app.goals.providers.Groq",
+        side_effect=[failed_client, successful_client],
+    ):
+        provider = build_llm_provider(
+            "groq",
+            "llama-3.1-8b-instant",
+            ["primary-key", "backup-key"],
+        )
+        assert provider.generate_text("Hello") == "Backup succeeded"
+
+
+def test_provider_does_not_retry_nonrecoverable_response_error():
+    from app.goals.providers import build_llm_provider
+    from unittest.mock import MagicMock, patch
+    import pytest
+
+    failed_client = MagicMock()
+    failed_client.chat.completions.create.side_effect = ValueError(
+        "Malformed response"
+    )
+
+    with patch("app.goals.providers.Groq", return_value=failed_client) as client:
+        provider = build_llm_provider(
+            "groq",
+            "llama-3.1-8b-instant",
+            ["primary-key", "backup-key"],
+        )
+        with pytest.raises(RuntimeError, match="All eligible"):
+            provider.generate_text("Hello")
+        assert client.call_count == 1
+        assert failed_client.chat.completions.create.call_count == 1
+

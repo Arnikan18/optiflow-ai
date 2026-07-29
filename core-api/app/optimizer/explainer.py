@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, Any, List
-from app.config.settings import settings
 from app.goals.providers import get_llm_provider
+from app.llm_settings.service import RuntimeLLMSettings, llm_settings_service
 
 logger = logging.getLogger("core-api.optimizer.explainer")
 
@@ -96,26 +96,36 @@ def generate_deterministic_fallback_explanation(profile: str, plan: Dict[str, An
         )
     return text
 
-def explain_plan(profile: str, plan: Dict[str, Any], ent_state: Dict[str, Any]) -> str:
+def explain_plan(
+    profile: str,
+    plan: Dict[str, Any],
+    ent_state: Dict[str, Any],
+    provider_name: str | None = None,
+    model_name: str | None = None,
+    runtime_settings: RuntimeLLMSettings | None = None,
+) -> str:
     """Computes a plan justification narrative, querying the LLM if available or falling back deterministically."""
-    provider_name = settings.llm_provider or "gemini"
-    api_key = settings.groq_api_key if provider_name.lower() == "groq" else settings.gemini_api_key
-    model = settings.groq_model if provider_name.lower() == "groq" else settings.gemini_model
-    
-    # 1. Fallback check if LLM configuration is missing
-    if not api_key or not model:
+    runtime = runtime_settings or llm_settings_service.current()
+    selected = runtime.provider_for(provider_name, model_name)
+    if selected is None:
         logger.info("LLM config missing. Executing deterministic fallback explanation.")
         return generate_deterministic_fallback_explanation(profile, plan, ent_state)
-        
+
+    selected_name, provider_settings = selected
     prompt = build_explanation_prompt(profile, plan, ent_state)
-    
-    # 2. Try querying the LLM provider
+
     try:
-        provider = get_llm_provider(provider_name, settings)
+        provider = get_llm_provider(
+            selected_name,
+            model_name=provider_settings.model_name,
+            api_keys=[item.api_key for item in provider_settings.credentials],
+        )
         explanation = provider.generate_text(prompt, temperature=0.2)
         if explanation and explanation.strip():
             return explanation.strip()
         raise ValueError("Provider returned empty explanation text")
-    except Exception as e:
-        logger.warning(f"LLM explanation query failed: {str(e)}. Falling back to deterministic narrative.")
+    except Exception:
+        logger.warning(
+            "LLM explanation query failed. Falling back to deterministic narrative."
+        )
         return generate_deterministic_fallback_explanation(profile, plan, ent_state)
