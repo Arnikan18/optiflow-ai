@@ -1,88 +1,96 @@
-import { useEffect, useState } from 'react';
-import type { ServiceHealth, ServiceHealthStatus } from '../../types/api';
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../../api/client';
+import type { DemoHealth, HealthComponent } from '../../types/api';
 
-const SERVICES: Omit<ServiceHealth, 'status' | 'latency_ms'>[] = [
-  { name: 'Core API', port: 8000 },
-  { name: 'CRM',      port: 8101 },
-  { name: 'Incident', port: 8102 },
-  { name: 'Workforce',port: 8103 },
-  { name: 'Comms',    port: 8104 },
-];
-
-const STATUS_DOT: Record<ServiceHealthStatus, string> = {
-  online:   'bg-ops-emerald',
-  degraded: 'bg-ops-orange',
-  offline:  'bg-ops-rose',
-  checking: 'bg-ink-muted animate-pulse',
+const COMPONENT_LABELS: Record<string, string> = {
+  'core-api': 'Core',
+  postgres: 'Data',
+  crm: 'CRM',
+  incident: 'Incident',
+  workforce: 'Workforce',
+  communication: 'Comms',
 };
 
+const STATUS_DOT = {
+  HEALTHY: 'bg-ops-emerald',
+  DEGRADED: 'bg-ops-orange',
+  UNHEALTHY: 'bg-ops-rose',
+} as const;
+
+function componentLabel(component: HealthComponent): string {
+  return COMPONENT_LABELS[component.name.toLowerCase()] ?? component.name;
+}
+
 export function HealthStrip() {
-  const [services, setServices] = useState<ServiceHealth[]>(
-    SERVICES.map((s) => ({ ...s, status: 'checking' })),
-  );
-  const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const [health, setHealth] = useState<DemoHealth | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [error, setError] = useState(false);
 
-  const checkHealth = async () => {
-    const start = Date.now();
+  const checkHealth = useCallback(async () => {
+    setChecking(true);
     try {
-      const res = await fetch('/api/v1/system/health', { signal: AbortSignal.timeout(5000) });
-      const body = res.ok ? await res.json() : null;
-
-      setServices((prev) =>
-        prev.map((svc) => {
-          if (svc.name === 'Core API') {
-            return { ...svc, status: res.ok ? 'online' : 'offline', latency_ms: Date.now() - start };
-          }
-          // Try to match tool service health from the nested body
-          const key = svc.name.toLowerCase();
-          const raw = body?.tools?.[key] ?? body?.[key];
-          let status: ServiceHealthStatus = 'checking';
-          if (raw?.status === 'healthy' || raw?.status === 'ok') status = 'online';
-          else if (raw?.status === 'degraded') status = 'degraded';
-          else if (raw) status = 'offline';
-          else status = res.ok ? 'online' : 'offline'; // fallback: if core is up, assume tools reachable
-          return { ...svc, status };
-        }),
-      );
+      setHealth(await api.getDemoHealth());
+      setError(false);
     } catch {
-      setServices((prev) => prev.map((s) => ({ ...s, status: 'offline' })));
+      setError(true);
+    } finally {
+      setChecking(false);
     }
-    setLastChecked(new Date().toLocaleTimeString());
-  };
+  }, []);
 
   useEffect(() => {
-    checkHealth();
-    const t = setInterval(checkHealth, 30_000);
-    return () => clearInterval(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    void checkHealth();
+    const timer = window.setInterval(() => void checkHealth(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [checkHealth]);
 
-  const overallOnline = services.filter((s) => s.status === 'online').length;
+  const components = health?.components ?? [];
+  const readyCount = components.filter((component) => component.status === 'HEALTHY').length;
+  const isHealthy = health?.overall_status === 'HEALTHY';
+  const networkDot = checking && !health
+    ? 'bg-ink-muted'
+    : error || health?.overall_status === 'UNHEALTHY'
+      ? 'bg-ops-rose'
+      : isHealthy
+        ? 'bg-ops-emerald'
+        : 'bg-ops-orange';
 
   return (
     <div className="bg-ink-primary text-white px-5 sm:px-8 py-2.5 flex items-center gap-5 overflow-x-auto">
       <div className="flex items-center gap-2.5 shrink-0">
         <span className="relative flex w-2 h-2">
-          <span className={`absolute inset-0 rounded-full ${overallOnline === services.length ? 'bg-ops-emerald' : 'bg-ops-orange'} animate-ping opacity-40`} />
-          <span className={`relative w-2 h-2 rounded-full ${overallOnline === services.length ? 'bg-ops-emerald' : 'bg-ops-orange'}`} />
+          <span className={`absolute inset-0 rounded-full ${networkDot} animate-ping opacity-40`} />
+          <span className={`relative w-2 h-2 rounded-full ${networkDot}`} />
         </span>
-        <span className="text-[9px] font-mono text-white/50 uppercase tracking-[0.16em]">Evidence network</span>
+        <span className="text-[9px] font-mono text-white/50 uppercase tracking-[0.16em]">
+          Evidence network
+        </span>
         <span className="text-[9px] font-mono font-semibold text-white">
-          {overallOnline}/{services.length} ready
+          {error
+            ? 'check unavailable'
+            : checking && !health
+              ? 'checking'
+              : `${readyCount}/${components.length} ready`}
         </span>
       </div>
 
       <div className="h-4 w-px bg-white/15 shrink-0" />
 
       <div className="flex items-center gap-4">
-        {services.map((svc) => (
-          <div key={svc.name} className="flex items-center gap-1.5 shrink-0">
-            <div className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[svc.status]}`} />
+        {components.length === 0 && !error && (
+          <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">
+            Reading source status…
+          </span>
+        )}
+        {components.map((component) => (
+          <div key={component.name} className="flex items-center gap-1.5 shrink-0">
+            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[component.status]}`} />
             <span className="text-[9px] font-mono text-white/60 uppercase tracking-wider">
-              {svc.name}
+              {componentLabel(component)}
             </span>
-            {svc.latency_ms !== undefined && (
-              <span className="text-[9px] text-white/30 font-mono hidden lg:block">
-                {svc.latency_ms}ms
+            {component.latency_ms !== null && (
+              <span className="text-[9px] text-white/30 font-mono hidden xl:block">
+                {Math.round(component.latency_ms)}ms
               </span>
             )}
           </div>
@@ -90,14 +98,18 @@ export function HealthStrip() {
       </div>
 
       <div className="ml-auto shrink-0 hidden md:flex items-center gap-3">
-        {lastChecked && (
-          <span className="text-[9px] font-mono text-white/30">checked {lastChecked}</span>
+        {health?.checked_at && (
+          <span className="text-[9px] font-mono text-white/30">
+            checked {new Date(health.checked_at).toLocaleTimeString()}
+          </span>
         )}
         <button
-          onClick={checkHealth}
-          className="text-[9px] font-mono text-white/60 hover:text-white transition-colors uppercase tracking-[0.15em] focus-ring rounded"
+          type="button"
+          onClick={() => void checkHealth()}
+          disabled={checking}
+          className="text-[9px] font-mono text-white/60 hover:text-white disabled:opacity-40 transition-colors uppercase tracking-[0.15em] focus-ring rounded"
         >
-          Refresh
+          {checking ? 'Checking' : 'Refresh'}
         </button>
       </div>
     </div>

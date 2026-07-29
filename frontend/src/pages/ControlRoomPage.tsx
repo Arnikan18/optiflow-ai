@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HealthStrip } from '../components/health/HealthStrip';
+import { PortfolioPulse } from '../components/portfolio/PortfolioPulse';
 import { GoalInput } from '../components/run/GoalInput';
 import { api } from '../api/client';
 import type { RecentRun } from '../types/api';
@@ -135,7 +136,7 @@ export function ControlRoomPage() {
     setResetting(true);
     setResetMsg(null);
     try {
-      await api.resetSystem();
+      await api.resetDemo();
       setResetMsg('Demo data refreshed and ready.');
     } catch (err: unknown) {
       setResetMsg(err instanceof Error ? err.message : 'Reset failed');
@@ -147,6 +148,7 @@ export function ControlRoomPage() {
   return (
     <div className="min-h-full paper-noise">
       <HealthStrip />
+      <PortfolioPulse />
 
       <section className="relative overflow-hidden border-b border-border-dim">
         <div className="absolute top-0 right-0 w-[42%] h-full border-l border-border-dim bg-deep/55 hidden lg:block" />
