@@ -1,13 +1,18 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRunStatus } from '../hooks/useRunStatus';
 import { useRunStream } from '../hooks/useRunStream';
 import { EventTimeline } from '../components/run/EventTimeline';
 import { PlaybackControls } from '../components/run/PlaybackControls';
+import {
+  DecisionJourneyRail,
+  normalizeJourneyStage,
+} from '../components/run/DecisionJourneyRail';
 import { PlanWorkspace } from '../components/approval/PlanWorkspace';
 import { ClarifyPanel } from '../components/clarification/ClarifyPanel';
 import { SummaryPanel } from '../components/completion/SummaryPanel';
 import { MissionGuide } from '../components/guide/MissionGuide';
-import { getActiveGuide, PHASE_TIMELINE } from '../data/guideContent';
+import { getActiveGuide, PHASE_GUIDES } from '../data/guideContent';
 import { useGuidedPlayback } from '../hooks/useGuidedPlayback';
 import type { RunStatus } from '../types/api';
 
@@ -38,48 +43,6 @@ const PHASE_INDEX: Record<string, number> = {
   failed: 7,
 };
 
-function RouteRail({ activeId, failed }: { activeId: string; failed: boolean }) {
-  const activeIndex = PHASE_INDEX[activeId] ?? 0;
-
-  return (
-    <div className="overflow-x-auto pb-1">
-      <div className="min-w-[820px] grid grid-cols-8">
-        {PHASE_TIMELINE.map((phase, index) => {
-          const done = index < activeIndex || activeId === 'complete';
-          const active = index === activeIndex && activeId !== 'complete';
-          return (
-            <div key={phase.id} className="relative">
-              {index < PHASE_TIMELINE.length - 1 && (
-                <div className={`absolute top-[15px] left-1/2 right-[-50%] h-0.5 ${index < activeIndex ? 'bg-ops-cyan' : 'bg-border-dim'}`}>
-                  {active && <span className="travel-dot absolute -top-[3px] w-2 h-2 rounded-full bg-ops-amber" />}
-                </div>
-              )}
-              <div className="relative z-10 flex flex-col items-center text-center px-1">
-                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[10px] font-mono font-semibold transition-all ${
-                  failed && active
-                    ? 'border-ops-rose bg-ops-rose text-white'
-                    : active
-                      ? 'border-ops-amber bg-ops-amber text-white route-pulse'
-                      : done
-                        ? 'border-ops-cyan bg-ops-cyan text-white'
-                        : 'border-border-dim bg-abyss text-ink-muted'
-                }`}>
-                  {done ? '✓' : String(index + 1).padStart(2, '0')}
-                </div>
-                <span className={`text-[9px] font-mono mt-2.5 whitespace-nowrap ${
-                  active ? 'text-ink-primary font-semibold' : done ? 'text-ops-cyan' : 'text-ink-muted'
-                }`}>
-                  {phase.label}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export function RunCockpitPage() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
@@ -89,6 +52,7 @@ export function RunCockpitPage() {
     minimumDwellMs: 1_800,
     resetKey: runId,
   });
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
 
   const status = runData?.status ?? null;
   const badge = status ? STATUS_BADGE[status] : null;
@@ -107,6 +71,18 @@ export function RunCockpitPage() {
   const presentationNode = presentationCaughtUp
     ? runData?.current_node ?? null
     : latestVisibleEvent?.source ?? null;
+  const activeJourneyStage = normalizeJourneyStage(guide.id);
+  const reviewedGuide = selectedStageId
+    ? PHASE_GUIDES.find((phase) => phase.id === selectedStageId) ?? null
+    : null;
+  const briefingGuide = reviewedGuide ?? guide;
+  const isReviewingStage = Boolean(
+    selectedStageId && selectedStageId !== activeJourneyStage,
+  );
+  const reviewedEvents = reviewedGuide
+    ? playback.visibleEvents.filter((event) => reviewedGuide.matchNodes.includes(event.source))
+    : playback.visibleEvents;
+  const briefingNode = reviewedGuide?.matchNodes[0] ?? presentationNode;
 
   const isApproval = presentationCaughtUp && status === 'WAITING_FOR_APPROVAL';
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
@@ -171,7 +147,12 @@ export function RunCockpitPage() {
               </span>
             </div>
           </div>
-          <RouteRail activeId={guide.id} failed={status === 'FAILED'} />
+          <DecisionJourneyRail
+            activeId={guide.id}
+            selectedId={selectedStageId}
+            failed={status === 'FAILED'}
+            onSelect={setSelectedStageId}
+          />
         </div>
         <PlaybackControls
           playback={playback}
@@ -186,11 +167,21 @@ export function RunCockpitPage() {
             <div className="px-5 sm:px-7 py-5 border-b border-border-dim flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div>
                 <div className="text-[9px] font-mono text-ops-amber uppercase tracking-[0.18em] font-semibold">
-                  Now · step {(PHASE_INDEX[guide.id] ?? 0) + 1} of 8
+                  {isReviewingStage ? 'Reviewing' : 'Now'} · step {(PHASE_INDEX[briefingGuide.id] ?? 0) + 1} of 8
                 </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-[-0.04em] mt-1">{guide.label}</h1>
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-[-0.04em] mt-1">
+                  {briefingGuide.label}
+                </h1>
               </div>
-              {!isApproval && !isClarification && !isTerminal && (
+              {isReviewingStage ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStageId(null)}
+                  className="text-[10px] font-semibold text-ops-amber hover:underline focus-ring rounded"
+                >
+                  Back to live route
+                </button>
+              ) : !isApproval && !isClarification && !isTerminal && (
                 <div className="flex items-center gap-2 text-[10px] font-mono text-ink-muted">
                   <span className="w-2 h-2 rounded-full bg-ops-amber animate-pulse" />
                   OptiFlow is working
@@ -199,7 +190,14 @@ export function RunCockpitPage() {
             </div>
 
             <div className="p-5 sm:p-7 min-h-[520px]">
-              {isApproval ? (
+              {isReviewingStage ? (
+                <EventTimeline
+                  events={reviewedEvents}
+                  status={null}
+                  connected={connected}
+                  usingFallback={usingFallback}
+                />
+              ) : isApproval ? (
                 <PlanWorkspace
                   runId={runId}
                   plans={runData?.candidate_plans ?? []}
@@ -222,7 +220,10 @@ export function RunCockpitPage() {
           </main>
 
           <aside className="lg:sticky lg:top-24 rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
-            <MissionGuide status={presentationStatus} currentNode={presentationNode} />
+            <MissionGuide
+              status={isReviewingStage ? null : presentationStatus}
+              currentNode={briefingNode}
+            />
           </aside>
         </div>
       </div>
