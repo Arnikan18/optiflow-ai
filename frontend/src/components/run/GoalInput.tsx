@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { RecentRun } from '../../types/api';
@@ -36,12 +36,28 @@ function saveRecentRun(run_id: string, goal_text: string) {
   }
 }
 
+function readGoalDraft(): string {
+  try {
+    return sessionStorage.getItem('optiflow_goal_draft') ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function GoalInput() {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(readGoalDraft);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const isReady = goal.trim().length >= 10 && !loading;
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('optiflow_goal_draft');
+    } catch {
+      // The prefilled draft remains in component state.
+    }
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
