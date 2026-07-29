@@ -6,6 +6,7 @@ import { EventTimeline } from '../components/run/EventTimeline';
 import { PlaybackControls } from '../components/run/PlaybackControls';
 import { CausalEvidenceMap } from '../components/run/CausalEvidenceMap';
 import { DecisionTrustPanel } from '../components/run/DecisionTrustPanel';
+import { ExecutionRelay } from '../components/run/ExecutionRelay';
 import {
   DecisionJourneyRail,
   normalizeJourneyStage,
@@ -105,6 +106,12 @@ export function RunCockpitPage() {
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
   const isTerminal = presentationCaughtUp
     && (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED');
+  const hasExecutionHistory = events.some((event) => event.source === 'execute_saga');
+  const latestSagaOutcome = [...events].reverse().find((event) =>
+    event.event_type === 'SAGA_COMPLETED' || event.event_type === 'SAGA_FAILED',
+  );
+  const terminalSagaFailed = latestSagaOutcome?.event_type === 'SAGA_FAILED'
+    && !latestSagaOutcome.summary?.includes('REPLANNING');
   const workflowStalled = status === 'RECEIVED'
     && runData?.current_node === 'receive_goal'
     && receivedWaitSeconds >= 10;
@@ -280,7 +287,13 @@ export function RunCockpitPage() {
                 risk={runData?.autonomy_risk_report ?? null}
               />
               <CausalEvidenceMap phaseId={briefingGuide.id} events={briefingEvents} />
-              {isReviewingStage ? (
+              {briefingGuide.id === 'executing' ? (
+                <ExecutionRelay
+                  events={reviewedEvents}
+                  runData={runData}
+                  status={presentationStatus}
+                />
+              ) : isReviewingStage ? (
                 <EventTimeline
                   events={reviewedEvents}
                   status={null}
@@ -297,7 +310,16 @@ export function RunCockpitPage() {
               ) : isClarification ? (
                 <ClarifyPanel runId={runId} runData={runData} onSubmitted={refetch} />
               ) : isTerminal ? (
-                <SummaryPanel runData={runData} events={events} />
+                <div className="space-y-8">
+                  {hasExecutionHistory && (
+                    <ExecutionRelay
+                      events={events}
+                      runData={runData}
+                      status={status}
+                    />
+                  )}
+                  {!terminalSagaFailed && <SummaryPanel runData={runData} events={events} />}
+                </div>
               ) : (
                 <EventTimeline
                   events={playback.visibleEvents}
