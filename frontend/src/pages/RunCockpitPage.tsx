@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRunStatus } from '../hooks/useRunStatus';
 import { useRunStream } from '../hooks/useRunStream';
@@ -66,6 +66,7 @@ export function RunCockpitPage() {
     resetKey: runId,
   });
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
+  const [receivedWaitSeconds, setReceivedWaitSeconds] = useState(0);
 
   const status = runData?.status ?? null;
   const badge = status ? STATUS_BADGE[status] : null;
@@ -104,10 +105,26 @@ export function RunCockpitPage() {
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
   const isTerminal = presentationCaughtUp
     && (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED');
+  const workflowStalled = status === 'RECEIVED'
+    && runData?.current_node === 'receive_goal'
+    && receivedWaitSeconds >= 10;
   const goalText = readSavedGoal(runId ?? '')
     ?? runData?.structured_goal?.objective
     ?? runData?.structured_goal?.objectives?.[0]
     ?? 'Operational decision goal';
+
+  useEffect(() => {
+    if (status !== 'RECEIVED' || runData?.current_node !== 'receive_goal') {
+      setReceivedWaitSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setReceivedWaitSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [runData?.current_node, runId, status]);
 
   if (!runId) {
     return (
@@ -223,6 +240,40 @@ export function RunCockpitPage() {
             </div>
 
             <div className="p-5 sm:p-7 min-h-[520px]">
+              {workflowStalled && (
+                <div className="rounded-2xl border border-ops-rose/30 bg-ops-rose/5 p-5 mb-6" role="alert">
+                  <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-rose">
+                    Route has not advanced
+                  </p>
+                  <h2 className="text-base font-extrabold text-ink-primary mt-1.5">
+                    Core accepted the goal, but the next step did not start.
+                  </h2>
+                  <p className="text-xs leading-relaxed text-ink-secondary mt-2 max-w-3xl">
+                    The Run ID and goal were created, but the workflow is still at Goal Received after
+                    {` ${receivedWaitSeconds} seconds`}. No plan was approved and no operational write occurred.
+                    This usually indicates a backend workflow or persistence error rather than a problem with your goal.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => void refetch()}
+                      className="rounded-lg bg-ink-primary px-4 py-2.5 text-[10px] font-bold text-white hover:bg-ops-amber focus-ring"
+                    >
+                      Recheck Core
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/')}
+                      className="rounded-lg border border-border-base bg-abyss px-4 py-2.5 text-[10px] font-semibold text-ink-secondary hover:text-ops-amber focus-ring"
+                    >
+                      Return to Today
+                    </button>
+                  </div>
+                  <p className="text-[9px] font-mono text-ink-muted mt-3">
+                    Support reference: {runId}
+                  </p>
+                </div>
+              )}
               <DecisionTrustPanel
                 phaseId={briefingGuide.id}
                 confidence={runData?.confidence_report ?? null}
