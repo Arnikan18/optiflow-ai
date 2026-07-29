@@ -453,21 +453,7 @@ export function RunHistoryPage() {
   );
 }
 
-export function DemoLabPage() {
-  return (
-    <WorkspacePage
-      eyebrow="Scenario lab"
-      title="Test the route before it matters."
-      description="Explore controlled operational situations with the same checks used by a live decision, without changing real work."
-      purpose="Practise safely with real logic"
-      capabilities={[
-        'Queue specialist responses and observe how the route adapts.',
-        'Simulate a source failure and inspect the manual fallback.',
-        'Reset the demonstration state for a repeatable walkthrough.',
-      ]}
-    />
-  );
-}
+export { DemoLabPage } from './DemoLabPage';
 
 export function SettingsPage() {
   return (
