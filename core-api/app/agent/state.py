@@ -48,6 +48,7 @@ class AgentState(TypedDict, total=False):
     monitoring_events: List[Dict[str, Any]]
     replan_count: int
     excluded_specialist_incidents: List[Dict[str, Any]]
+    personalized_recommendation: Optional[Dict[str, Any]]
     created_at: str
     updated_at: str
     clarification_resolved: bool

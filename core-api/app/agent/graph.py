@@ -16,9 +16,11 @@ from app.agent.nodes.build_state import build_state
 from app.agent.nodes.pause_for_clarification import pause_for_clarification
 from app.agent.nodes.evaluate_quality import evaluate_quality
 from app.agent.nodes.generate_plans import generate_plans
+from app.agent.nodes.generate_personalized_plan import generate_personalized_plan
 from app.agent.nodes.pause_for_approval import pause_for_approval
 from app.agent.nodes.execute_saga import execute_saga
 from app.agent.nodes.complete_run import complete_run
+from app.agent.nodes.update_preference_memory import update_preference_memory
 
 
 def route_after_validation(state: AgentState) -> str:
@@ -34,15 +36,21 @@ def route_after_validation(state: AgentState) -> str:
 def route_after_approval(state: AgentState) -> str:
     """Routes the workflow based on the human approval status."""
     app_status = state.get("approval_status")
-    if app_status == "APPROVED":
-        return "execute_saga"
-    elif app_status == "MODIFY":
-        return "interpret_goal"  # Route back to goal interpreter for re-planning
-    elif app_status == "REJECTED":
-        return "complete_run"
+    if app_status in ("APPROVED", "REJECTED", "MODIFY"):
+        return "update_preference_memory"
     
     # Halt execution and wait at END for approval request resume (checkpoint resume)
     return END
+
+
+def route_after_preference_update(state: AgentState) -> str:
+    """Routes the workflow after updating the preference memory based on approval status."""
+    app_status = state.get("approval_status")
+    if app_status == "APPROVED":
+        return "execute_saga"
+    elif app_status == "MODIFY":
+        return "interpret_goal"
+    return "complete_run"
 
 
 def route_after_saga(state: AgentState) -> str:
@@ -74,9 +82,11 @@ def build_graph() -> StateGraph:
     graph.add_node("build_state", build_state)
     graph.add_node("evaluate_quality", evaluate_quality)
     graph.add_node("generate_plans", generate_plans)
+    graph.add_node("generate_personalized_plan", generate_personalized_plan)
     graph.add_node("pause_for_approval", pause_for_approval)
     graph.add_node("execute_saga", execute_saga)
     graph.add_node("complete_run", complete_run)
+    graph.add_node("update_preference_memory", update_preference_memory)
     
     # 2. Establish links and conditional routing paths
     graph.add_edge(START, "receive_goal")
@@ -103,17 +113,27 @@ def build_graph() -> StateGraph:
     graph.add_edge("execute_tools", "build_state")
     graph.add_edge("build_state", "evaluate_quality")
     graph.add_edge("evaluate_quality", "generate_plans")
-    graph.add_edge("generate_plans", "pause_for_approval")
+    graph.add_edge("generate_plans", "generate_personalized_plan")
+    graph.add_edge("generate_personalized_plan", "pause_for_approval")
     
     # Conditional edge after human control approval gate
     graph.add_conditional_edges(
         "pause_for_approval",
         route_after_approval,
         {
+            "update_preference_memory": "update_preference_memory",
+            "__end__": END
+        }
+    )
+    
+    # After preference update, route to SAGA, replanning, or completion
+    graph.add_conditional_edges(
+        "update_preference_memory",
+        route_after_preference_update,
+        {
             "execute_saga": "execute_saga",
             "interpret_goal": "interpret_goal",
-            "complete_run": "complete_run",
-            "__end__": END
+            "complete_run": "complete_run"
         }
     )
     

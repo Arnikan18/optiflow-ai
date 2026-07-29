@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import BusinessGoal, AgentRun, RunEvent, GraphCheckpoint, StateSnapshot, EvidenceItem
+from app.database.models import BusinessGoal, AgentRun, RunEvent, GraphCheckpoint, StateSnapshot, EvidenceItem, ManagerPreference
 
 logger = logging.getLogger("core-api.database.persistence")
 
@@ -245,3 +245,38 @@ async def save_graph_checkpoint(
         
     await session.flush()
     return chk
+
+
+async def get_manager_preference(
+    session: AsyncSession
+) -> Optional[ManagerPreference]:
+    """Retrieves the single manager preference record."""
+    stmt = select(ManagerPreference).where(ManagerPreference.id == 1)
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def save_manager_preference(
+    session: AsyncSession,
+    preference_json: Dict[str, Any]
+) -> ManagerPreference:
+    """Creates or updates the single manager preference record."""
+    stmt = select(ManagerPreference).where(ManagerPreference.id == 1)
+    res = await session.execute(stmt)
+    pref = res.scalar_one_or_none()
+
+    if not pref:
+        pref = ManagerPreference(
+            id=1,
+            preference_json=preference_json,
+            updated_at=datetime.utcnow()
+        )
+        session.add(pref)
+    else:
+        pref.preference_json = preference_json
+        pref.updated_at = datetime.utcnow()
+
+    await session.flush()
+    return pref
+
+
