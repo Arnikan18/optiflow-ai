@@ -43,6 +43,8 @@ const PHASE_INDEX: Record<string, number> = {
   failed: 7,
 };
 
+const READABLE_CARD_DWELL_MS = 2_600;
+
 function readSavedGoal(runId: string): string | null {
   try {
     const runs = JSON.parse(localStorage.getItem('optiflow_runs') ?? '[]') as RecentRun[];
@@ -58,7 +60,7 @@ export function RunCockpitPage() {
   const { data: runData, error, loading, refetch } = useRunStatus(runId);
   const { events, connected, usingFallback } = useRunStream(runId);
   const playback = useGuidedPlayback(events, {
-    minimumDwellMs: 1_800,
+    minimumDwellMs: READABLE_CARD_DWELL_MS,
     resetKey: runId,
   });
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
