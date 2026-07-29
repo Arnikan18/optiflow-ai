@@ -5,6 +5,7 @@ import { useRunStream } from '../hooks/useRunStream';
 import { EventTimeline } from '../components/run/EventTimeline';
 import { PlaybackControls } from '../components/run/PlaybackControls';
 import { CausalEvidenceMap } from '../components/run/CausalEvidenceMap';
+import { DecisionTrustPanel } from '../components/run/DecisionTrustPanel';
 import {
   DecisionJourneyRail,
   normalizeJourneyStage,
@@ -222,6 +223,11 @@ export function RunCockpitPage() {
             </div>
 
             <div className="p-5 sm:p-7 min-h-[520px]">
+              <DecisionTrustPanel
+                phaseId={briefingGuide.id}
+                confidence={runData?.confidence_report ?? null}
+                risk={runData?.autonomy_risk_report ?? null}
+              />
               <CausalEvidenceMap phaseId={briefingGuide.id} events={briefingEvents} />
               {isReviewingStage ? (
                 <EventTimeline
