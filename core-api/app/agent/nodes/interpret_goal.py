@@ -43,4 +43,8 @@ async def interpret_goal(state: AgentState) -> dict:
                 state_version=1
             )
             
-    return {"structured_goal": structured_goal_dict}
+    ret = {"structured_goal": structured_goal_dict}
+    app_status = state.get("approval_status")
+    if app_status not in ("APPROVED", "REJECTED"):
+        ret["approval_status"] = "PENDING"
+    return ret

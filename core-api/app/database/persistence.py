@@ -54,7 +54,7 @@ async def save_agent_run(
     plan_version: int = 0,
     goal_id: Optional[str] = None,
     current_node: Optional[str] = None,
-    replan_count: int = 0,
+    replan_count: Optional[int] = None,
     recommended_plan_id: Optional[str] = None,
     completed_at: Optional[datetime] = None
 ) -> AgentRun:
@@ -73,7 +73,7 @@ async def save_agent_run(
             plan_version=plan_version,
             goal_id=goal_id,
             current_node=current_node,
-            replan_count=replan_count,
+            replan_count=replan_count if replan_count is not None else 0,
             recommended_plan_id=recommended_plan_id,
             completed_at=completed_at,
             created_at=datetime.utcnow(),
@@ -86,7 +86,8 @@ async def save_agent_run(
         run.plan_version = plan_version
         if current_node:
             run.current_node = current_node
-        run.replan_count = replan_count
+        if replan_count is not None:
+            run.replan_count = replan_count
         if recommended_plan_id:
             run.recommended_plan_id = recommended_plan_id
         if completed_at:

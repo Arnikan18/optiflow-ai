@@ -32,7 +32,7 @@ async def load_last_checkpoint(run_id: str) -> Optional[Dict[str, Any]]:
     """Loads the latest checkpoint state dictionary for the run from database."""
     async with async_session() as session:
         res = await session.execute(
-            text("SELECT checkpoint_json FROM graph_checkpoints WHERE run_id = :r ORDER BY state_version DESC LIMIT 1"),
+            text("SELECT checkpoint_json FROM graph_checkpoints WHERE run_id = :r ORDER BY created_at DESC LIMIT 1"),
             {"r": run_id}
         )
         row = res.fetchone()

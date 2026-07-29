@@ -97,8 +97,9 @@ async def execute_saga(state: AgentState) -> dict:
         if not inc_id or not spec_id:
             continue
 
-        res_id = f"RES-{run_id[:8]}-{inc_id[:8]}"
-        req_id = f"REQ-{run_id[:8]}-{inc_id[:8]}"
+        suffix = f"-{current_replan_count}" if current_replan_count > 0 else ""
+        res_id = f"RES-{run_id[:8]}-{inc_id[:8]}{suffix}"
+        req_id = f"REQ-{run_id[:8]}-{inc_id[:8]}{suffix}"
 
         try:
             # ── STEP A: Tentative workforce reservation ──────────────────────
@@ -155,7 +156,7 @@ async def execute_saga(state: AgentState) -> dict:
                 print(f"  [SAGA] Specialist ACCEPTED {req_id}. Confirming reservation {res_id}...")
                 await client.confirm_reservation(reservation_id=res_id)
                 await client.assign_incident_specialist(incident_id=inc_id, specialist_id=spec_id)
-                await client.patch_incident_status(incident_id=inc_id, incident_status="ASSIGNED")
+                await client.patch_incident_status(incident_id=inc_id, incident_status="IN_PROGRESS")
                 updated_incidents.append(inc_id)
                 execution_actions.append(
                     {"action": "RESERVE_CONFIRM", "entity": "workforce-service", "id": res_id}
