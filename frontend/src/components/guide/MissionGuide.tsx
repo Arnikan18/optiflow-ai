@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { RunEvent, RunStatus } from '../../types/api';
 import { getActiveGuide } from '../../data/guideContent';
+import { readUiPreferences, subscribeToUiPreferences } from '../../preferences';
 
 interface MissionGuideProps {
   status: RunStatus | null;
@@ -71,13 +73,17 @@ export function MissionGuide({
   events,
   isReviewing,
 }: MissionGuideProps) {
+  const [preferences, setPreferences] = useState(readUiPreferences);
   const guide = getActiveGuide(status, currentNode);
+  const compact = preferences.detail === 'compact';
   const checks = CHECKS_BY_PHASE[guide.id] ?? [];
   const latestEvent = events.at(-1);
   const inputFields = Array.from(
     new Set(events.flatMap((event) => Object.keys(event.payload ?? {}))),
   ).slice(0, 8);
   const sourceNodes = Array.from(new Set(events.map((event) => event.source)));
+
+  useEffect(() => subscribeToUiPreferences(setPreferences), []);
 
   return (
     <div className="w-full">
@@ -94,7 +100,9 @@ export function MissionGuide({
           </div>
         </div>
         <p className="text-xs text-white/60 leading-relaxed mt-4">
-          Follow the reasoning, inspect the evidence, or repeat this step manually.
+          {compact
+            ? 'Compact briefing keeps the checks and recorded result in view.'
+            : 'Follow the reasoning, inspect the evidence, or repeat this step manually.'}
         </p>
       </div>
 
@@ -150,7 +158,7 @@ export function MissionGuide({
         </div>
       </GuideSection>
 
-      <GuideSection marker="04" title="Timing truth">
+      {!compact && <GuideSection marker="04" title="Timing truth">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[8px] font-mono uppercase tracking-[0.14em] text-ink-muted">Latest record</p>
@@ -166,17 +174,17 @@ export function MissionGuide({
           Backend duration is shown only when the API supplies it. The guided card dwell is presentation time,
           added so the route remains readable.
         </p>
-      </GuideSection>
+      </GuideSection>}
 
-      <GuideSection marker="05" title="If you did this manually">
+      {!compact && <GuideSection marker="05" title="If you did this manually">
         <div className="rounded-xl bg-deep border border-border-dim p-4">
           <p className="text-xs text-ink-primary font-semibold leading-relaxed">
             {MANUAL_MOVE[guide.id]}
           </p>
         </div>
-      </GuideSection>
+      </GuideSection>}
 
-      <GuideSection marker="06" title="Raw event evidence">
+      {!compact && <GuideSection marker="06" title="Raw event evidence">
         {events.length === 0 ? (
           <p className="text-[10px] leading-relaxed text-ink-muted">
             No event payload has been presented for this step yet.
@@ -195,7 +203,7 @@ export function MissionGuide({
             ))}
           </div>
         )}
-      </GuideSection>
+      </GuideSection>}
 
       {guide.actionPrompt && (
         <section className="m-4 rounded-xl bg-ops-amber text-white p-4 shadow-amber-glow">
@@ -206,7 +214,7 @@ export function MissionGuide({
         </section>
       )}
 
-      <div className="px-5 py-4 bg-deep border-t border-border-dim">
+      {!compact && <div className="px-5 py-4 bg-deep border-t border-border-dim">
         <div className="flex gap-3">
           <span className="text-ops-cyan text-sm">i</span>
           <div>
@@ -218,7 +226,7 @@ export function MissionGuide({
             </p>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
