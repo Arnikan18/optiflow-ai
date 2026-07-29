@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     gemini_max_retries: int = 1
     groq_api_key: str = ""
     groq_model: str = "llama-3.1-8b-instant"
+    llm_settings_encryption_key: str = ""
     prompt_version: str = "4.0"
     
     crm_service_url: str = "http://crm-service:8101"
