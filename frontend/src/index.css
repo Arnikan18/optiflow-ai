@@ -8,27 +8,57 @@
    ──────────────────────────────────────────────────────────────── */
 
 :root {
-  --bg-void:    #f4f1e8;
-  --bg-abyss:   #fffdf8;
-  --bg-deep:    #f8f5ed;
-  --bg-surface: #ece7db;
-  --bg-elevated:#ffffff;
+  color-scheme: light;
+  --bg-void:     244 241 232;
+  --bg-abyss:    255 253 248;
+  --bg-deep:     248 245 237;
+  --bg-surface:  236 231 219;
+  --bg-elevated: 255 255 255;
 
-  --border-dim:   #ded8ca;
-  --border-base:  #c3bbab;
-  --border-bright:#817868;
+  --border-dim:    222 216 202;
+  --border-base:   195 187 171;
+  --border-bright: 129 120 104;
 
-  --amber:        #f05a2a;
-  --amber-bright: #ff7448;
-  --cyan:         #147d75;
-  --emerald:      #2e7d4f;
-  --rose:         #c53e4c;
-  --violet:       #6654a5;
-  --orange:       #d9772f;
+  --amber:        240 90 42;
+  --amber-bright: 255 116 72;
+  --cyan:         20 125 117;
+  --emerald:      46 125 79;
+  --rose:         197 62 76;
+  --violet:       102 84 165;
+  --orange:       217 119 47;
 
-  --text-primary:   #1d2926;
-  --text-secondary: #59635f;
-  --text-muted:     #8a918d;
+  --text-primary:   29 41 38;
+  --text-secondary: 89 99 95;
+  --text-muted:     138 145 141;
+  --text-ghost:     185 189 184;
+  --shadow-card: 0 14px 40px rgb(48 53 47 / 0.08);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-void:     10 17 16;
+  --bg-abyss:    15 25 23;
+  --bg-deep:     20 32 29;
+  --bg-surface:  29 45 41;
+  --bg-elevated: 36 54 49;
+
+  --border-dim:    45 65 59;
+  --border-base:   66 91 83;
+  --border-bright: 116 141 132;
+
+  --amber:        255 122 76;
+  --amber-bright: 255 153 112;
+  --cyan:         75 198 186;
+  --emerald:      87 199 133;
+  --rose:         240 120 130;
+  --violet:       169 152 232;
+  --orange:       233 164 95;
+
+  --text-primary:   241 244 239;
+  --text-secondary: 180 195 188;
+  --text-muted:     128 148 140;
+  --text-ghost:     90 112 104;
+  --shadow-card: 0 18px 48px rgb(0 0 0 / 0.28);
 }
 
 /* ── Base ─────────────────────────────────────────────────────── */
@@ -37,8 +67,8 @@
 html { scroll-behavior: smooth; }
 
 body {
-  background-color: var(--bg-void);
-  color: var(--text-primary);
+  background-color: rgb(var(--bg-void));
+  color: rgb(var(--text-primary));
   font-family: 'Manrope', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
@@ -46,15 +76,15 @@ body {
 
 /* ── Scrollbar ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-void); }
-::-webkit-scrollbar-thumb { background: var(--border-base); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+::-webkit-scrollbar-track { background: rgb(var(--bg-void)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--border-base)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--border-bright)); }
 
 /* ── Grid background ──────────────────────────────────────────── */
 .bg-grid {
   background-image:
-    linear-gradient(var(--border-dim) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-dim) 1px, transparent 1px);
+    linear-gradient(rgb(var(--border-dim)) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--border-dim)) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
@@ -86,7 +116,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--amber);
+  background: rgb(var(--amber));
   animation: ping-amber 1.8s ease-out infinite;
 }
 .dot-ping-cyan::after {
@@ -94,7 +124,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--cyan);
+  background: rgb(var(--cyan));
   animation: ping-cyan 1.5s ease-out infinite;
 }
 
@@ -138,30 +168,30 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--cyan)), transparent);
   animation: scan-sweep 3s linear infinite;
   pointer-events: none;
 }
 
 /* ── Markdown rendering overrides ─────────────────────────────── */
 .markdown-body h1, .markdown-body h2, .markdown-body h3 {
-  color: var(--amber-bright);
+  color: rgb(var(--amber-bright));
   font-weight: 600;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
 }
 .markdown-body ul { list-style: disc; padding-left: 1.25rem; }
-.markdown-body li { margin-bottom: 0.25rem; color: var(--text-secondary); }
-.markdown-body p  { color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.6; }
-.markdown-body strong { color: var(--text-primary); }
+.markdown-body li { margin-bottom: 0.25rem; color: rgb(var(--text-secondary)); }
+.markdown-body p  { color: rgb(var(--text-secondary)); margin-bottom: 0.75rem; line-height: 1.6; }
+.markdown-body strong { color: rgb(var(--text-primary)); }
 .markdown-body code {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-dim);
+  background: rgb(var(--bg-surface));
+  border: 1px solid rgb(var(--border-dim));
   border-radius: 4px;
   padding: 0.1em 0.4em;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85em;
-  color: var(--amber-bright);
+  color: rgb(var(--amber-bright));
 }
 
 /* ── Timeline connector ───────────────────────────────────────── */
@@ -171,13 +201,13 @@ body {
   top: 40px;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(to bottom, var(--border-base), transparent);
+  background: linear-gradient(to bottom, rgb(var(--border-base)), transparent);
 }
 
 /* OptiFlow route language */
 .paper-noise {
   background-image:
-    radial-gradient(rgba(29, 41, 38, 0.075) 0.65px, transparent 0.65px);
+    radial-gradient(rgb(var(--text-primary) / 0.075) 0.65px, transparent 0.65px);
   background-size: 7px 7px;
 }
 
@@ -192,7 +222,7 @@ body {
   top: 22px;
   bottom: 22px;
   width: 2px;
-  background: var(--border-dim);
+  background: rgb(var(--border-dim));
 }
 
 .route-track-active::after {
@@ -202,14 +232,14 @@ body {
   top: 22px;
   height: var(--route-progress, 0%);
   width: 2px;
-  background: var(--cyan);
+  background: rgb(var(--cyan));
   transition: height 700ms cubic-bezier(.22, 1, .36, 1);
 }
 
 .flow-dash {
   background-image: linear-gradient(
     90deg,
-    var(--cyan) 50%,
+    rgb(var(--cyan)) 50%,
     transparent 50%
   );
   background-size: 16px 2px;
