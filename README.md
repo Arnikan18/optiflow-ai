@@ -587,9 +587,11 @@ optiflow-ai/
 │   └── expected-results/
 │
 ├── scripts/
+│   ├── health-check.ps1
 │   ├── health-check.sh
+│   ├── reset-demo.ps1
 │   ├── reset-demo.sh
-│   ├── run-demo.sh
+│   ├── run-tests.ps1
 │   └── run-tests.sh
 │
 ├── docs/
@@ -676,16 +678,42 @@ Do not commit the actual `.env` file.
 
 ---
 
+## Configuration Management
+
+The project uses one root `.env` file as the local source of configuration.
+
+- `.env.example` is committed and contains placeholders or safe development defaults.
+- `.env` is local only and is ignored by Git.
+- `docker-compose.yml` reads values with `${VARIABLE_NAME}` references.
+- Do not commit API keys, tokens, database passwords or generated local databases.
+- When a required variable is added, add it to `.env.example`, read it through the application settings layer, and reference it from Compose where the container needs it.
+
+---
+
 ## 3. Start the complete system
 
+### Windows PowerShell
+
+```powershell
+docker compose --profile full-stack up --build
+```
+
+Detached mode:
+
+```powershell
+docker compose --profile full-stack up --build -d
+```
+
+### Linux / Git Bash
+
 ```bash
-docker compose up --build
+docker compose --profile full-stack up --build
 ```
 
 Run in detached mode:
 
 ```bash
-docker compose up --build -d
+docker compose --profile full-stack up --build -d
 ```
 
 ---
@@ -707,47 +735,140 @@ docker compose up --build -d
 
 ## 5. Check container status
 
+### Windows PowerShell
+
+```powershell
+docker compose --profile full-stack ps
+```
+
+### Linux / Git Bash
+
 ```bash
-docker compose ps
+docker compose --profile full-stack ps
 ```
 
 ---
 
-## 6. View logs
+## 6. Health check
+
+### Windows PowerShell
+
+```powershell
+.\scripts\health-check.ps1
+```
+
+### Linux / Git Bash
+
+```bash
+./scripts/health-check.sh
+```
+
+The health scripts check PostgreSQL, Core API, CRM, Incident, Workforce and Communication services. They return exit code `0` only when required backend components are healthy.
+
+---
+
+## 7. Reset demo data
+
+Normal deterministic reset:
+
+```powershell
+.\scripts\reset-demo.ps1
+```
+
+```bash
+./scripts/reset-demo.sh
+```
+
+Destructive local reset with volume recreation:
+
+```powershell
+.\scripts\reset-demo.ps1 -RecreateVolumes
+```
+
+```bash
+./scripts/reset-demo.sh --recreate-volumes
+```
+
+The destructive path asks for confirmation unless `-Force` or `--force` is supplied. Use it only for local demo data.
+
+---
+
+## 8. Run backend tests
+
+### Windows PowerShell
+
+```powershell
+.\scripts\run-tests.ps1 -Mode all
+.\scripts\run-tests.ps1 -Mode unit
+.\scripts\run-tests.ps1 -Mode integration
+```
+
+### Linux / Git Bash
+
+```bash
+./scripts/run-tests.sh --mode all
+./scripts/run-tests.sh --mode unit
+./scripts/run-tests.sh --mode integration
+```
+
+The scripts continue through all selected suites, print a summary, and return non-zero if any required suite fails.
+
+---
+
+## 9. View logs
 
 All services:
 
 ```bash
-docker compose logs -f
+docker compose --profile full-stack logs -f
 ```
 
 Core API only:
 
 ```bash
-docker compose logs -f core-api
+docker compose --profile full-stack logs -f core-api
 ```
 
 CRM Service only:
 
 ```bash
-docker compose logs -f crm-service
+docker compose --profile full-stack logs -f crm-service
 ```
 
 ---
 
-## 7. Stop the system
+## 10. Stop the system
+
+### Windows PowerShell
+
+```powershell
+docker compose --profile full-stack down
+```
+
+### Linux / Git Bash
 
 ```bash
-docker compose down
+docker compose --profile full-stack down
 ```
 
 Remove containers and generated volumes:
 
 ```bash
-docker compose down -v
+docker compose --profile full-stack down -v
 ```
 
 Use `-v` only when all stored local database data should be removed.
+
+---
+
+## 11. Troubleshooting
+
+- If `docker compose --profile full-stack ps` shows no services, start with `docker compose --profile full-stack up --build -d`.
+- If ports are busy, change the host-side `*_PORT` values in `.env`; scripts derive host URLs from those values.
+- If health checks fail, run `docker compose --profile full-stack logs -f core-api` and inspect the failing service logs.
+- If tests fail because dependencies are missing, create the service virtual environments and install each `requirements.txt`.
+- If Docker reports credential or Compose plugin errors, fix Docker Desktop or Docker CLI first, then rerun the command.
+- Never fix local demo issues by committing `.env` or secrets.
 
 ---
 
@@ -833,30 +954,34 @@ npm run dev
 
 # Environment Configuration
 
-Example `.env` configuration:
+Use `.env.example` as the committed template. The local `.env` should contain the same variable names with developer-specific values.
+
+Core examples:
 
 ```env
 # Application
 APP_ENV=development
-APP_VERSION=1.0.0
-SCENARIO_ID=demo
+APP_VERSION=4.0
+SCENARIO_ID=phase2-demo
 
 # Frontend
 FRONTEND_PORT=3000
+FRONTEND_CONTAINER_PORT=3000
 VITE_CORE_API_URL=http://localhost:8000
 
 # Core API
 CORE_API_PORT=8000
+CORE_API_CONTAINER_PORT=8000
 CORE_API_HOST=0.0.0.0
 CORE_LOG_LEVEL=INFO
 
 # PostgreSQL
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
+POSTGRES_CONTAINER_PORT=5432
 POSTGRES_DB=optiflow
 POSTGRES_USER=optiflow
 POSTGRES_PASSWORD=change-me
-
 DATABASE_URL=postgresql+psycopg://optiflow:change-me@postgres:5432/optiflow
 
 # Enterprise Services
@@ -866,12 +991,17 @@ WORKFORCE_SERVICE_URL=http://workforce-service:8103
 COMMUNICATION_SERVICE_URL=http://communication-service:8104
 
 CRM_SERVICE_PORT=8101
+CRM_SERVICE_CONTAINER_PORT=8101
 INCIDENT_SERVICE_PORT=8102
+INCIDENT_SERVICE_CONTAINER_PORT=8102
 WORKFORCE_SERVICE_PORT=8103
+WORKFORCE_SERVICE_CONTAINER_PORT=8103
 COMMUNICATION_SERVICE_PORT=8104
+COMMUNICATION_SERVICE_CONTAINER_PORT=8104
 
 # Internal Service Authentication
 TOOL_SHARED_TOKEN=change-me
+ADMIN_API_KEY=change-me-admin
 
 # Gemini
 GEMINI_API_KEY=
@@ -895,10 +1025,14 @@ SSE_QUEUE_SIZE=200
 
 # Demonstration
 DEMO_MODE=true
-DEMO_STEP_DELAY_MS=250
+DEMO_DELAY_MS=300
 DEMO_PORTFOLIO_TIMEOUT_SECONDS=3
 DEMO_HEALTH_TIMEOUT_SECONDS=2
 DEMO_ALLOW_FAILURE_INJECTION=true
+
+# SAGA specialist response polling
+SAGA_POLL_MAX_ATTEMPTS=5
+SAGA_POLL_INTERVAL_SECONDS=1.0
 ```
 
 Core demo APIs:
@@ -968,17 +1102,27 @@ The controlled demonstration uses four enterprise customers and three specialist
 
 ## Backend tests
 
-Run from a Python service directory:
+Use the Part 4 backend test scripts from the repository root.
 
-```bash
-pytest
+### Windows PowerShell
+
+```powershell
+.\scripts\run-tests.ps1 -Mode all
 ```
 
-Run with detailed output:
+### Linux / Git Bash
 
 ```bash
-pytest -v
+./scripts/run-tests.sh --mode all
 ```
+
+Supported modes:
+
+- `unit`: CRM, Incident, Workforce, Communication and Core unit tests.
+- `integration`: repository integration tests.
+- `all`: unit and integration tests.
+
+The scripts report missing required test folders instead of silently skipping them.
 
 ## Frontend tests
 
@@ -1084,18 +1228,6 @@ git push origin feature/your-feature-name
 ```
 
 Open a pull request and request a review before merging into the main branch.
-
----
-
-# Commit the README and Diagrams
-
-After adding `README.md` and the six image files:
-
-```bash
-git add README.md docs/images
-git commit -m "Add OptiFlow project README and architecture diagrams"
-git push origin main
-```
 
 ---
 
