@@ -104,3 +104,16 @@ class EvidenceItem(Base):
     freshness_status: Mapped[str] = mapped_column(String(50), nullable=False)
     quality_flags_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     decision_critical: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ManagerPreference(Base):
+    __tablename__ = "manager_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    preference_json: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
