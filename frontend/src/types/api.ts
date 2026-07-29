@@ -68,6 +68,18 @@ export interface StructuredGoal {
   [key: string]: unknown;
 }
 
+export interface CandidatePlanSummary {
+  profile: string;
+  objective_score: number;
+  sla_score: number;
+  revenue_score: number;
+  fairness_score: number;
+  workload_score: number;
+  selected: boolean;
+  recommendation_reason: string;
+  rank: number;
+}
+
 export interface RunSummary {
   run_id: string;
   status: RunStatus;
@@ -82,6 +94,7 @@ export interface RunSummary {
   selected_tools: SelectedTool[];
   business_summary: string | Record<string, unknown> | null;
   change_summary: string | Record<string, unknown> | null;
+  candidate_plan_summary: CandidatePlanSummary[];
 }
 
 // SSE event

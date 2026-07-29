@@ -197,6 +197,23 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
     checkpoint = await load_last_checkpoint(run_id) or {}
     candidate_plans = checkpoint.get("candidate_plans", [])
     
+    # ── Populate Candidate Summaries dynamically ──────────────────────────────
+    from app.services.candidate_comparison_builder import CandidateComparisonBuilder
+    
+    enterprise_state = checkpoint.get("enterprise_state", {})
+    customers = enterprise_state.get("customers", [])
+    
+    pers_rec = checkpoint.get("personalized_recommendation")
+    rec_plan_id = pers_rec.get("candidate_plan_id") if pers_rec else row[3]
+    pers_reason = pers_rec.get("reason") if pers_rec else None
+    
+    summaries = CandidateComparisonBuilder.build_summaries(
+        plans=candidate_plans,
+        customers=customers,
+        recommended_plan_id=rec_plan_id,
+        personalized_reason=pers_reason
+    )
+    
     return {
         "run_id": row[0],
         "status": row[1],
@@ -211,7 +228,8 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
         "selected_tools": checkpoint.get("selected_tools", []),
         "business_summary": checkpoint.get("business_summary"),
         "change_summary": checkpoint.get("change_summary"),
-        "personalized_recommendation": checkpoint.get("personalized_recommendation")
+        "personalized_recommendation": pers_rec,
+        "candidate_plan_summary": [s.model_dump(mode="json") for s in summaries]
     }
 
 @app.post("/api/v1/runs/{run_id}/approve")

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
-import type { CandidatePlan } from '../../types/api';
+import type { CandidatePlan, CandidatePlanSummary } from '../../types/api';
 import { PlanCard } from './PlanCard';
 
 interface PlanWorkspaceProps {
   runId: string;
   plans: CandidatePlan[];
   recommendedPlanId: string | null;
+  candidatePlanSummary?: CandidatePlanSummary[];
   onApproved: () => void;
 }
 
@@ -227,7 +228,93 @@ function ComparisonMatrix({
   );
 }
 
-export function PlanWorkspace({ runId, plans, recommendedPlanId, onApproved }: PlanWorkspaceProps) {
+function CandidateComparisonTable({ summaries }: { summaries: CandidatePlanSummary[] }) {
+  if (!summaries || summaries.length === 0) return null;
+
+  // Ensure items are sorted by rank descending/ascending
+  const sortedSummaries = [...summaries].sort((a, b) => a.rank - b.rank);
+
+  return (
+    <section className="rounded-2xl border border-border-base bg-abyss overflow-hidden animate-fade-up" aria-labelledby="candidate-comparison-title">
+      <div className="px-5 py-4 border-b border-border-dim bg-deep/60">
+        <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
+          Strategy evaluation dashboard
+        </p>
+        <h3 id="candidate-comparison-title" className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
+          Candidate Plan Comparison
+        </h3>
+        <p className="text-[10px] leading-relaxed text-ink-muted mt-1.5">
+          AI-driven tradeoffs comparison across generated optimization strategies. Highlighted row indicates the selected recommendation.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[920px] border-collapse">
+          <caption className="sr-only">Candidate optimization plan scores and selected recommendation</caption>
+          <thead>
+            <tr className="border-b border-border-dim bg-deep/40 text-[9px] font-mono uppercase tracking-wider text-ink-muted">
+              <th className="px-5 py-3 text-left w-16">Rank</th>
+              <th className="px-5 py-3 text-left w-48">Profile</th>
+              <th className="px-5 py-3 text-right w-24">Objective</th>
+              <th className="px-5 py-3 text-right w-24">SLA</th>
+              <th className="px-5 py-3 text-right w-24">Revenue</th>
+              <th className="px-5 py-3 text-right w-24">Fairness</th>
+              <th className="px-5 py-3 text-right w-24">Workload</th>
+              <th className="px-5 py-3 text-left">Explanation</th>
+              <th className="px-5 py-3 text-center w-32">Recommended</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedSummaries.map((summary) => {
+              const isPersonalized = summary.selected && summary.rank > 1;
+              return (
+                <tr 
+                  key={summary.profile} 
+                  className={`border-b border-border-dim/60 last:border-0 transition-colors ${
+                    summary.selected 
+                      ? 'bg-ops-amber/10 text-ops-amber hover:bg-ops-amber/15 font-semibold' 
+                      : 'text-ink-secondary hover:bg-deep/20'
+                  }`}
+                >
+                  <td className="px-5 py-4 text-xs font-mono">#{summary.rank}</td>
+                  <td className="px-5 py-4 text-xs font-extrabold flex items-center gap-2">
+                    {summary.selected && <span className="text-ops-amber text-sm">⭐</span>}
+                    <span>{summary.profile}</span>
+                    {isPersonalized && (
+                      <span className="rounded bg-ops-violet px-2 py-0.5 text-[8px] font-bold text-white uppercase shrink-0">
+                        AI Personalized
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.objective_score.toFixed(1)}</td>
+                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.sla_score.toFixed(0)} / 100</td>
+                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.revenue_score.toFixed(0)} / 100</td>
+                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.fairness_score.toFixed(0)} / 100</td>
+                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.workload_score.toFixed(0)} / 100</td>
+                  <td className="px-5 py-4 text-xs">
+                    <span className={summary.selected ? "text-ops-amber" : "text-ink-muted/80"}>
+                      {summary.recommendation_reason}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-xs text-center">
+                    {summary.selected ? (
+                      <span className="rounded bg-ops-amber px-2 py-1 text-[8px] font-bold text-white uppercase">
+                        AI Recommended
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-ink-muted/40">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSummary, onApproved }: PlanWorkspaceProps) {
   const [pendingPlan, setPendingPlan] = useState<CandidatePlan | null>(null);
   const [confirmReject, setConfirmReject] = useState(false);
   const [actionInFlight, setActionInFlight] = useState<'approve' | 'reject' | null>(null);
@@ -327,6 +414,9 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, onApproved }: P
 
       {sorted.length > 0 ? (
         <>
+          {candidatePlanSummary && candidatePlanSummary.length > 0 && (
+            <CandidateComparisonTable summaries={candidatePlanSummary} />
+          )}
           <ComparisonMatrix plans={sorted} recommendedPlanId={recommendedPlanId} />
           <div>
             <div className="flex flex-wrap items-end justify-between gap-3 mb-4">

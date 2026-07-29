@@ -302,6 +302,7 @@ export function RunCockpitPage() {
                   runId={runId}
                   plans={runData?.candidate_plans ?? []}
                   recommendedPlanId={runData?.recommended_plan_id ?? null}
+                  candidatePlanSummary={runData?.candidate_plan_summary ?? []}
                   onApproved={refetch}
                 />
               ) : isClarification ? (
