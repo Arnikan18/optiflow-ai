@@ -61,6 +61,12 @@ def generate_optimization_plans(
     from app.optimizer.greedy import GreedyOptimizer
     from app.config.settings import settings
     
+    # Filter only active and available specialists for planning
+    specialists = [
+        s for s in specialists
+        if s.get("active") is True and s.get("availability") is True
+    ]
+    
     excluded_pairs = excluded_pairs or []
     strategy = settings.optimizer_provider or settings.optimization_strategy or "cp_sat"
     try:
