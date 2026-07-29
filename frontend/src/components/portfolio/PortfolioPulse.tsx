@@ -54,6 +54,7 @@ export function PortfolioPulse() {
   const [portfolio, setPortfolio] = useState<DemoPortfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeLens, setActiveLens] = useState<'customers' | 'incidents' | 'capacity'>('customers');
 
   const loadPortfolio = useCallback(async () => {
     setLoading(true);
@@ -128,6 +129,7 @@ export function PortfolioPulse() {
   const availableRatio = summary.total_specialists
     ? Math.min(100, Math.round(((summary.available_specialists ?? 0) / summary.total_specialists) * 100))
     : 0;
+  const maximumArr = Math.max(...portfolio.customers.map((customer) => customer.arr ?? 0), 1);
   const metrics = [
     {
       label: 'ARR at risk',
@@ -252,15 +254,172 @@ export function PortfolioPulse() {
               <span className="text-[9px] font-mono text-ink-ghost">ARR</span>
             </div>
             <ul className="mt-2">
-              {riskCustomers.map((customer) => (
-                <CustomerSignal
-                  key={customer.customer_id}
-                  customer={customer}
-                  portfolio={portfolio}
-                />
-              ))}
+              {riskCustomers.length > 0 ? riskCustomers.map((customer) => (
+                  <CustomerSignal
+                    key={customer.customer_id}
+                    customer={customer}
+                    portfolio={portfolio}
+                  />
+                )) : (
+                  <li className="py-6 text-center text-[10px] text-ink-muted">
+                    No customer currently carries renewal or SLA risk.
+                  </li>
+                )}
             </ul>
           </article>
+        </div>
+
+        <div className="rounded-[1.5rem] border border-border-dim bg-deep/45 p-5 sm:p-6 mt-3">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-[0.16em] text-ink-muted">
+                Pressure explorer
+              </p>
+              <h3 className="text-base font-extrabold tracking-[-0.025em] text-ink-primary mt-1.5">
+                See which facts create the recommendation pressure.
+              </h3>
+            </div>
+            <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Portfolio pressure lenses">
+              {([
+                ['customers', 'Customers'],
+                ['incidents', 'Incidents'],
+                ['capacity', 'Capacity'],
+              ] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeLens === id}
+                  onClick={() => setActiveLens(id)}
+                  className={`rounded-lg border px-3 py-2 text-[9px] font-semibold focus-ring ${
+                    activeLens === id
+                      ? 'border-ops-cyan bg-ops-cyan/[0.07] text-ops-cyan'
+                      : 'border-border-dim bg-abyss text-ink-muted hover:text-ink-primary'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeLens === 'customers' && (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5">
+              {portfolio.customers.map((customer) => {
+                const customerIncidents = portfolio.incidents.filter(
+                  (incident) => incident.customer_id === customer.customer_id,
+                );
+                const pressure = customer.renewal_risk
+                  || customerIncidents.some((incident) => incident.sla_risk);
+                return (
+                  <article key={customer.customer_id} className="rounded-xl border border-border-dim bg-abyss p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink-primary truncate">{customer.customer_name}</p>
+                        <p className="text-[8px] font-mono uppercase tracking-[0.12em] text-ink-muted mt-1">
+                          {customer.segment ?? customer.strategic_priority ?? 'segment not reported'}
+                        </p>
+                      </div>
+                      <span className={`w-2 h-2 rounded-full mt-1 ${
+                        pressure ? 'bg-ops-rose' : 'bg-ops-emerald'
+                      }`} />
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] font-mono mt-4">
+                      <span className="text-ink-muted">ARR influence</span>
+                      <span className="font-semibold text-ink-secondary">{formatMoney(customer.arr)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-surface overflow-hidden mt-2">
+                      <div
+                        className={`h-full rounded-full ${pressure ? 'bg-ops-rose' : 'bg-ops-cyan'}`}
+                        style={{ width: `${Math.max(4, ((customer.arr ?? 0) / maximumArr) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[9px] leading-relaxed text-ink-muted mt-3">
+                      {customerIncidents.length} active incident signal{customerIncidents.length === 1 ? '' : 's'}
+                      {customer.renewal_risk ? ' · renewal risk present' : ' · renewal stable'}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {activeLens === 'incidents' && (
+            <div className="grid md:grid-cols-2 gap-3 mt-5">
+              {portfolio.incidents.map((incident) => (
+                <article key={incident.incident_id} className="rounded-xl border border-border-dim bg-abyss p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[9px] font-mono text-ink-muted">{incident.incident_id}</span>
+                    <span className={`rounded-full px-2 py-1 text-[8px] font-mono font-semibold uppercase ${
+                      incident.sla_risk
+                        ? 'bg-ops-rose/10 text-ops-rose'
+                        : 'bg-ops-emerald/10 text-ops-emerald'
+                    }`}>
+                      {incident.sla_risk ? 'SLA pressure' : 'within SLA'}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-ink-primary mt-3">{incident.title ?? incident.summary ?? 'Untitled incident'}</p>
+                  <div className="grid grid-cols-2 gap-3 mt-4 text-[9px]">
+                    <div>
+                      <p className="font-mono uppercase tracking-[0.11em] text-ink-muted">Severity</p>
+                      <p className="font-semibold text-ink-secondary mt-1">{incident.severity ?? 'not reported'}</p>
+                    </div>
+                    <div>
+                      <p className="font-mono uppercase tracking-[0.11em] text-ink-muted">Ownership</p>
+                      <p className="font-semibold text-ink-secondary mt-1">
+                        {incident.current_specialist_id ?? 'Unassigned'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-4 pt-3 border-t border-border-dim">
+                    {incident.required_skills.map((skill) => (
+                      <span key={skill} className="rounded-full border border-border-dim bg-deep px-2 py-1 text-[8px] text-ink-muted">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {activeLens === 'capacity' && (
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5">
+              {portfolio.specialists.map((specialist) => {
+                const utilisation = Math.max(0, Math.min(100, specialist.utilisation_percentage ?? 0));
+                const available = specialist.availability === true;
+                return (
+                  <article key={specialist.specialist_id} className="rounded-xl border border-border-dim bg-abyss p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-ink-primary">{specialist.specialist_name}</p>
+                        <p className="text-[8px] font-mono text-ink-muted mt-1">{specialist.specialist_id}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-[8px] font-mono ${
+                        available ? 'bg-ops-emerald/10 text-ops-emerald' : 'bg-surface text-ink-muted'
+                      }`}>
+                        {available ? 'available' : 'unavailable'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] font-mono mt-4">
+                      <span className="text-ink-muted">Utilisation</span>
+                      <span className={utilisation >= 80 ? 'text-ops-rose' : 'text-ops-cyan'}>{Math.round(utilisation)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-surface overflow-hidden mt-2">
+                      <div
+                        className={`h-full rounded-full ${utilisation >= 80 ? 'bg-ops-rose' : 'bg-ops-cyan'}`}
+                        style={{ width: `${utilisation}%` }}
+                      />
+                    </div>
+                    <p className="text-[9px] leading-relaxed text-ink-muted mt-3">
+                      Workload {specialist.current_workload ?? 0}/{specialist.capacity ?? 0}
+                      {' · '}{specialist.skills.slice(0, 3).join(', ') || 'skills not reported'}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <p className="text-[10px] leading-relaxed text-ink-muted mt-3">
