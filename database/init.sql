@@ -270,6 +270,16 @@ CREATE TABLE IF NOT EXISTS policy_versions (
     retired_at TIMESTAMPTZ
 );
 
+-- 19. system_settings
+-- Values are encrypted by Core before persistence. API keys never belong in
+-- ordinary JSON columns, logs, events, or graph checkpoints.
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    encrypted_value TEXT NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Seed initial schema version
 INSERT INTO schema_versions (version) VALUES ('4.0.0') ON CONFLICT DO NOTHING;
 
