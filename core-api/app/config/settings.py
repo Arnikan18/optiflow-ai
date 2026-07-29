@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     
     sse_heartbeat_seconds: int = 15
     demo_mode: bool = True
-    demo_step_delay_ms: int = 250
+    demo_delay_ms: int = 300
     demo_portfolio_timeout_seconds: float = 3.0
     demo_health_timeout_seconds: float = 2.0
     demo_allow_failure_injection: bool = True

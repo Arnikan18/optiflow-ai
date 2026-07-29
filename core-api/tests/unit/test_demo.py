@@ -183,3 +183,12 @@ def test_simulation_routes_require_demo_mode(monkeypatch):
     monkeypatch.setattr(settings, "demo_mode", False)
     response = client.get("/api/v1/demo/simulation/state")
     assert response.status_code == 403
+
+
+def test_demo_delay_uses_documented_env_name(monkeypatch):
+    from app.config.settings import Settings
+
+    monkeypatch.setenv("DEMO_DELAY_MS", "450")
+    settings = Settings(database_url="sqlite+aiosqlite:///demo-settings.db")
+
+    assert settings.demo_delay_ms == 450
