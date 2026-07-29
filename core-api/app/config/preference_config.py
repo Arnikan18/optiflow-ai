@@ -10,6 +10,13 @@ class OptimizationProfile(str, Enum):
     REVENUE_FIRST = "REVENUE_FIRST"
     FAIRNESS_FIRST = "FAIRNESS_FIRST"
 
+DEFAULT_PROFILE_EXPLANATIONS = {
+    OptimizationProfile.BALANCED: "Best overall balance",
+    OptimizationProfile.SLA_FIRST: "Highest SLA protection",
+    OptimizationProfile.REVENUE_FIRST: "Highest revenue preservation",
+    OptimizationProfile.FAIRNESS_FIRST: "Best workload distribution"
+}
+
 class PreferenceConfig:
     """Centralized configuration for the experimental Preference Memory and Personalized Recommendation system.
     
