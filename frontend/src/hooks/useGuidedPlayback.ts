@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RunEvent } from '../types/api';
+import {
+  readUiPreferences,
+  subscribeToUiPreferences,
+  WALKTHROUGH_DWELL_MS,
+} from '../preferences';
 
 interface GuidedPlaybackOptions {
   minimumDwellMs?: number;
@@ -29,23 +34,29 @@ export function useGuidedPlayback(
   events: RunEvent[],
   options: GuidedPlaybackOptions = {},
 ): GuidedPlayback {
-  const { minimumDwellMs = 1_800, resetKey = 'default' } = options;
+  const { minimumDwellMs, resetKey = 'default' } = options;
   const [revealedCount, setRevealedCount] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+  const [systemReducedMotion, setSystemReducedMotion] = useState(
     readReducedMotionPreference,
   );
+  const [preferences, setPreferences] = useState(readUiPreferences);
+  const configuredDwellMs = minimumDwellMs
+    ?? WALKTHROUGH_DWELL_MS[preferences.walkthroughPace];
+  const prefersReducedMotion = preferences.motion === 'reduced' || systemReducedMotion;
   const effectiveDwellMs = prefersReducedMotion
-    ? Math.min(minimumDwellMs, 450)
-    : minimumDwellMs;
+    ? Math.min(configuredDwellMs, 450)
+    : configuredDwellMs;
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updatePreference = () => setPrefersReducedMotion(query.matches);
+    const updatePreference = () => setSystemReducedMotion(query.matches);
     updatePreference();
     query.addEventListener('change', updatePreference);
     return () => query.removeEventListener('change', updatePreference);
   }, []);
+
+  useEffect(() => subscribeToUiPreferences(setPreferences), []);
 
   useEffect(() => {
     setRevealedCount(0);
