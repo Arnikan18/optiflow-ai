@@ -97,7 +97,7 @@ export function PlaybackControls({
               disabled={playback.totalCount === 0 || playback.isCaughtUp}
               className="rounded-lg border border-border-base bg-abyss px-3 py-2 text-[10px] font-semibold text-ink-secondary hover:text-ink-primary disabled:opacity-35 focus-ring"
             >
-              {playback.isPaused ? 'Resume' : 'Pause'}
+              {playback.isPaused ? 'Resume walkthrough' : 'Pause walkthrough'}
             </button>
             <button
               type="button"
@@ -105,7 +105,7 @@ export function PlaybackControls({
               disabled={playback.bufferedCount === 0}
               className="rounded-lg border border-border-base bg-abyss px-3 py-2 text-[10px] font-semibold text-ink-secondary hover:text-ops-cyan disabled:opacity-35 focus-ring"
             >
-              Next check
+              Show next card
             </button>
             <button
               type="button"

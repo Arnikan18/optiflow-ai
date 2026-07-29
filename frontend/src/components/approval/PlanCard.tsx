@@ -5,8 +5,8 @@ import type { CandidatePlan } from '../../types/api';
 interface PlanCardProps {
   plan: CandidatePlan;
   isRecommended: boolean;
-  onApprove: (plan: CandidatePlan) => void;
-  approving: boolean;
+  onSelect: (plan: CandidatePlan) => void;
+  busy: boolean;
 }
 
 const PROFILE_ACCENTS: Record<string, { border: string; badge: string; glow: string }> = {
@@ -33,7 +33,7 @@ function MetricRow({ label, value, unit = '' }: { label: string; value: string |
   );
 }
 
-export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCardProps) {
+export function PlanCard({ plan, isRecommended, onSelect, busy }: PlanCardProps) {
   const [showExplanation, setShowExplanation] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
 
@@ -150,8 +150,8 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
       {/* Approve button */}
       <div className="px-5 py-4 mt-auto">
         <button
-          onClick={() => onApprove(plan)}
-          disabled={approving}
+          onClick={() => onSelect(plan)}
+          disabled={busy}
           className={`w-full py-3 rounded-lg font-bold text-sm tracking-widest uppercase transition-all duration-200
             disabled:opacity-40 disabled:cursor-not-allowed
             ${isRecommended
@@ -159,13 +159,13 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
               : 'bg-surface border border-border-base text-ink-primary hover:border-ops-amber hover:text-ops-amber'
             }`}
         >
-          {approving ? (
+          {busy ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
               Approving…
             </span>
           ) : (
-            `Approve ${profile}`
+            isRecommended ? 'Review recommended plan' : `Review ${profile} override`
           )}
         </button>
       </div>

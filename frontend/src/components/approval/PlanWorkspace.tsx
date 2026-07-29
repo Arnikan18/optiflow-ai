@@ -228,22 +228,37 @@ function ComparisonMatrix({
 }
 
 export function PlanWorkspace({ runId, plans, recommendedPlanId, onApproved }: PlanWorkspaceProps) {
-  const [approving, setApproving] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<CandidatePlan | null>(null);
+  const [confirmReject, setConfirmReject] = useState(false);
+  const [actionInFlight, setActionInFlight] = useState<'approve' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sorted = sortPlans(plans, recommendedPlanId);
 
-  const handleApprove = async (plan: CandidatePlan) => {
-    setApproving(true);
+  const handleApprove = async () => {
+    if (!pendingPlan) return;
+    setActionInFlight('approve');
     setError(null);
     try {
       await api.approveRun(runId, {
         approval_status: 'APPROVED',
-        recommended_plan: plan,
+        recommended_plan: pendingPlan,
       });
       onApproved();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Approval failed');
-      setApproving(false);
+      setActionInFlight(null);
+    }
+  };
+
+  const handleReject = async () => {
+    setActionInFlight('reject');
+    setError(null);
+    try {
+      await api.approveRun(runId, { approval_status: 'REJECTED' });
+      onApproved();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Rejection failed');
+      setActionInFlight(null);
     }
   };
 
@@ -268,6 +283,48 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, onApproved }: P
         </div>
       )}
 
+      {pendingPlan && (
+        <section className="rounded-2xl border border-ops-amber bg-ops-amber/5 p-5 shadow-card" aria-label="Confirm plan selection">
+          <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-amber">
+            Review before execution
+          </p>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mt-2">
+            <div>
+              <h3 className="text-base font-extrabold text-ink-primary">
+                {profileName(pendingPlan)}
+                {pendingPlan.plan_id !== recommendedPlanId && (
+                  <span className="ml-2 rounded-full bg-ops-violet/10 px-2 py-1 text-[8px] font-mono uppercase text-ops-violet">
+                    explicit override
+                  </span>
+                )}
+              </h3>
+              <p className="text-[10px] leading-relaxed text-ink-secondary mt-2 max-w-2xl">
+                Confirming sends this exact backend plan to Core and starts SAGA execution. The selected plan is
+                recorded; Core does not currently accept a separate override-reason field.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setPendingPlan(null)}
+                disabled={actionInFlight !== null}
+                className="rounded-lg border border-border-base bg-abyss px-4 py-2.5 text-[10px] font-semibold text-ink-secondary disabled:opacity-40 focus-ring"
+              >
+                Keep comparing
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleApprove()}
+                disabled={actionInFlight !== null}
+                className="rounded-lg bg-ops-amber px-4 py-2.5 text-[10px] font-bold text-white disabled:opacity-40 focus-ring"
+              >
+                {actionInFlight === 'approve' ? 'Starting execution…' : 'Confirm and execute'}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {sorted.length > 0 ? (
         <>
           <ComparisonMatrix plans={sorted} recommendedPlanId={recommendedPlanId} />
@@ -287,12 +344,62 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, onApproved }: P
                   key={plan.plan_id}
                   plan={plan}
                   isRecommended={plan.plan_id === recommendedPlanId}
-                  onApprove={handleApprove}
-                  approving={approving}
+                  onSelect={setPendingPlan}
+                  busy={actionInFlight !== null}
                 />
               ))}
             </div>
           </div>
+
+          <details className="rounded-2xl border border-border-dim bg-deep/60">
+            <summary className="cursor-pointer px-5 py-4 text-xs font-bold text-ink-primary focus-ring rounded">
+              Continue manually or reject these plans
+            </summary>
+            <div className="px-5 pb-5 border-t border-border-dim pt-4">
+              <ol className="grid sm:grid-cols-3 gap-2">
+                {[
+                  'Rank incidents by SLA deadline and customer impact.',
+                  'Match required skills against confirmed available capacity.',
+                  'Record the chosen tradeoff before changing each system.',
+                ].map((step, index) => (
+                  <li key={step} className="rounded-xl border border-border-dim bg-abyss p-3 text-[10px] leading-relaxed text-ink-secondary">
+                    <span className="block text-[8px] font-mono text-ops-cyan mb-1">0{index + 1}</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+              <p className="text-[9px] leading-relaxed text-ink-muted mt-3">
+                Goal-change instructions are not supported by the current Core contract. Reject this proposal and
+                start a revised goal if the decision itself must change.
+              </p>
+              {!confirmReject ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmReject(true)}
+                  className="mt-4 text-[10px] font-semibold text-ops-rose hover:underline focus-ring rounded"
+                >
+                  Reject automated proposal
+                </button>
+              ) : (
+                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-ops-rose/30 bg-ops-rose/5 p-3">
+                  <p className="text-[10px] text-ink-secondary flex-1">
+                    Rejecting ends this automated route without executing a plan.
+                  </p>
+                  <button type="button" onClick={() => setConfirmReject(false)} className="text-[10px] font-semibold text-ink-muted">
+                    Go back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleReject()}
+                    disabled={actionInFlight !== null}
+                    className="rounded-lg bg-ops-rose px-3 py-2 text-[10px] font-bold text-white disabled:opacity-40"
+                  >
+                    {actionInFlight === 'reject' ? 'Rejecting…' : 'Confirm rejection'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </details>
         </>
       ) : (
         <div className="border border-border-dim rounded-xl p-12 text-center">
