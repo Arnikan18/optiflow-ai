@@ -523,7 +523,6 @@ export function SettingsPage() {
     { label: 'Backup 1', apiKey: '' },
     { label: 'Backup 2', apiKey: '' },
   ]);
-  const [adminKey, setAdminKey] = useState('');
   const [endpointAvailable, setEndpointAvailable] = useState<boolean | null>(null);
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -614,7 +613,6 @@ export function SettingsPage() {
           api_key: entry.apiKey.trim(),
           priority,
         }));
-      if (!adminKey.trim()) throw new Error('Enter the Core admin key for this secure change.');
       if (credentials.length === 0) throw new Error('Enter at least one provider API key.');
 
       const payload: LLMSettingsPayload = {
@@ -629,8 +627,8 @@ export function SettingsPage() {
         },
       };
       const result = action === 'test'
-        ? await api.testLLMSettings(payload, adminKey.trim())
-        : await api.saveLLMSettings(payload, adminKey.trim());
+        ? await api.testLLMSettings(payload)
+        : await api.saveLLMSettings(payload);
       if (!result.connected) {
         throw new Error(result.credentials
           .filter((entry) => !entry.connected)
@@ -658,8 +656,7 @@ export function SettingsPage() {
     setConnectionMessage(null);
     setConnectionError(null);
     try {
-      if (!adminKey.trim()) throw new Error('Enter the Core admin key to change the runtime mode.');
-      const status = await api.disconnectLLM(null, adminKey.trim());
+      const status = await api.disconnectLLM(null);
       setSettingsStatus(status);
       updatePreference('decisionEngine', 'rules_only');
       setConnectionMessage('Core is now using the deterministic rules-only engine. Saved provider credentials were removed.');
@@ -674,7 +671,7 @@ export function SettingsPage() {
     setConnectionMessage(null);
     setConnectionError(null);
     if (mode === 'rules_only' && settingsStatus?.mode === 'ai_assisted') {
-      setConnectionError('Core is currently AI-assisted. Enter the admin key below and choose “Switch Core to rules-only” to remove saved credentials safely.');
+      setConnectionError('Core is currently AI-assisted. Choose “Switch Core to rules-only” below to remove saved credentials safely.');
       return;
     }
     updatePreference('decisionEngine', mode);
@@ -870,7 +867,7 @@ export function SettingsPage() {
                   <div>
                     <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-muted">Secure provider connection</p>
                     <p className="text-xs text-ink-secondary mt-1.5">
-                      Keys stay in this form only until sent to encrypted Core storage.
+                      Enter only provider keys. Core authorization stays in the server proxy, and provider keys move directly to encrypted Core storage.
                     </p>
                   </div>
                   <span className={`rounded-full border px-3 py-1.5 text-[8px] font-mono font-semibold uppercase tracking-[0.1em] ${
@@ -955,18 +952,6 @@ export function SettingsPage() {
                     </div>
                   </div>
                 )}
-
-                <label className="block mt-4">
-                  <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ink-muted">Core admin key</span>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={adminKey}
-                    onChange={(event) => setAdminKey(event.target.value)}
-                    placeholder="Required for secure settings changes"
-                    className="mt-2 w-full rounded-xl border border-border-base bg-abyss px-4 py-3 text-xs text-ink-primary placeholder:text-ink-ghost focus-ring"
-                  />
-                </label>
 
                 {!endpointAvailable && endpointAvailable !== null && (
                   <div className="mt-4 rounded-xl border border-ops-orange/25 bg-ops-orange/[0.055] p-4">

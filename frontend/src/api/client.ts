@@ -224,33 +224,27 @@ export const api = {
 
   testLLMSettings(
     payload: LLMSettingsPayload,
-    adminKey: string,
   ): Promise<LLMConnectionResult> {
     return request('/settings/llm/test', {
       method: 'POST',
-      headers: { 'X-Admin-Key': adminKey },
       body: JSON.stringify(payload),
     });
   },
 
   saveLLMSettings(
     payload: LLMSettingsPayload,
-    adminKey: string,
   ): Promise<LLMConnectionResult> {
     return request('/settings/llm', {
       method: 'POST',
-      headers: { 'X-Admin-Key': adminKey },
       body: JSON.stringify(payload),
     });
   },
 
   disconnectLLM(
     provider: LLMProviderName | null,
-    adminKey: string,
   ): Promise<LLMSettingsStatus> {
     return request('/settings/llm/disconnect', {
       method: 'POST',
-      headers: { 'X-Admin-Key': adminKey },
       body: JSON.stringify({ provider }),
     });
   },
