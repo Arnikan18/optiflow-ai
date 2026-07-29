@@ -1,135 +1,224 @@
-import type { RunSummary, RunEvent } from '../../types/api';
+import type { RunEvent, RunSummary } from '../../types/api';
 
 interface SummaryPanelProps {
   runData: RunSummary | null;
   events: RunEvent[];
 }
 
-function ReceiptCard({ event }: { event: RunEvent }) {
-  const time = event.received_at
-    ? new Date(event.received_at).toLocaleTimeString()
-    : '';
+interface ExecutionReceipt {
+  receipt_id?: string;
+  status?: string;
+  actions?: string[];
+  allocation?: {
+    specialist_id?: string;
+    incident_id?: string;
+    customer_id?: string;
+  };
+}
+
+function readReceipts(events: RunEvent[]): ExecutionReceipt[] {
+  return events.flatMap((event) => {
+    const receipts = event.payload?.receipts;
+    return Array.isArray(receipts) ? receipts as ExecutionReceipt[] : [];
+  });
+}
+
+function readableAction(action: string): string {
+  const labels: Record<string, string> = {
+    RESERVE_TENTATIVE: 'Capacity held tentatively',
+    NOTIFY: 'Assignment request sent',
+    CREATE_NOTIFICATION: 'Assignment request sent',
+    SPECIALIST_ACCEPTED: 'Specialist accepted',
+    SPECIALIST_REJECTED: 'Specialist rejected',
+    SPECIALIST_TIMEOUT: 'Specialist timed out',
+    RESERVE_CONFIRM: 'Capacity reservation confirmed',
+    RESERVE_CANCELLED: 'Tentative reservation cancelled',
+    ASSIGN: 'Incident assigned',
+    ASSIGN_INCIDENT: 'Incident assigned',
+  };
+  return labels[action] ?? action.replace(/_/g, ' ').toLowerCase();
+}
+
+function displaySummary(value: RunSummary['business_summary']): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+function ReceiptCard({ receipt }: { receipt: ExecutionReceipt }) {
+  const success = receipt.status === 'SUCCESS';
+  const allocation = receipt.allocation ?? {};
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-border-dim last:border-0 animate-scan-in">
-      <div className="w-2 h-2 rounded-full bg-ops-emerald mt-1.5 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-mono text-ops-emerald uppercase tracking-wider">
-          {event.event_type.replace(/_/g, ' ')}
-        </p>
-        {event.summary && (
-          <p className="text-sm text-ink-secondary mt-0.5 leading-relaxed">{event.summary}</p>
-        )}
+    <article className={`rounded-2xl border p-4 ${
+      success
+        ? 'border-ops-emerald/25 bg-ops-emerald/[0.045]'
+        : 'border-ops-violet/30 bg-ops-violet/[0.05]'
+    }`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[9px] font-mono text-ink-muted">
+          {receipt.receipt_id ?? 'Receipt without identifier'}
+        </span>
+        <span className={`rounded-full border px-2.5 py-1 text-[8px] font-mono font-semibold uppercase ${
+          success
+            ? 'border-ops-emerald/25 bg-ops-emerald/10 text-ops-emerald'
+            : 'border-ops-violet/25 bg-ops-violet/10 text-ops-violet'
+        }`}>
+          {receipt.status ?? 'unknown'}
+        </span>
       </div>
-      <span className="text-xs font-mono text-ink-muted shrink-0">{time}</span>
-    </div>
+      <div className="grid sm:grid-cols-2 gap-3 mt-4">
+        <div>
+          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">Specialist</p>
+          <p className="text-xs font-bold text-ink-primary mt-1">{allocation.specialist_id ?? 'Not reported'}</p>
+        </div>
+        <div>
+          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">Incident</p>
+          <p className="text-xs font-bold text-ink-primary mt-1">{allocation.incident_id ?? 'Not reported'}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border-dim">
+        {(receipt.actions ?? []).map((action) => (
+          <span key={action} className="rounded-full border border-border-dim bg-abyss px-2.5 py-1 text-[9px] text-ink-secondary">
+            {readableAction(action)}
+          </span>
+        ))}
+      </div>
+    </article>
   );
 }
 
 export function SummaryPanel({ runData, events }: SummaryPanelProps) {
-  const isFailed = runData?.status === 'FAILED';
+  const receipts = readReceipts(events);
+  const successfulReceipts = receipts.filter((receipt) => receipt.status === 'SUCCESS');
+  const nonSuccessReceipts = receipts.filter((receipt) => receipt.status !== 'SUCCESS');
+  const latestSaga = [...events].reverse().find((event) =>
+    event.event_type === 'SAGA_COMPLETED' || event.event_type === 'SAGA_FAILED');
+  const sagaFailed = latestSaga?.event_type === 'SAGA_FAILED';
+  const routeFailed = runData?.status === 'FAILED' || sagaFailed;
+  const hasVerifiedWrites = successfulReceipts.length > 0 && !sagaFailed;
+  const businessSummary = displaySummary(runData?.business_summary ?? null);
+  const changeSummary = displaySummary(runData?.change_summary ?? null);
 
-  const completionEvents = events.filter((e) =>
-    ['RUN_COMPLETED', 'PLAN_APPROVED', 'SAGA_EXECUTING', 'RUN_FAILED'].includes(e.event_type),
-  );
-
-  const allocationEvents = events.filter((e) =>
-    e.event_type.startsWith('SAGA') || e.event_type.includes('ASSIGN') || e.event_type.includes('RESERVE'),
-  );
+  const hero = routeFailed
+    ? {
+        eyebrow: 'Execution review required',
+        title: 'The route did not prove a successful operational outcome.',
+        description:
+          'Review the failed boundary and compensation evidence before retrying. A terminal run status is not treated as proof of successful writes.',
+        border: 'border-ops-rose/35 bg-ops-rose/[0.055]',
+        tone: 'text-ops-rose',
+      }
+    : hasVerifiedWrites
+      ? {
+          eyebrow: 'Verified execution outcome',
+          title: `${successfulReceipts.length} allocation ${successfulReceipts.length === 1 ? 'receipt confirms' : 'receipts confirm'} the approved change.`,
+          description:
+            'These results come from SAGA receipts in the audit stream. Each receipt names the allocation and the operations recorded for it.',
+          border: 'border-ops-emerald/35 bg-ops-emerald/[0.055]',
+          tone: 'text-ops-emerald',
+        }
+      : {
+          eyebrow: 'Audit route closed',
+          title: 'Core closed this route without execution receipts in the visible audit stream.',
+          description:
+            'The decision record is available, but this screen will not claim reservations, assignments, or notifications succeeded without receipt evidence.',
+          border: 'border-ops-orange/30 bg-ops-orange/[0.05]',
+          tone: 'text-ops-orange',
+        };
 
   return (
-    <div className="animate-fade-up space-y-6 max-w-3xl mx-auto">
-      {/* Hero status */}
-      <div
-        className={`rounded-2xl border p-6 text-center space-y-3
-          ${isFailed
-            ? 'border-ops-rose/40 bg-ops-rose/8'
-            : 'border-ops-emerald/40 bg-ops-emerald/8 glow-emerald'
-          }`}
-      >
-        <div className="text-5xl">{isFailed ? '❌' : '✅'}</div>
-        <h2 className="text-xl font-bold text-ink-primary">
-          {isFailed ? 'Execution Failed' : 'Mission Complete'}
-        </h2>
-        <p className="text-sm text-ink-secondary max-w-lg mx-auto leading-relaxed">
-          {isFailed
-            ? 'The SAGA transaction was rolled back. No partial changes were committed. Review the error details below and retry from the Control Room.'
-            : 'All allocation changes have been successfully committed to enterprise systems. The full audit trail is now closed and permanently stored.'
-          }
+    <section className="animate-fade-up space-y-6" aria-labelledby="outcome-title">
+      <div className={`rounded-[1.5rem] border p-6 sm:p-7 ${hero.border}`}>
+        <p className={`text-[8px] font-mono font-semibold uppercase tracking-[0.17em] ${hero.tone}`}>
+          {hero.eyebrow}
         </p>
-        <div className="flex items-center justify-center gap-2 font-mono text-xs text-ink-muted">
-          <span>Run ID:</span>
-          <span className="text-ink-secondary">{runData?.run_id ?? '—'}</span>
-        </div>
+        <h2 id="outcome-title" className="max-w-3xl text-xl sm:text-2xl font-extrabold tracking-[-0.04em] text-ink-primary mt-2">
+          {hero.title}
+        </h2>
+        <p className="max-w-3xl text-xs sm:text-sm leading-relaxed text-ink-secondary mt-3">
+          {hero.description}
+        </p>
+        <p className="text-[9px] font-mono text-ink-muted mt-4">Audit identity: {runData?.run_id ?? 'not reported'}</p>
       </div>
 
-      {/* What this means — education block */}
-      {!isFailed && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            {
-              icon: '🔗',
-              title: 'Audit Trail Closed',
-              desc: 'Every decision in this session — goal, evidence, plans, approval, execution — is permanently recorded and linked to the Run ID.',
-            },
-            {
-              icon: '📋',
-              title: 'Specialists Assigned',
-              desc: 'Workforce reservations have been committed. Specialists are now allocated to their approved incidents in the system.',
-            },
-            {
-              icon: '🔔',
-              title: 'Notifications Dispatched',
-              desc: 'Assignment notifications have been sent to affected specialists and customers through the Communication service.',
-            },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} className="bg-deep border border-border-dim rounded-xl p-4 space-y-2">
-              <span className="text-2xl">{icon}</span>
-              <p className="text-sm font-semibold text-ink-primary">{title}</p>
-              <p className="text-xs text-ink-muted leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          ['Successful receipts', successfulReceipts.length],
+          ['Non-success receipts', nonSuccessReceipts.length],
+          ['Replans', runData?.replan_count ?? 0],
+          ['Final Core status', runData?.status?.replace(/_/g, ' ') ?? 'unknown'],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-2xl border border-border-dim bg-deep/55 p-4">
+            <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">{label}</p>
+            <p className="text-lg font-extrabold text-ink-primary mt-2">{value}</p>
+          </div>
+        ))}
+      </div>
 
-      {/* Execution log */}
-      {allocationEvents.length > 0 && (
-        <div className="bg-deep border border-border-dim rounded-xl p-5">
-          <p className="text-xs font-mono text-ink-secondary uppercase tracking-widest mb-4">
-            Execution Receipts
-          </p>
+      {receipts.length > 0 ? (
+        <div className="rounded-[1.5rem] border border-border-dim bg-abyss p-5 sm:p-6">
           <div>
-            {allocationEvents.map((e) => (
-              <ReceiptCard key={e.event_id} event={e} />
+            <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
+              Execution receipts
+            </p>
+            <h3 className="text-base font-extrabold tracking-[-0.025em] text-ink-primary mt-1.5">
+              What the services actually recorded
+            </h3>
+          </div>
+          <div className="grid lg:grid-cols-2 gap-3 mt-5">
+            {receipts.map((receipt, index) => (
+              <ReceiptCard key={receipt.receipt_id ?? `receipt-${index}`} receipt={receipt} />
             ))}
           </div>
         </div>
-      )}
-
-      {/* All run events (collapsed) */}
-      {completionEvents.length > 0 && (
-        <div className="bg-deep border border-border-dim rounded-xl p-5">
-          <p className="text-xs font-mono text-ink-secondary uppercase tracking-widest mb-4">
-            Terminal Events
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border-base bg-deep/45 p-6">
+          <p className="text-sm font-bold text-ink-primary">No execution receipt payload is available.</p>
+          <p className="text-[10px] leading-relaxed text-ink-muted mt-2">
+            Review the execution relay and Core logs before making an operational success claim.
           </p>
-          {completionEvents.map((e) => (
-            <ReceiptCard key={e.event_id} event={e} />
-          ))}
         </div>
       )}
 
-      {/* Learning callout */}
-      <div className="bg-abyss border border-border-dim rounded-xl p-5 space-y-3">
-        <p className="text-xs font-mono text-ops-amber uppercase tracking-widest">
-          Decision-Making Without the AI
+      {(businessSummary || changeSummary) && (
+        <div className="grid md:grid-cols-2 gap-3">
+          {businessSummary && (
+            <div className="rounded-2xl border border-border-dim bg-deep/55 p-5">
+              <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ops-cyan">Business summary</p>
+              <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-ink-secondary">{businessSummary}</pre>
+            </div>
+          )}
+          {changeSummary && (
+            <div className="rounded-2xl border border-border-dim bg-deep/55 p-5">
+              <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ops-violet">Change summary</p>
+              <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-ink-secondary">{changeSummary}</pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border-dim bg-abyss p-5">
+        <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-amber">
+          Manual verification route
         </p>
-        <p className="text-sm text-ink-secondary leading-relaxed">
-          Even when the AI is unavailable, you can replicate this process manually: query CRM for ARR and tier data, query Incident for SLA deadlines, query Workforce for availability, then score allocations against the same objectives. The system's value is in doing this at scale and in parallel — but the decision logic remains yours.
-        </p>
-        <p className="text-sm text-ink-secondary leading-relaxed">
-          The four profiles you compared (Balanced, SLA-First, Revenue-First, Fairness-First) represent real trade-off dimensions every operations manager faces. Understanding which profile you chose and why is the most important skill this system teaches.
-        </p>
+        <ol className="grid sm:grid-cols-3 gap-3 mt-4">
+          {[
+            'Confirm reservation status in Workforce.',
+            'Confirm owner and status in Incident.',
+            'Confirm assignment-request state in Communication.',
+          ].map((instruction, index) => (
+            <li key={instruction} className="rounded-xl border border-border-dim bg-deep/55 p-4">
+              <span className="text-[8px] font-mono text-ops-amber">0{index + 1}</span>
+              <p className="text-[10px] leading-relaxed text-ink-secondary mt-2">{instruction}</p>
+            </li>
+          ))}
+        </ol>
       </div>
-    </div>
+    </section>
   );
 }
