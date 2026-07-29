@@ -1,9 +1,8 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/layout/Shell';
 import { ControlRoomPage } from './pages/ControlRoomPage';
 import { RunCockpitPage } from './pages/RunCockpitPage';
 import {
-  DecisionFlowHubPage,
   DemoLabPage,
   RunHistoryPage,
   SettingsPage,
@@ -15,7 +14,7 @@ export default function App() {
       <Shell>
         <Routes>
           <Route path="/" element={<ControlRoomPage />} />
-          <Route path="/decision-flow" element={<DecisionFlowHubPage />} />
+          <Route path="/decision-flow" element={<Navigate to="/" replace />} />
           <Route path="/run/:runId" element={<RunCockpitPage />} />
           <Route path="/history" element={<RunHistoryPage />} />
           <Route path="/demo-lab" element={<DemoLabPage />} />
@@ -27,7 +26,7 @@ export default function App() {
                 <p className="text-5xl">404</p>
                 <p className="text-sm text-ink-muted">Page not found.</p>
                 <Link to="/" className="text-xs font-mono text-ops-amber hover:underline">
-                  ← Return to Overview
+                  ← Return to Today
                 </Link>
               </div>
             )}

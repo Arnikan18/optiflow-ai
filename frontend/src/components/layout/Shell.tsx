@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
-type NavIcon = 'overview' | 'flow' | 'history' | 'lab' | 'settings';
+type NavIcon = 'today' | 'history' | 'lab' | 'settings';
 
 type NavigationItem = {
   number: string;
@@ -15,41 +15,33 @@ type NavigationItem = {
 const NAVIGATION: NavigationItem[] = [
   {
     number: '01',
-    label: 'Overview',
-    shortLabel: 'Overview',
-    description: 'Portfolio and starting context',
+    label: "Today's Goal",
+    shortLabel: 'Today',
+    description: 'Live goal and decision journey',
     to: '/',
-    icon: 'overview',
+    icon: 'today',
   },
   {
     number: '02',
-    label: 'Decision Flow',
-    shortLabel: 'Flow',
-    description: 'Every check and decision',
-    to: '/decision-flow',
-    icon: 'flow',
-  },
-  {
-    number: '03',
-    label: 'Run History',
+    label: 'History',
     shortLabel: 'History',
-    description: 'Revisit earlier outcomes',
+    description: 'Continue and review decisions',
     to: '/history',
     icon: 'history',
   },
   {
-    number: '04',
-    label: 'Demo Lab',
-    shortLabel: 'Lab',
-    description: 'Controlled response scenarios',
+    number: '03',
+    label: 'Scenario Lab',
+    shortLabel: 'Scenarios',
+    description: 'Test controlled outcomes',
     to: '/demo-lab',
     icon: 'lab',
   },
   {
-    number: '05',
+    number: '04',
     label: 'Settings',
     shortLabel: 'Settings',
-    description: 'Playback and accessibility',
+    description: 'Appearance and playback',
     to: '/settings',
     icon: 'settings',
   },
@@ -57,17 +49,11 @@ const NAVIGATION: NavigationItem[] = [
 
 function Icon({ name }: { name: NavIcon }) {
   const paths: Record<NavIcon, ReactNode> = {
-    overview: (
+    today: (
       <>
-        <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
-      </>
-    ),
-    flow: (
-      <>
-        <circle cx="5" cy="6" r="2" />
-        <circle cx="19" cy="12" r="2" />
-        <circle cx="5" cy="18" r="2" />
-        <path d="M7 6h3a4 4 0 0 1 4 4v0a2 2 0 0 0 2 2h1M7 18h3a4 4 0 0 0 4-4v0" />
+        <path d="M4 19.5V8.8a2 2 0 0 1 1-1.7l6-3.5a2 2 0 0 1 2 0l6 3.5a2 2 0 0 1 1 1.7v10.7" />
+        <path d="M8 21v-7h8v7M3 21h18" />
+        <path d="m9.5 10.2 1.6 1.6 3.5-3.6" />
       </>
     ),
     history: (
@@ -108,10 +94,7 @@ function Icon({ name }: { name: NavIcon }) {
 
 function isItemActive(pathname: string, item: NavigationItem): boolean {
   if (item.to === '/') {
-    return pathname === '/';
-  }
-  if (item.to === '/decision-flow') {
-    return pathname === '/decision-flow' || pathname.startsWith('/run/');
+    return pathname === '/' || pathname.startsWith('/run/');
   }
   return pathname.startsWith(item.to);
 }
@@ -174,7 +157,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <nav
         className="lg:hidden sticky top-16 z-40 border-b border-border-dim bg-abyss/95 backdrop-blur overflow-x-auto"
-        aria-label="Workspace stations"
+        aria-label="Decision workspace"
       >
         <div className="min-w-max px-3 flex">
           {NAVIGATION.map((item) => {
@@ -201,14 +184,14 @@ export function Shell({ children }: { children: ReactNode }) {
         <aside className="hidden lg:flex w-60 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-border-dim bg-abyss flex-col">
           <div className="px-5 pt-6 pb-4">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-ink-muted">
-              Workspace stations
+              Decision workspace
             </p>
             <p className="text-xs leading-relaxed text-ink-secondary mt-2">
-              Move between context, reasoning, tests, and records.
+              Set today's goal, understand each choice, and return to any outcome.
             </p>
           </div>
 
-          <nav className="px-3 space-y-1" aria-label="Workspace stations">
+          <nav className="px-3 space-y-1" aria-label="Decision workspace">
             {NAVIGATION.map((item) => {
               const active = isItemActive(pathname, item);
               return (
