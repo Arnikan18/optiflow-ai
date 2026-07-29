@@ -37,7 +37,8 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
   const [showExplanation, setShowExplanation] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
 
-  const accent = PROFILE_ACCENTS[plan.profile] ?? PROFILE_ACCENTS['Balanced'];
+  const profile = plan.profile_name ?? plan.profile;
+  const accent = PROFILE_ACCENTS[profile] ?? PROFILE_ACCENTS['Balanced'];
   const matchRatePct = typeof plan.metrics.match_rate === 'number'
     ? `${(plan.metrics.match_rate <= 1
       ? plan.metrics.match_rate * 100
@@ -45,7 +46,12 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
     ).toFixed(1)}%`
     : plan.metrics.match_rate;
   const arrProtected = typeof plan.metrics.arr_protected === 'number'
-    ? `$${(plan.metrics.arr_protected / 1000).toFixed(0)}k`
+    ? new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        notation: plan.metrics.arr_protected >= 1_000_000 ? 'compact' : 'standard',
+        maximumFractionDigits: 0,
+      }).format(plan.metrics.arr_protected)
     : plan.metrics.arr_protected;
 
   return (
@@ -60,7 +66,7 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
       {isRecommended && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
           <span className="bg-ops-amber text-void text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest whitespace-nowrap">
-            ★ System Recommended
+            Recommended for this goal
           </span>
         </div>
       )}
@@ -69,7 +75,7 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
       <div className={`px-5 pt-6 pb-4 border-b border-border-dim ${isRecommended ? 'pt-8' : ''}`}>
         <div className="flex items-center justify-between mb-1">
           <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded uppercase tracking-wider ${accent.badge}`}>
-            {plan.profile}
+            {profile}
           </span>
           <span className="text-xs font-mono text-ink-muted">{plan.plan_id}</span>
         </div>
@@ -92,12 +98,15 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
           onClick={() => setShowExplanation(!showExplanation)}
           className="w-full flex items-center justify-between text-xs font-mono text-ink-secondary hover:text-ink-primary transition-colors"
         >
-          <span className="uppercase tracking-widest">AI Explanation</span>
+          <span className="uppercase tracking-widest">Plan reasoning</span>
           <span className={`transition-transform duration-200 ${showExplanation ? 'rotate-180' : ''}`}>▼</span>
         </button>
         {showExplanation && (
           <div className="mt-3 markdown-body max-h-48 overflow-y-auto pr-1 animate-fade-up">
             <Markdown>{plan.explanation}</Markdown>
+            <p className="text-[9px] text-ink-ghost mt-3">
+              This explanation is supplied by the backend and may come from configured AI assistance or deterministic rules.
+            </p>
           </div>
         )}
       </div>
@@ -156,7 +165,7 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
               Approving…
             </span>
           ) : (
-            `Approve ${plan.profile}`
+            `Approve ${profile}`
           )}
         </button>
       </div>
