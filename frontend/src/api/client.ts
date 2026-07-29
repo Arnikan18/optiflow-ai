@@ -11,6 +11,11 @@ import type {
   ExecutionVerificationPayload,
   FailureService,
   FailureSimulationPayload,
+  LLMConnectionResult,
+  LLMModelCatalog,
+  LLMProviderName,
+  LLMSettingsPayload,
+  LLMSettingsStatus,
   RunSummary,
   SimulationState,
   SpecialistResponseSimulationPayload,
@@ -205,6 +210,48 @@ export const api = {
     return requestEnvelope('/demo/simulation/reset', {
       method: 'POST',
       body: JSON.stringify(services ? { services } : {}),
+    });
+  },
+
+  // Secure provider settings
+  getLLMModels(): Promise<LLMModelCatalog> {
+    return request('/settings/llm/models');
+  },
+
+  getLLMSettings(): Promise<LLMSettingsStatus> {
+    return request('/settings/llm');
+  },
+
+  testLLMSettings(
+    payload: LLMSettingsPayload,
+    adminKey: string,
+  ): Promise<LLMConnectionResult> {
+    return request('/settings/llm/test', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  saveLLMSettings(
+    payload: LLMSettingsPayload,
+    adminKey: string,
+  ): Promise<LLMConnectionResult> {
+    return request('/settings/llm', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  disconnectLLM(
+    provider: LLMProviderName | null,
+    adminKey: string,
+  ): Promise<LLMSettingsStatus> {
+    return request('/settings/llm/disconnect', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ provider }),
     });
   },
 

@@ -22,6 +22,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 .npm/
 .pnpm-store/
 

@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import type { RecentRun, RunStatus, RunSummary } from '../types/api';
+import type {
+  LLMProviderName,
+  LLMSettingsPayload,
+  LLMSettingsStatus,
+  RecentRun,
+  RunStatus,
+  RunSummary,
+} from '../types/api';
 import {
   DEFAULT_UI_PREFERENCES,
   readUiPreferences,
@@ -484,7 +491,9 @@ const PACE_OPTIONS: { id: WalkthroughPace; label: string; value: string; descrip
 
 const PROVIDER_MODELS: Record<string, string[]> = {
   gemini: [
+    'gemini-3.6-flash',
     'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
@@ -506,8 +515,9 @@ interface KeyDraft {
 export function SettingsPage() {
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
   const [preferences, setPreferences] = useState<UiPreferences>(readUiPreferences);
-  const [provider, setProvider] = useState<'gemini' | 'groq'>('gemini');
-  const [model, setModel] = useState(PROVIDER_MODELS.gemini[2]);
+  const [provider, setProvider] = useState<LLMProviderName>('gemini');
+  const [providerModels, setProviderModels] = useState(PROVIDER_MODELS);
+  const [model, setModel] = useState(PROVIDER_MODELS.gemini[0]);
   const [keys, setKeys] = useState<KeyDraft[]>([
     { label: 'Primary', apiKey: '' },
     { label: 'Backup 1', apiKey: '' },
@@ -518,6 +528,7 @@ export function SettingsPage() {
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionBusy, setConnectionBusy] = useState<'test' | 'save' | null>(null);
+  const [settingsStatus, setSettingsStatus] = useState<LLMSettingsStatus | null>(null);
 
   useEffect(() => {
     const updateTheme = (event: Event) => {
@@ -531,10 +542,32 @@ export function SettingsPage() {
     let cancelled = false;
     const probe = async () => {
       try {
-        const response = await fetch('/api/v1/settings/llm/models', {
-          headers: { 'X-Request-ID': `settings-${Date.now()}` },
-        });
-        if (!cancelled) setEndpointAvailable(response.ok);
+        const [catalog, status] = await Promise.all([
+          api.getLLMModels(),
+          api.getLLMSettings(),
+        ]);
+        if (cancelled) return;
+        const models = Object.fromEntries(
+          catalog.providers.map((entry) => [entry.id, entry.models]),
+        ) as Record<LLMProviderName, string[]>;
+        setProviderModels(models);
+        setSettingsStatus(status);
+        setEndpointAvailable(true);
+        const selectedProvider = status.active_llm_provider
+          ?? catalog.providers[0]?.id
+          ?? 'gemini';
+        setProvider(selectedProvider);
+        setModel(
+          status.providers[selectedProvider]?.model_name
+            ?? catalog.providers.find((entry) => entry.id === selectedProvider)?.default_model
+            ?? models[selectedProvider][0],
+        );
+        const nextPreferences = {
+          ...readUiPreferences(),
+          decisionEngine: status.mode,
+        };
+        setPreferences(nextPreferences);
+        saveUiPreferences(nextPreferences);
       } catch {
         if (!cancelled) setEndpointAvailable(false);
       }
@@ -554,9 +587,12 @@ export function SettingsPage() {
     saveUiPreferences(next);
   };
 
-  const updateProvider = (nextProvider: 'gemini' | 'groq') => {
+  const updateProvider = (nextProvider: LLMProviderName) => {
     setProvider(nextProvider);
-    setModel(PROVIDER_MODELS[nextProvider][0]);
+    setModel(
+      settingsStatus?.providers[nextProvider]?.model_name
+        ?? providerModels[nextProvider][0],
+    );
     setConnectionMessage(null);
     setConnectionError(null);
   };
@@ -581,49 +617,67 @@ export function SettingsPage() {
       if (!adminKey.trim()) throw new Error('Enter the Core admin key for this secure change.');
       if (credentials.length === 0) throw new Error('Enter at least one provider API key.');
 
-      const path = action === 'test'
-        ? '/api/v1/settings/llm/test'
-        : '/api/v1/settings/llm';
-      const response = await fetch(path, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Key': adminKey.trim(),
-          'X-Request-ID': `settings-${Date.now()}`,
-        },
-        body: JSON.stringify({
-          version: 1,
-          mode: 'ai_assisted',
-          active_llm_provider: provider,
-          providers: {
-            [provider]: {
-              model_name: model,
-              credentials,
-            },
+      const payload: LLMSettingsPayload = {
+        version: 1,
+        mode: 'ai_assisted',
+        active_llm_provider: provider,
+        providers: {
+          [provider]: {
+            model_name: model,
+            credentials,
           },
-        }),
-      });
-      if (!response.ok) {
-        let message = `Core returned HTTP ${response.status}`;
-        try {
-          const body = await response.json() as { detail?: string; message?: string };
-          message = body.detail ?? body.message ?? message;
-        } catch {
-          // Keep the HTTP status when no JSON error is available.
-        }
-        throw new Error(message);
+        },
+      };
+      const result = action === 'test'
+        ? await api.testLLMSettings(payload, adminKey.trim())
+        : await api.saveLLMSettings(payload, adminKey.trim());
+      if (!result.connected) {
+        throw new Error(result.credentials
+          .filter((entry) => !entry.connected)
+          .map((entry) => `${entry.label}: ${entry.message}`)
+          .join(' '));
       }
       setConnectionMessage(action === 'test'
-        ? 'Connection verified. No credential was saved by this test.'
-        : 'Encrypted provider settings saved by Core.');
+        ? `Connection verified with ${result.credentials.length} credential${result.credentials.length === 1 ? '' : 's'}. Nothing was saved.`
+        : `${provider === 'gemini' ? 'Google Gemini' : 'GroqCloud'} is connected. Core encrypted and saved ${result.credentials.length} credential${result.credentials.length === 1 ? '' : 's'}.`);
       if (action === 'save') {
         setKeys((current) => current.map((entry) => ({ ...entry, apiKey: '' })));
+        const status = await api.getLLMSettings();
+        setSettingsStatus(status);
+        updatePreference('decisionEngine', 'ai_assisted');
       }
     } catch (error: unknown) {
       setConnectionError(error instanceof Error ? error.message : 'The secure settings request failed.');
     } finally {
       setConnectionBusy(null);
     }
+  };
+
+  const disconnectProvider = async () => {
+    setConnectionBusy('save');
+    setConnectionMessage(null);
+    setConnectionError(null);
+    try {
+      if (!adminKey.trim()) throw new Error('Enter the Core admin key to change the runtime mode.');
+      const status = await api.disconnectLLM(null, adminKey.trim());
+      setSettingsStatus(status);
+      updatePreference('decisionEngine', 'rules_only');
+      setConnectionMessage('Core is now using the deterministic rules-only engine. Saved provider credentials were removed.');
+    } catch (error: unknown) {
+      setConnectionError(error instanceof Error ? error.message : 'Core could not switch to rules-only mode.');
+    } finally {
+      setConnectionBusy(null);
+    }
+  };
+
+  const selectDecisionEngine = (mode: DecisionEngineMode) => {
+    setConnectionMessage(null);
+    setConnectionError(null);
+    if (mode === 'rules_only' && settingsStatus?.mode === 'ai_assisted') {
+      setConnectionError('Core is currently AI-assisted. Enter the admin key below and choose “Switch Core to rules-only” to remove saved credentials safely.');
+      return;
+    }
+    updatePreference('decisionEngine', mode);
   };
 
   const resetPersonalization = () => {
@@ -797,7 +851,7 @@ export function SettingsPage() {
                   key={id}
                   type="button"
                   aria-pressed={preferences.decisionEngine === id}
-                  onClick={() => updatePreference('decisionEngine', id)}
+                  onClick={() => selectDecisionEngine(id)}
                   className={`rounded-2xl border p-5 text-left focus-ring ${
                     preferences.decisionEngine === id
                       ? 'border-ops-amber bg-ops-amber/[0.055]'
@@ -828,7 +882,7 @@ export function SettingsPage() {
                       ? 'Checking Core'
                       : endpointAvailable
                         ? 'Secure endpoint ready'
-                        : 'Backend endpoint pending'}
+                        : 'Core unreachable'}
                   </span>
                 </div>
 
@@ -844,7 +898,7 @@ export function SettingsPage() {
                       }`}
                     >
                       <p className="text-xs font-bold text-ink-primary">{id === 'gemini' ? 'Google Gemini' : 'GroqCloud'}</p>
-                      <p className="text-[9px] text-ink-muted mt-1">{PROVIDER_MODELS[id].length} supported production models</p>
+                      <p className="text-[9px] text-ink-muted mt-1">{providerModels[id].length} supported production models</p>
                     </button>
                   ))}
                 </div>
@@ -856,7 +910,7 @@ export function SettingsPage() {
                     onChange={(event) => setModel(event.target.value)}
                     className="mt-2 w-full rounded-xl border border-border-base bg-abyss px-4 py-3 text-xs text-ink-primary focus-ring"
                   >
-                    {PROVIDER_MODELS[provider].map((modelName) => (
+                    {providerModels[provider].map((modelName) => (
                       <option key={modelName} value={modelName}>{modelName}</option>
                     ))}
                   </select>
@@ -884,6 +938,24 @@ export function SettingsPage() {
                   It does not switch models silently.
                 </p>
 
+                {settingsStatus?.active_llm_provider && (
+                  <div className="mt-4 rounded-xl border border-ops-emerald/20 bg-ops-emerald/[0.045] p-4">
+                    <p className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ops-emerald">
+                      Core runtime · {settingsStatus.active_llm_provider} · {settingsStatus.providers[settingsStatus.active_llm_provider]?.model_name}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {settingsStatus.providers[settingsStatus.active_llm_provider]?.credentials.map((credential) => (
+                        <span
+                          key={`${credential.label}-${credential.priority}`}
+                          className="rounded-full border border-border-base bg-abyss px-3 py-1.5 text-[8px] text-ink-secondary"
+                        >
+                          {credential.label} {credential.masked_key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <label className="block mt-4">
                   <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ink-muted">Core admin key</span>
                   <input
@@ -898,9 +970,9 @@ export function SettingsPage() {
 
                 {!endpointAvailable && endpointAvailable !== null && (
                   <div className="mt-4 rounded-xl border border-ops-orange/25 bg-ops-orange/[0.055] p-4">
-                    <p className="text-[10px] font-bold text-ops-orange">Secure Core routes are not available yet.</p>
+                    <p className="text-[10px] font-bold text-ops-orange">Core settings API is unreachable.</p>
                     <p className="text-[9px] leading-relaxed text-ink-muted mt-1.5">
-                      Rules-only mode remains fully usable. Connection buttons stay disabled so keys cannot be sent to an undefined endpoint.
+                      Start or restart Core API on port 8000. Rules-only decisions remain available while provider controls stay disabled.
                     </p>
                   </div>
                 )}
@@ -924,6 +996,16 @@ export function SettingsPage() {
                   >
                     {connectionBusy === 'save' ? 'Encrypting and saving…' : 'Connect provider'}
                   </button>
+                  {settingsStatus?.mode === 'ai_assisted' && (
+                    <button
+                      type="button"
+                      disabled={!endpointAvailable || connectionBusy !== null}
+                      onClick={() => void disconnectProvider()}
+                      className="rounded-xl border border-ops-rose/25 bg-ops-rose/[0.045] px-4 py-3 text-[10px] font-bold text-ops-rose hover:bg-ops-rose/10 disabled:opacity-40 focus-ring"
+                    >
+                      Switch Core to rules-only
+                    </button>
+                  )}
                 </div>
               </div>
             )}

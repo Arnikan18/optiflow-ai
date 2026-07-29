@@ -371,6 +371,70 @@ export interface ExecutionVerificationPayload {
   profile_name?: string;
 }
 
+// Secure LLM settings
+export type LLMProviderName = 'gemini' | 'groq';
+export type LLMEngineMode = 'rules_only' | 'ai_assisted';
+
+export interface LLMCredentialInput {
+  label: string;
+  api_key: string;
+  priority: number;
+}
+
+export interface LLMSettingsPayload {
+  version: 1;
+  mode: LLMEngineMode;
+  active_llm_provider: LLMProviderName | null;
+  providers: Partial<Record<LLMProviderName, {
+    model_name: string;
+    credentials: LLMCredentialInput[];
+  }>>;
+}
+
+export interface LLMProviderCatalog {
+  id: LLMProviderName;
+  label: string;
+  default_model: string;
+  models: string[];
+}
+
+export interface LLMModelCatalog {
+  version: number;
+  providers: LLMProviderCatalog[];
+}
+
+export interface LLMCredentialStatus {
+  label: string;
+  masked_key: string;
+  priority: number;
+}
+
+export interface LLMSettingsStatus {
+  version: number;
+  mode: LLMEngineMode;
+  active_llm_provider: LLMProviderName | null;
+  providers: Partial<Record<LLMProviderName, {
+    model_name: string;
+    credentials: LLMCredentialStatus[];
+  }>>;
+  source: 'database' | 'environment' | 'rules_only';
+}
+
+export interface LLMCredentialConnectionResult {
+  label: string;
+  priority: number;
+  connected: boolean;
+  message: string;
+}
+
+export interface LLMConnectionResult {
+  connected: boolean;
+  saved: boolean;
+  provider: LLMProviderName;
+  model_name: string;
+  credentials: LLMCredentialConnectionResult[];
+}
+
 // Local persistence
 export interface RecentRun {
   run_id: string;
