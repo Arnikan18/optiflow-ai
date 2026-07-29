@@ -210,7 +210,8 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
         "structured_goal": checkpoint.get("structured_goal"),
         "selected_tools": checkpoint.get("selected_tools", []),
         "business_summary": checkpoint.get("business_summary"),
-        "change_summary": checkpoint.get("change_summary")
+        "change_summary": checkpoint.get("change_summary"),
+        "personalized_recommendation": checkpoint.get("personalized_recommendation")
     }
 
 @app.post("/api/v1/runs/{run_id}/approve")

@@ -113,7 +113,7 @@ async def pause_for_approval(state: AgentState) -> dict:
     risk justifications alongside the checkpoint.
     """
     app_status = state.get("approval_status")
-    if app_status in ("APPROVED", "REJECTED"):
+    if app_status in ("APPROVED", "REJECTED", "MODIFY"):
         print(f"[pause_for_approval] Resuming: Approval status is {app_status}. Bypassing halt.")
         return {"status": "EXECUTING"}
 
