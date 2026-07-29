@@ -31,6 +31,7 @@
   --text-secondary: 89 99 95;
   --text-muted:     138 145 141;
   --text-ghost:     185 189 184;
+  --bg-authority:   29 41 38;
   --shadow-card: 0 14px 40px rgb(48 53 47 / 0.08);
 }
 
@@ -58,6 +59,7 @@
   --text-secondary: 180 195 188;
   --text-muted:     128 148 140;
   --text-ghost:     90 112 104;
+  --bg-authority:   5 11 10;
   --shadow-card: 0 18px 48px rgb(0 0 0 / 0.28);
 }
 
@@ -72,6 +74,11 @@ body {
   font-family: 'Manrope', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+}
+
+/* Dark authority surfaces remain inverse in both appearance modes. */
+.bg-ink-primary {
+  background-color: rgb(var(--bg-authority) / var(--tw-bg-opacity, 1));
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────── */

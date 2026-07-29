@@ -14,7 +14,7 @@ import { SummaryPanel } from '../components/completion/SummaryPanel';
 import { MissionGuide } from '../components/guide/MissionGuide';
 import { getActiveGuide, PHASE_GUIDES } from '../data/guideContent';
 import { useGuidedPlayback } from '../hooks/useGuidedPlayback';
-import type { RunStatus } from '../types/api';
+import type { RecentRun, RunStatus } from '../types/api';
 
 const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
   RECEIVED: { label: 'Route received', cls: 'text-ink-secondary bg-surface' },
@@ -42,6 +42,15 @@ const PHASE_INDEX: Record<string, number> = {
   complete: 7,
   failed: 7,
 };
+
+function readSavedGoal(runId: string): string | null {
+  try {
+    const runs = JSON.parse(localStorage.getItem('optiflow_runs') ?? '[]') as RecentRun[];
+    return runs.find((run) => run.run_id === runId)?.goal_text ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function RunCockpitPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -88,6 +97,10 @@ export function RunCockpitPage() {
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
   const isTerminal = presentationCaughtUp
     && (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED');
+  const goalText = readSavedGoal(runId ?? '')
+    ?? runData?.structured_goal?.objective
+    ?? runData?.structured_goal?.objectives?.[0]
+    ?? 'Operational decision goal';
 
   if (!runId) {
     return (
@@ -126,27 +139,40 @@ export function RunCockpitPage() {
 
   return (
     <div className="min-h-full paper-noise">
-      <section className="bg-abyss border-b border-border-dim">
-        <div className="max-w-[1440px] mx-auto px-5 sm:px-8 pt-6 pb-5">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-ink-muted">Decision route</span>
-              <span className="text-[10px] font-mono text-ink-secondary">#{runId.slice(0, 12)}</span>
+      <section
+        className="sticky top-[7.05rem] lg:top-16 z-30 border-b border-border-base bg-deep/95 backdrop-blur"
+        aria-label="Active goal"
+      >
+        <div className="max-w-[1440px] mx-auto px-5 sm:px-8 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-[8px] font-mono font-semibold uppercase tracking-[0.18em] text-ops-amber">
+                Today’s goal
+              </span>
+              <span className="text-[9px] font-mono text-ink-muted">#{runId.slice(0, 12)}</span>
               {badge && (
-                <span className={`text-[9px] font-mono px-2.5 py-1 rounded-full uppercase tracking-[0.12em] font-semibold ${badge.cls}`}>
+                <span className={`text-[8px] font-mono px-2 py-1 rounded-full uppercase tracking-[0.1em] font-semibold ${badge.cls}`}>
                   {badge.label}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`relative w-2 h-2 rounded-full ${connected ? 'bg-ops-cyan' : 'bg-ops-orange'}`}>
-                <span className="absolute inset-0 rounded-full bg-current animate-ping opacity-30" />
-              </span>
-              <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-ink-muted">
-                {connected ? 'Live updates' : usingFallback ? 'Safe polling' : 'Connecting'}
-              </span>
-            </div>
+            <h1 className="text-sm sm:text-base font-extrabold tracking-[-0.025em] text-ink-primary mt-1.5 truncate">
+              {goalText}
+            </h1>
           </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`relative w-2 h-2 rounded-full ${connected ? 'bg-ops-cyan' : 'bg-ops-orange'}`}>
+              <span className="absolute inset-0 rounded-full bg-current animate-ping opacity-30" />
+            </span>
+            <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-ink-muted">
+              {connected ? 'Live updates' : usingFallback ? 'Safe polling' : 'Connecting'}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-abyss border-b border-border-dim">
+        <div className="max-w-[1440px] mx-auto px-5 sm:px-8 pt-5 pb-5">
           <DecisionJourneyRail
             activeId={guide.id}
             selectedId={selectedStageId}
