@@ -40,7 +40,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     matchStatus: ['RUNNING'],
     matchNodes: ['interpret_goal'],
     whatIsHappening:
-      'Google Gemini is reading your natural-language goal and converting it into a structured format: primary objectives, hard constraints, soft preferences, and business horizon. If Gemini is unavailable, a deterministic fallback parser activates automatically.',
+      'The interpretation layer converts your goal into objectives, hard constraints, preferences, and a business horizon. It can use a configured AI provider for language assistance, while the deterministic rules parser remains available for rules-only operation.',
     whyItMatters:
       'The quality of interpretation determines which evidence gets collected and how plans are scored. Vague goals produce more conservative, hedged plans.',
     whatToWatch:
@@ -80,7 +80,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     whatIsHappening:
       'The goal validator found an ambiguity or a conflict it cannot resolve automatically. The system has safely paused — no evidence has been collected yet — and is waiting for your answer.',
     whyItMatters:
-      'Proceeding without clarity here would generate plans built on incorrect assumptions. The AI will never guess when it comes to critical business rules.',
+      'Proceeding without clarity here would generate plans built on incorrect assumptions. OptiFlow pauses instead of guessing when a critical business rule needs an owner.',
     whatToWatch:
       'Read the clarification question carefully. It is usually asking about tier priority rules, capacity override permissions, or constraint-conflict resolution.',
     actionPrompt:
@@ -136,7 +136,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     matchStatus: ['WAITING_FOR_APPROVAL'],
     matchNodes: ['pause_for_approval'],
     whatIsHappening:
-      'The AI has completed its analysis and generated 4 candidate allocation plans. It has paused execution and is waiting for your review and explicit approval before writing any changes to enterprise systems.',
+      'The planning engines have generated 4 candidate allocation plans. Execution is paused while you review the recommendation and explicitly approve a tradeoff before any enterprise system is changed.',
     whyItMatters:
       'This is the most consequential moment. Nothing has changed in any system yet. You are evaluating proposals, not confirming something that already happened. Your approval triggers real SAGA transactions.',
     whatToWatch:
@@ -146,7 +146,7 @@ export const PHASE_GUIDES: PhaseGuide[] = [
     keyConcept: {
       term: 'Human-in-the-Loop',
       definition:
-        'A deliberate architectural decision: the AI never executes high-impact allocation changes without explicit manager authorisation. Your approval is the required gate between analysis and action.',
+        'A deliberate architectural decision: OptiFlow never executes high-impact allocation changes without explicit manager authorisation. Your approval is the required gate between analysis and action.',
     },
   },
   {

@@ -94,6 +94,9 @@ export function RunCockpitPage() {
     ? playback.visibleEvents.filter((event) => reviewedGuide.matchNodes.includes(event.source))
     : playback.visibleEvents;
   const briefingNode = reviewedGuide?.matchNodes[0] ?? presentationNode;
+  const briefingEvents = playback.visibleEvents.filter(
+    (event) => briefingGuide.matchNodes.includes(event.source),
+  );
 
   const isApproval = presentationCaughtUp && status === 'WAITING_FOR_APPROVAL';
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
@@ -247,10 +250,12 @@ export function RunCockpitPage() {
             </div>
           </main>
 
-          <aside className="lg:sticky lg:top-24 rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
+          <aside className="lg:sticky lg:top-[9.5rem] lg:max-h-[calc(100vh-10.5rem)] lg:overflow-y-auto rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
             <MissionGuide
               status={isReviewingStage ? null : presentationStatus}
               currentNode={briefingNode}
+              events={briefingEvents}
+              isReviewing={isReviewingStage}
             />
           </aside>
         </div>
