@@ -2,6 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { RecentRun, RunStatus, RunSummary } from '../types/api';
+import {
+  DEFAULT_UI_PREFERENCES,
+  readUiPreferences,
+  saveUiPreferences,
+  type DecisionEngineMode,
+  type DetailPreference,
+  type MotionPreference,
+  type UiPreferences,
+  type WalkthroughPace,
+} from '../preferences';
+import {
+  getThemePreference,
+  setThemePreference,
+  type ThemePreference,
+} from '../theme';
 
 type WorkspacePageProps = {
   eyebrow: string;
@@ -455,18 +470,466 @@ export function RunHistoryPage() {
 
 export { DemoLabPage } from './DemoLabPage';
 
+const THEME_OPTIONS: { id: ThemePreference; label: string; description: string }[] = [
+  { id: 'light', label: 'Light', description: 'Bright paper workspace for daylight use.' },
+  { id: 'dark', label: 'Dark', description: 'Low-glare operations room appearance.' },
+  { id: 'system', label: 'System', description: 'Follow this device automatically.' },
+];
+
+const PACE_OPTIONS: { id: WalkthroughPace; label: string; value: string; description: string }[] = [
+  { id: 'focused', label: 'Focused', value: '1.6 seconds', description: 'Faster review for experienced operators.' },
+  { id: 'standard', label: 'Standard', value: '2.6 seconds', description: 'Recommended teaching pace for most users.' },
+  { id: 'deliberate', label: 'Deliberate', value: '4.0 seconds', description: 'Extra reading time between arriving cards.' },
+];
+
+const PROVIDER_MODELS: Record<string, string[]> = {
+  gemini: [
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+  ],
+  groq: [
+    'llama-3.1-8b-instant',
+    'llama-3.3-70b-versatile',
+    'openai/gpt-oss-20b',
+    'openai/gpt-oss-120b',
+  ],
+};
+
+interface KeyDraft {
+  label: string;
+  apiKey: string;
+}
+
 export function SettingsPage() {
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
+  const [preferences, setPreferences] = useState<UiPreferences>(readUiPreferences);
+  const [provider, setProvider] = useState<'gemini' | 'groq'>('gemini');
+  const [model, setModel] = useState(PROVIDER_MODELS.gemini[2]);
+  const [keys, setKeys] = useState<KeyDraft[]>([
+    { label: 'Primary', apiKey: '' },
+    { label: 'Backup 1', apiKey: '' },
+    { label: 'Backup 2', apiKey: '' },
+  ]);
+  const [adminKey, setAdminKey] = useState('');
+  const [endpointAvailable, setEndpointAvailable] = useState<boolean | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionBusy, setConnectionBusy] = useState<'test' | 'save' | null>(null);
+
+  useEffect(() => {
+    const updateTheme = (event: Event) => {
+      setTheme((event as CustomEvent<ThemePreference>).detail);
+    };
+    window.addEventListener('optiflow:theme-change', updateTheme);
+    return () => window.removeEventListener('optiflow:theme-change', updateTheme);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const probe = async () => {
+      try {
+        const response = await fetch('/api/v1/settings/llm/models', {
+          headers: { 'X-Request-ID': `settings-${Date.now()}` },
+        });
+        if (!cancelled) setEndpointAvailable(response.ok);
+      } catch {
+        if (!cancelled) setEndpointAvailable(false);
+      }
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updatePreference = <Key extends keyof UiPreferences>(
+    key: Key,
+    value: UiPreferences[Key],
+  ) => {
+    const next = { ...preferences, [key]: value };
+    setPreferences(next);
+    saveUiPreferences(next);
+  };
+
+  const updateProvider = (nextProvider: 'gemini' | 'groq') => {
+    setProvider(nextProvider);
+    setModel(PROVIDER_MODELS[nextProvider][0]);
+    setConnectionMessage(null);
+    setConnectionError(null);
+  };
+
+  const updateKey = (index: number, value: string) => {
+    setKeys((current) => current.map((entry, entryIndex) =>
+      entryIndex === index ? { ...entry, apiKey: value } : entry));
+  };
+
+  const submitConnection = async (action: 'test' | 'save') => {
+    setConnectionBusy(action);
+    setConnectionMessage(null);
+    setConnectionError(null);
+    try {
+      const credentials = keys
+        .filter((entry) => entry.apiKey.trim())
+        .map((entry, priority) => ({
+          label: entry.label,
+          api_key: entry.apiKey.trim(),
+          priority,
+        }));
+      if (!adminKey.trim()) throw new Error('Enter the Core admin key for this secure change.');
+      if (credentials.length === 0) throw new Error('Enter at least one provider API key.');
+
+      const path = action === 'test'
+        ? '/api/v1/settings/llm/test'
+        : '/api/v1/settings/llm';
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': adminKey.trim(),
+          'X-Request-ID': `settings-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          version: 1,
+          mode: 'ai_assisted',
+          active_llm_provider: provider,
+          providers: {
+            [provider]: {
+              model_name: model,
+              credentials,
+            },
+          },
+        }),
+      });
+      if (!response.ok) {
+        let message = `Core returned HTTP ${response.status}`;
+        try {
+          const body = await response.json() as { detail?: string; message?: string };
+          message = body.detail ?? body.message ?? message;
+        } catch {
+          // Keep the HTTP status when no JSON error is available.
+        }
+        throw new Error(message);
+      }
+      setConnectionMessage(action === 'test'
+        ? 'Connection verified. No credential was saved by this test.'
+        : 'Encrypted provider settings saved by Core.');
+      if (action === 'save') {
+        setKeys((current) => current.map((entry) => ({ ...entry, apiKey: '' })));
+      }
+    } catch (error: unknown) {
+      setConnectionError(error instanceof Error ? error.message : 'The secure settings request failed.');
+    } finally {
+      setConnectionBusy(null);
+    }
+  };
+
+  const resetPersonalization = () => {
+    setThemePreference('system');
+    setTheme('system');
+    setPreferences(DEFAULT_UI_PREFERENCES);
+    saveUiPreferences(DEFAULT_UI_PREFERENCES);
+  };
+
   return (
-    <WorkspacePage
-      eyebrow="Settings"
-      title="Make OptiFlow work your way."
-      description="Control appearance, guided playback, motion, and how much engine detail is revealed while a decision unfolds."
-      purpose="Personalize without hiding the truth"
-      capabilities={[
-        'Choose light, dark, or system appearance.',
-        'Adjust readable step timing and reduced-motion behavior.',
-        'Choose rules-only or AI-assisted explanations when available.',
-      ]}
-    />
+    <div className="min-h-full paper-noise">
+      <section className="border-b border-border-dim bg-abyss">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-10 lg:py-14">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-7">
+            <div>
+              <p className="text-[9px] font-mono font-semibold uppercase tracking-[0.2em] text-ops-amber">
+                Personal operating rules
+              </p>
+              <h1 className="max-w-4xl text-4xl sm:text-6xl font-extrabold tracking-[-0.06em] leading-[0.98] mt-4">
+                Adjust the experience.
+                <span className="block text-ops-amber">Keep the decision truth.</span>
+              </h1>
+              <p className="max-w-2xl text-sm sm:text-base leading-relaxed text-ink-secondary mt-5">
+                Appearance and teaching pace are personal. Evidence, approval gates, and audit records
+                remain visible regardless of these choices.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={resetPersonalization}
+              className="self-start rounded-xl border border-border-base bg-deep px-4 py-3 text-[10px] font-bold text-ink-secondary hover:text-ops-amber focus-ring"
+            >
+              Restore recommended settings
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-5 sm:px-8 py-8 lg:py-10 space-y-6">
+        <article className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
+          <div className="h-1 bg-ops-cyan" />
+          <div className="p-5 sm:p-7">
+            <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
+              Appearance
+            </p>
+            <h2 className="text-xl font-extrabold tracking-[-0.035em] mt-2">Choose how the workspace feels.</h2>
+            <div className="grid sm:grid-cols-3 gap-3 mt-5">
+              {THEME_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={theme === option.id}
+                  onClick={() => {
+                    setThemePreference(option.id);
+                    setTheme(option.id);
+                  }}
+                  className={`rounded-2xl border p-5 text-left transition-all focus-ring ${
+                    theme === option.id
+                      ? 'border-ops-cyan bg-ops-cyan/[0.055] shadow-card'
+                      : 'border-border-dim bg-deep/45 hover:border-border-base'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-ink-primary">{option.label}</span>
+                    <span className={`h-4 w-4 rounded-full border-4 ${
+                      theme === option.id ? 'border-ops-cyan bg-abyss' : 'border-border-base'
+                    }`} />
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-ink-muted mt-2">{option.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
+          <div className="h-1 bg-ops-violet" />
+          <div className="p-5 sm:p-7">
+            <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-violet">
+              Guided walkthrough
+            </p>
+            <h2 className="text-xl font-extrabold tracking-[-0.035em] mt-2">Set a pace you can understand.</h2>
+            <div className="grid sm:grid-cols-3 gap-3 mt-5">
+              {PACE_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={preferences.walkthroughPace === option.id}
+                  onClick={() => updatePreference('walkthroughPace', option.id)}
+                  className={`rounded-2xl border p-5 text-left transition-all focus-ring ${
+                    preferences.walkthroughPace === option.id
+                      ? 'border-ops-violet bg-ops-violet/[0.055]'
+                      : 'border-border-dim bg-deep/45 hover:border-border-base'
+                  }`}
+                >
+                  <p className="text-sm font-bold text-ink-primary">{option.label}</p>
+                  <p className="text-[9px] font-mono text-ops-violet mt-1">{option.value}</p>
+                  <p className="text-[10px] leading-relaxed text-ink-muted mt-2">{option.description}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4 mt-5">
+              <fieldset className="rounded-2xl border border-border-dim bg-deep/45 p-5">
+                <legend className="px-1 text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-muted">Motion</legend>
+                {([
+                  ['system', 'Follow device', 'Use the operating system motion preference.'],
+                  ['reduced', 'Always reduce motion', 'Short dwell and nearly instant transitions.'],
+                ] as [MotionPreference, string, string][]).map(([id, label, description]) => (
+                  <label key={id} className="flex gap-3 py-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="motion"
+                      checked={preferences.motion === id}
+                      onChange={() => updatePreference('motion', id)}
+                      className="mt-1 accent-current"
+                    />
+                    <span>
+                      <span className="block text-xs font-bold text-ink-primary">{label}</span>
+                      <span className="block text-[10px] leading-relaxed text-ink-muted mt-1">{description}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="rounded-2xl border border-border-dim bg-deep/45 p-5">
+                <legend className="px-1 text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-muted">Teaching detail</legend>
+                {([
+                  ['guided', 'Guided', 'Show definitions, checks, and manual fallback teaching.'],
+                  ['compact', 'Compact', 'Keep evidence visible with shorter supporting explanations.'],
+                ] as [DetailPreference, string, string][]).map(([id, label, description]) => (
+                  <label key={id} className="flex gap-3 py-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="detail"
+                      checked={preferences.detail === id}
+                      onChange={() => updatePreference('detail', id)}
+                      className="mt-1 accent-current"
+                    />
+                    <span>
+                      <span className="block text-xs font-bold text-ink-primary">{label}</span>
+                      <span className="block text-[10px] leading-relaxed text-ink-muted mt-1">{description}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
+          <div className="h-1 bg-ops-amber" />
+          <div className="p-5 sm:p-7">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div>
+                <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-amber">
+                  Decision engine
+                </p>
+                <h2 className="text-xl font-extrabold tracking-[-0.035em] mt-2">Choose rules-only or AI-assisted explanation.</h2>
+              </div>
+              <span className="rounded-full border border-ops-emerald/25 bg-ops-emerald/[0.055] px-3 py-2 text-[8px] font-mono font-semibold uppercase tracking-[0.12em] text-ops-emerald">
+                Optimisation remains deterministic
+              </span>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 mt-5">
+              {([
+                ['rules_only', 'Rules-only', 'No external LLM required. Goal interpretation and explanations use deterministic fallback logic.'],
+                ['ai_assisted', 'AI-assisted', 'Use a configured provider for language interpretation and explanations; approval rules do not change.'],
+              ] as [DecisionEngineMode, string, string][]).map(([id, label, description]) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={preferences.decisionEngine === id}
+                  onClick={() => updatePreference('decisionEngine', id)}
+                  className={`rounded-2xl border p-5 text-left focus-ring ${
+                    preferences.decisionEngine === id
+                      ? 'border-ops-amber bg-ops-amber/[0.055]'
+                      : 'border-border-dim bg-deep/45 hover:border-border-base'
+                  }`}
+                >
+                  <p className="text-sm font-bold text-ink-primary">{label}</p>
+                  <p className="text-[10px] leading-relaxed text-ink-muted mt-2">{description}</p>
+                </button>
+              ))}
+            </div>
+
+            {preferences.decisionEngine === 'ai_assisted' && (
+              <div className="mt-5 rounded-2xl border border-border-base bg-deep/55 p-5 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-muted">Secure provider connection</p>
+                    <p className="text-xs text-ink-secondary mt-1.5">
+                      Keys stay in this form only until sent to encrypted Core storage.
+                    </p>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1.5 text-[8px] font-mono font-semibold uppercase tracking-[0.1em] ${
+                    endpointAvailable
+                      ? 'border-ops-emerald/25 bg-ops-emerald/10 text-ops-emerald'
+                      : 'border-ops-orange/25 bg-ops-orange/10 text-ops-orange'
+                  }`}>
+                    {endpointAvailable === null
+                      ? 'Checking Core'
+                      : endpointAvailable
+                        ? 'Secure endpoint ready'
+                        : 'Backend endpoint pending'}
+                  </span>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3 mt-5">
+                  {(['gemini', 'groq'] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={provider === id}
+                      onClick={() => updateProvider(id)}
+                      className={`rounded-xl border p-4 text-left focus-ring ${
+                        provider === id ? 'border-ops-amber bg-abyss' : 'border-border-dim bg-deep'
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-ink-primary">{id === 'gemini' ? 'Google Gemini' : 'GroqCloud'}</p>
+                      <p className="text-[9px] text-ink-muted mt-1">{PROVIDER_MODELS[id].length} supported production models</p>
+                    </button>
+                  ))}
+                </div>
+
+                <label className="block mt-4">
+                  <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ink-muted">Model</span>
+                  <select
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-border-base bg-abyss px-4 py-3 text-xs text-ink-primary focus-ring"
+                  >
+                    {PROVIDER_MODELS[provider].map((modelName) => (
+                      <option key={modelName} value={modelName}>{modelName}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid lg:grid-cols-3 gap-3 mt-4">
+                  {keys.map((entry, index) => (
+                    <label key={entry.label} className="block">
+                      <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                        {entry.label} key
+                      </span>
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={entry.apiKey}
+                        onChange={(event) => updateKey(index, event.target.value)}
+                        placeholder={index === 0 ? 'Required' : 'Optional failover'}
+                        className="mt-2 w-full rounded-xl border border-border-base bg-abyss px-4 py-3 text-xs text-ink-primary placeholder:text-ink-ghost focus-ring"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[9px] leading-relaxed text-ink-muted mt-3">
+                  Core tries keys in priority order only for retryable quota, authentication, or provider-availability failures.
+                  It does not switch models silently.
+                </p>
+
+                <label className="block mt-4">
+                  <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.12em] text-ink-muted">Core admin key</span>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={adminKey}
+                    onChange={(event) => setAdminKey(event.target.value)}
+                    placeholder="Required for secure settings changes"
+                    className="mt-2 w-full rounded-xl border border-border-base bg-abyss px-4 py-3 text-xs text-ink-primary placeholder:text-ink-ghost focus-ring"
+                  />
+                </label>
+
+                {!endpointAvailable && endpointAvailable !== null && (
+                  <div className="mt-4 rounded-xl border border-ops-orange/25 bg-ops-orange/[0.055] p-4">
+                    <p className="text-[10px] font-bold text-ops-orange">Secure Core routes are not available yet.</p>
+                    <p className="text-[9px] leading-relaxed text-ink-muted mt-1.5">
+                      Rules-only mode remains fully usable. Connection buttons stay disabled so keys cannot be sent to an undefined endpoint.
+                    </p>
+                  </div>
+                )}
+                {connectionError && <p className="mt-4 text-[10px] text-ops-rose" role="alert">{connectionError}</p>}
+                {connectionMessage && <p className="mt-4 text-[10px] text-ops-emerald" role="status">{connectionMessage}</p>}
+
+                <div className="flex flex-wrap gap-2 mt-5">
+                  <button
+                    type="button"
+                    disabled={!endpointAvailable || connectionBusy !== null}
+                    onClick={() => void submitConnection('test')}
+                    className="rounded-xl border border-border-base bg-abyss px-4 py-3 text-[10px] font-bold text-ink-secondary hover:text-ops-amber disabled:opacity-40 focus-ring"
+                  >
+                    {connectionBusy === 'test' ? 'Testing…' : 'Test without saving'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!endpointAvailable || connectionBusy !== null}
+                    onClick={() => void submitConnection('save')}
+                    className="rounded-xl bg-ink-primary px-4 py-3 text-[10px] font-bold text-white hover:bg-ops-amber disabled:opacity-40 focus-ring"
+                  >
+                    {connectionBusy === 'save' ? 'Encrypting and saving…' : 'Connect provider'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </article>
+      </section>
+    </div>
   );
 }
