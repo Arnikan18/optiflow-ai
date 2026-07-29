@@ -19,6 +19,22 @@ class BusinessGoal(Base):
     created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
+
+class SystemSetting(Base):
+    """Encrypted, versioned application setting owned by Core."""
+
+    __tablename__ = "system_settings"
+
+    setting_key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    encrypted_value: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
 class AgentRun(Base):
     __tablename__ = "agent_runs"
     
