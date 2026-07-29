@@ -39,7 +39,10 @@ export function PlanCard({ plan, isRecommended, onApprove, approving }: PlanCard
 
   const accent = PROFILE_ACCENTS[plan.profile] ?? PROFILE_ACCENTS['Balanced'];
   const matchRatePct = typeof plan.metrics.match_rate === 'number'
-    ? `${(plan.metrics.match_rate * 100).toFixed(1)}%`
+    ? `${(plan.metrics.match_rate <= 1
+      ? plan.metrics.match_rate * 100
+      : plan.metrics.match_rate
+    ).toFixed(1)}%`
     : plan.metrics.match_rate;
   const arrProtected = typeof plan.metrics.arr_protected === 'number'
     ? `$${(plan.metrics.arr_protected / 1000).toFixed(0)}k`

@@ -15,8 +15,12 @@ const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
   WAITING_FOR_CLARIFICATION: { label: 'Your input needed', cls: 'text-ops-orange bg-ops-orange/10' },
   WAITING_FOR_APPROVAL: { label: 'Your decision needed', cls: 'text-ops-amber bg-ops-amber/10' },
   EXECUTING: { label: 'Applying decision', cls: 'text-ops-orange bg-ops-orange/10' },
+  REPLANNING: { label: 'Replanning route', cls: 'text-ops-violet bg-ops-violet/10' },
+  EXECUTED: { label: 'Execution complete', cls: 'text-ops-cyan bg-ops-cyan/10' },
+  FAILED_SAGA: { label: 'Execution recovered', cls: 'text-ops-rose bg-ops-rose/10' },
   COMPLETED: { label: 'Route complete', cls: 'text-ops-emerald bg-ops-emerald/10' },
   FAILED: { label: 'Safely stopped', cls: 'text-ops-rose bg-ops-rose/10' },
+  CANCELLED: { label: 'Cancelled', cls: 'text-ink-secondary bg-surface' },
 };
 
 const PHASE_INDEX: Record<string, number> = {
