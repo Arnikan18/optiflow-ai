@@ -78,6 +78,7 @@ export function LiveDemoPage() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [aiError, setAIError] = useState<string | null>(null);
+  const [lastChange, setLastChange] = useState<EnterpriseChange | null>(null);
 
   useEffect(() => {
     if (!scenarioId) {
@@ -139,8 +140,16 @@ export function LiveDemoPage() {
 
   const advanceTimeline = async () => {
     const changed = await simulation.advance();
-    if (changed && autoAnalyze) {
-      await startAIAnalysis('timeline event');
+    if (changed) {
+      setLastChange({
+        eventType: 'NEW_TICKET',
+        label: 'Timeline event applied',
+        description: 'The next prepared enterprise event changed the live baseline.',
+        payload: {},
+      });
+      if (autoAnalyze) {
+        await startAIAnalysis('timeline event');
+      }
     }
   };
 
@@ -155,8 +164,11 @@ export function LiveDemoPage() {
       payload: change.payload,
     };
     const changed = await simulation.inject(payload);
-    if (changed && autoAnalyze) {
-      await startAIAnalysis(change.label.toLowerCase());
+    if (changed) {
+      setLastChange(change);
+      if (autoAnalyze) {
+        await startAIAnalysis(change.label.toLowerCase());
+      }
     }
   };
 
@@ -459,8 +471,11 @@ export function LiveDemoPage() {
           <aside className="space-y-5">
             <section className="rounded-[1.5rem] border border-ops-amber/30 bg-abyss shadow-card p-5">
               <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-amber">
-                AI response
+                Before → live → AI
               </p>
+              <h2 className="mt-1 text-xl font-extrabold text-ink-primary">
+                What the decision engine sees
+              </h2>
               <div className="flex items-center gap-3 mt-4">
                 <span className="relative w-12 h-12 rounded-full border-2 border-ops-amber flex items-center justify-center">
                   {simulationStatus === 'RUNNING' && (
@@ -470,8 +485,23 @@ export function LiveDemoPage() {
                 </span>
                 <div>
                   <p className="text-xl font-extrabold text-ink-primary">{aiStatus}</p>
-                  <p className="text-xs text-ink-muted mt-1">Same governed AI pipeline</p>
+                  <p className="text-sm text-ink-muted mt-1">
+                    {activeRunId ? 'Fresh governed route started' : 'Waiting for analysis'}
+                  </p>
                 </div>
+              </div>
+
+              <div className={`mt-4 rounded-xl border px-4 py-3 ${
+                lastChange
+                  ? 'border-ops-orange/30 bg-ops-orange/[0.06]'
+                  : 'border-border-dim bg-deep'
+              }`}>
+                <p className={`text-sm font-bold ${lastChange ? 'text-ops-orange' : 'text-ink-muted'}`}>
+                  {lastChange?.label ?? 'No judge change yet'}
+                </p>
+                {lastChange && (
+                  <p className="mt-1 text-sm text-ink-secondary">{lastChange.description}</p>
+                )}
               </div>
 
               {simulation.portfolioDelta && (
@@ -483,13 +513,13 @@ export function LiveDemoPage() {
                   </p>
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     <div className="rounded-lg bg-abyss px-3 py-2">
-                      <p className="text-xs text-ink-muted">Urgent work</p>
+                      <p className="text-xs text-ink-muted">Urgent · before → now</p>
                       <p className="text-lg font-extrabold text-ink-primary">
                         {simulation.portfolioDelta.urgentBefore} → {simulation.portfolioDelta.urgentAfter}
                       </p>
                     </div>
                     <div className="rounded-lg bg-abyss px-3 py-2">
-                      <p className="text-xs text-ink-muted">Team ready</p>
+                      <p className="text-xs text-ink-muted">Ready · before → now</p>
                       <p className="text-lg font-extrabold text-ink-primary">
                         {simulation.portfolioDelta.availableBefore} → {simulation.portfolioDelta.availableAfter}
                       </p>
@@ -536,10 +566,11 @@ export function LiveDemoPage() {
               onRefresh={preferenceMemory.refresh}
             />
 
-            <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
-              <p className="text-sm font-bold text-ops-cyan">
-                Live portfolio
-              </p>
+            <details className="group rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-ops-cyan focus-ring rounded-xl">
+                <span>Live portfolio totals</span>
+                <span className="text-xl transition-transform group-open:rotate-45">+</span>
+              </summary>
               <div className="grid grid-cols-2 gap-2 mt-4">
                 {[
                   ['Clients', portfolio?.portfolio_summary.total_customers ?? '—'],
@@ -553,7 +584,7 @@ export function LiveDemoPage() {
                   </div>
                 ))}
               </div>
-            </section>
+            </details>
 
           </aside>
         </div>
