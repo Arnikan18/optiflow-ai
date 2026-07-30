@@ -44,6 +44,11 @@ async def initialize_database() -> None:
                 await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assigned_at DATETIME")
             if "estimated_effort_minutes" not in existing_columns:
                 await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN estimated_effort_minutes INTEGER")
+            if "required_skills" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN required_skills JSON")
+                await conn.exec_driver_sql(
+                    "UPDATE incidents SET required_skills = '[]' WHERE required_skills IS NULL"
+                )
             if "resolved_at" not in existing_columns:
                 await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN resolved_at DATETIME")
             await conn.exec_driver_sql(

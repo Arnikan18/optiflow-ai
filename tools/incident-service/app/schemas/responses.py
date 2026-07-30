@@ -20,6 +20,7 @@ class IncidentResponse(BaseModel):
     status: str
     sla_deadline: datetime
     estimated_effort_minutes: int | None = None
+    required_skills: list[str] = Field(default_factory=list)
     assigned_specialist_id: str | None
     assignment_run_id: str | None = None
     assignment_idempotency_key: str | None = None

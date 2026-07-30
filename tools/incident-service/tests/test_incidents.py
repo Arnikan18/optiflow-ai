@@ -26,6 +26,8 @@ def incident_payload(**overrides):
         "description": "Checkout latency exceeded normal operating thresholds.",
         "priority": "high",
         "sla_deadline": "2099-08-01T10:00:00Z",
+        "estimated_effort_minutes": 90,
+        "required_skills": [" Payments ", "API-Integration", "payments"],
     }
     payload.update(overrides)
     return payload
@@ -142,6 +144,8 @@ def test_create_incident_defaults_normalizes_and_rejects_duplicate(client, auth_
     assert created["customer_id"] == "CUS-ALPHA"
     assert created["priority"] == "HIGH"
     assert created["status"] == "OPEN"
+    assert created["estimated_effort_minutes"] == 90
+    assert created["required_skills"] == ["payments", "api-integration"]
     assert created["assigned_specialist_id"] is None
     assert created["created_at"] <= created["updated_at"]
 
@@ -423,6 +427,7 @@ def test_simulation_load_state_update_and_resolve(client, auth_headers, admin_he
                 "status": "IN_PROGRESS",
                 "sla_deadline": "2099-07-22T10:00:00Z",
                 "estimated_effort_minutes": 60,
+                "required_skills": ["Identity", " SAML "],
                 "assigned_specialist_id": "spec-maya",
                 "assigned_at": "2026-07-22T09:10:00Z",
                 "created_at": "2026-07-22T09:00:00Z",
@@ -433,6 +438,12 @@ def test_simulation_load_state_update_and_resolve(client, auth_headers, admin_he
     loaded = client.post("/admin/simulation/load-state", json=load_payload, headers=admin_headers)
     assert loaded.status_code == 200
     assert assert_success(loaded)["incident_count"] == 1
+
+    persisted = assert_success(
+        client.get("/incident/api/v1/incidents/INC-SIM-001", headers=auth_headers)
+    )
+    assert persisted["required_skills"] == ["identity", "saml"]
+    assert persisted["estimated_effort_minutes"] == 60
 
     updated = assert_success(
         client.patch(
