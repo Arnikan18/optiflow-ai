@@ -2,6 +2,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/layout/Shell';
 import { ControlRoomPage } from './pages/ControlRoomPage';
 import { RunCockpitPage } from './pages/RunCockpitPage';
+import { LiveDemoPage } from './pages/LiveDemoPage';
 import {
   DemoLabPage,
   RunHistoryPage,
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/run/:runId" element={<RunCockpitPage />} />
           <Route path="/history" element={<RunHistoryPage />} />
           <Route path="/demo-lab" element={<DemoLabPage />} />
+          <Route path="/live-demo" element={<LiveDemoPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route
             path="*"
