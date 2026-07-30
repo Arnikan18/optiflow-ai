@@ -80,10 +80,6 @@ export function LiveDemoPage() {
   const [aiError, setAIError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (simulation.status?.mode) setMode(simulation.status.mode);
-  }, [simulation.status?.mode]);
-
-  useEffect(() => {
     if (!scenarioId) {
       setScenarioId(
         simulation.status?.scenario_id
@@ -168,15 +164,15 @@ export function LiveDemoPage() {
     <div className="min-h-full paper-noise">
       <section className="border-b border-border-dim bg-abyss">
         <div className="max-w-[1500px] mx-auto px-5 sm:px-8 py-8 lg:py-10">
-          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-7">
-            <div className="max-w-4xl">
+          <div>
+            <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="relative w-2.5 h-2.5">
                   <span className="absolute inset-0 rounded-full bg-ops-emerald animate-ping opacity-35" />
                   <span className="absolute inset-0 rounded-full bg-ops-emerald" />
                 </span>
                 <p className="text-xs font-mono font-bold uppercase tracking-[0.18em] text-ops-emerald">
-                  Live enterprise demo
+                  Judge Mode
                 </p>
                 <span className={`rounded-full border px-3 py-1 text-xs font-mono font-bold ${
                   STATUS_STYLE[simulationStatus]
@@ -185,35 +181,12 @@ export function LiveDemoPage() {
                 </span>
               </div>
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-[-0.055em] leading-[0.98] mt-4">
-                Change one signal.
-                <span className="block text-ops-amber">See the whole decision respond.</span>
+                Change live data.
+                <span className="block text-ops-amber">Test the decision.</span>
               </h1>
               <p className="max-w-2xl text-base text-ink-secondary mt-4">
-                Edit real demo data, compare the new recommendation, then make the final decision.
+                Choose one problem or worker, apply a real backend change, and run a fresh governed analysis.
               </p>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-2 min-w-0 xl:min-w-[430px]">
-              {([
-                ['INTERACTIVE', 'Live controls', 'Judges edit a problem or worker'],
-                ['TIMELINE', 'Guided story', 'Advance the prepared release day'],
-              ] as const).map(([value, label, detail]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setMode(value)}
-                  className={`rounded-2xl border p-4 text-left transition-all focus-ring ${
-                    mode === value
-                      ? 'border-ops-amber bg-ops-amber/[0.07] shadow-card'
-                      : 'border-border-dim bg-deep hover:border-border-base'
-                  }`}
-                >
-                  <p className={`text-sm font-extrabold ${mode === value ? 'text-ops-amber' : 'text-ink-primary'}`}>
-                    {label}
-                  </p>
-                  <p className="text-xs leading-relaxed text-ink-muted mt-1.5">{detail}</p>
-                </button>
-              ))}
             </div>
           </div>
         </div>
@@ -313,6 +286,37 @@ export function LiveDemoPage() {
               )}
             </div>
           </div>
+
+          <details className="group mt-4 border-t border-border-dim pt-4">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl text-sm font-bold text-ink-secondary focus-ring">
+              <span>Advanced scenario controls</span>
+              <span className="text-ops-cyan transition-transform group-open:rotate-45">+</span>
+            </summary>
+            <div className="grid gap-2 pt-3 sm:grid-cols-2">
+              {([
+                ['INTERACTIVE', 'Free exploration', 'Edit workers and problems directly'],
+                ['TIMELINE', 'Timeline testing', 'Advance prepared scenario events'],
+              ] as const).map(([value, label, detail]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setMode(value)}
+                  className={`min-h-14 rounded-xl border px-4 py-3 text-left focus-ring ${
+                    mode === value
+                      ? 'border-ops-violet/45 bg-ops-violet/[0.08]'
+                      : 'border-border-dim bg-deep'
+                  }`}
+                >
+                  <span className={`block text-base font-bold ${
+                    mode === value ? 'text-ops-violet' : 'text-ink-primary'
+                  }`}>
+                    {label}
+                  </span>
+                  <span className="mt-1 block text-sm text-ink-muted">{detail}</span>
+                </button>
+              ))}
+            </div>
+          </details>
         </section>
 
         <LiveDemoJourneyStrip
@@ -418,7 +422,7 @@ export function LiveDemoPage() {
               </div>
 
               <div className="space-y-2 mt-4">
-                {simulation.events.slice(0, 8).map((event, index) => {
+                {simulation.events.slice(0, 3).map((event, index) => {
                   const type = eventText(event, 'event_type') ?? 'ENTERPRISE_EVENT';
                   const description = eventText(event, 'description') ?? type.replace(/_/g, ' ');
                   const processingStatus = eventText(event, 'processing_status') ?? 'RECORDED';
@@ -517,7 +521,7 @@ export function LiveDemoPage() {
                   <span className="block text-sm font-bold text-ink-primary">
                     Analyze applied changes
                   </span>
-                  <span className="block text-xs text-ink-muted mt-0.5">
+                  <span className="block text-sm text-ink-muted mt-0.5">
                     Starts a fresh governed route after each successful event.
                   </span>
                 </span>
@@ -533,7 +537,7 @@ export function LiveDemoPage() {
             />
 
             <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
-              <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-cyan">
+              <p className="text-sm font-bold text-ops-cyan">
                 Live portfolio
               </p>
               <div className="grid grid-cols-2 gap-2 mt-4">
@@ -545,29 +549,12 @@ export function LiveDemoPage() {
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl border border-border-dim bg-deep p-3">
                     <p className="text-2xl font-extrabold text-ink-primary">{value}</p>
-                    <p className="text-xs text-ink-muted mt-1">{label}</p>
+                    <p className="text-sm text-ink-muted mt-1">{label}</p>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="rounded-[1.5rem] border border-border-dim bg-deep p-5">
-              <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ink-muted">
-                Demo truth
-              </p>
-              <ul className="space-y-3 mt-4">
-                {[
-                  'Events update the real demo service databases.',
-                  'AI analysis uses the normal evidence and optimizer path.',
-                  'Every executable plan still pauses for human approval.',
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-ink-secondary">
-                    <span className="mt-1 w-5 h-5 shrink-0 rounded-full bg-ops-emerald/10 text-ops-emerald flex items-center justify-center text-xs">✓</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </section>
           </aside>
         </div>
       </div>
