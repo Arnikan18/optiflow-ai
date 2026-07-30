@@ -22,6 +22,8 @@ from app.agent.nodes.execute_saga import execute_saga
 from app.agent.nodes.complete_run import complete_run
 from app.agent.nodes.update_preference_memory import update_preference_memory
 from app.agent.nodes.enterprise_monitor import enterprise_monitor
+from app.agent.nodes.decision_intelligence import decision_intelligence
+
 
 
 def route_after_monitoring(state: AgentState) -> str:
@@ -100,6 +102,7 @@ def build_graph() -> StateGraph:
     graph.add_node("complete_run", complete_run)
     graph.add_node("update_preference_memory", update_preference_memory)
     graph.add_node("enterprise_monitor", enterprise_monitor)
+    graph.add_node("decision_intelligence", decision_intelligence)
     
     # 2. Establish links and conditional routing paths
     graph.add_edge(START, "receive_goal")
@@ -137,7 +140,8 @@ def build_graph() -> StateGraph:
     )
     graph.add_edge("evaluate_quality", "generate_plans")
     graph.add_edge("generate_plans", "generate_personalized_plan")
-    graph.add_edge("generate_personalized_plan", "pause_for_approval")
+    graph.add_edge("generate_personalized_plan", "decision_intelligence")
+    graph.add_edge("decision_intelligence", "pause_for_approval")
     
     # Conditional edge after human control approval gate
     graph.add_conditional_edges(

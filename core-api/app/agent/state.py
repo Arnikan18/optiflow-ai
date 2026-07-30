@@ -62,6 +62,10 @@ class AgentState(TypedDict, total=False):
     latest_event: Optional[Dict[str, Any]]
     simulation_status: Optional[str]
     replan_needed: Optional[bool]
+    
+    # 4. Decision Intelligence & Explainability Layer
+    decision_explanation: Optional[Dict[str, Any]]
+    decision_history: Optional[List[Dict[str, Any]]]
 
 
 

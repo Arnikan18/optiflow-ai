@@ -123,6 +123,7 @@ def test_graph_compilation_and_node():
     # Check that nodes exist
     nodes = compiled_graph.nodes
     assert "enterprise_monitor" in nodes
+    assert "decision_intelligence" in nodes
     assert compiled_graph.get_graph() is not None
 
 def test_route_after_monitoring():
