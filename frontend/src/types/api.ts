@@ -237,7 +237,7 @@ export interface ApproveRunPayload {
   approval_status: 'APPROVED' | 'REJECTED' | 'MODIFY';
   recommended_plan?: CandidatePlan;
   decision_reason?: string;
-  decision_source?: 'AI_RECOMMENDATION' | 'ALTERNATIVE_PLAN' | 'MANUAL_PLAN' | 'REJECT_ALL';
+  decision_source?: 'AI_RECOMMENDATION' | 'ALTERNATIVE_PLAN' | 'MODIFICATION' | 'MANUAL_PLAN' | 'REJECT_ALL';
 }
 
 export interface ClarifyRunPayload {

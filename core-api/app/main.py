@@ -186,7 +186,13 @@ class ApproveRunRequest(BaseModel):
     recommended_plan: Optional[Dict[str, Any]] = None
     decision_reason: Optional[str] = None
     decision_source: Optional[
-        Literal["AI_RECOMMENDATION", "ALTERNATIVE_PLAN", "MANUAL_PLAN", "REJECT_ALL"]
+        Literal[
+            "AI_RECOMMENDATION",
+            "ALTERNATIVE_PLAN",
+            "MODIFICATION",
+            "MANUAL_PLAN",
+            "REJECT_ALL",
+        ]
     ] = None
 
     @field_validator("decision_reason")
