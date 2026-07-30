@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
-import type { CandidatePlan, CandidatePlanSummary } from '../../types/api';
+import type { CandidatePlan, CandidatePlanSummary, DemoPortfolio } from '../../types/api';
 import { ManualAssignmentPanel } from './ManualAssignmentPanel';
 
 interface PlanWorkspaceProps {
@@ -132,14 +132,96 @@ function PlanMetrics({
   );
 }
 
+function planAllocations(plan: CandidatePlan) {
+  return plan.assignments.length ? plan.assignments : plan.allocations;
+}
+
+function AssignmentPreview({
+  plan,
+  portfolio,
+  limit,
+}: {
+  plan: CandidatePlan;
+  portfolio: DemoPortfolio | null;
+  limit?: number;
+}) {
+  const allocations = planAllocations(plan);
+  const visible = typeof limit === 'number' ? allocations.slice(0, limit) : allocations;
+  const plannedAdds = allocations.reduce<Record<string, number>>((counts, allocation) => {
+    const incident = portfolio?.incidents.find((item) => item.incident_id === allocation.incident_id);
+    if (incident?.current_specialist_id !== allocation.specialist_id) {
+      counts[allocation.specialist_id] = (counts[allocation.specialist_id] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+
+  if (allocations.length === 0) {
+    return <p className="text-sm text-ink-muted">This plan does not create a new assignment.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {visible.map((allocation, index) => {
+        const incident = portfolio?.incidents.find((item) => item.incident_id === allocation.incident_id);
+        const worker = portfolio?.specialists.find((item) => item.specialist_id === allocation.specialist_id);
+        const capacity = worker?.capacity;
+        const currentFree = worker?.available_capacity
+          ?? (capacity === null || capacity === undefined
+            ? null
+            : Math.max(capacity - (worker?.active_assignments ?? worker?.current_workload ?? 0), 0));
+        const freeAfter = currentFree === null
+          ? null
+          : Math.max(currentFree - (plannedAdds[allocation.specialist_id] ?? 0), 0);
+        const usedAfter = capacity === null || capacity === undefined || freeAfter === null
+          ? null
+          : Math.max(capacity - freeAfter, 0);
+
+        return (
+          <div
+            key={`${allocation.incident_id}-${allocation.specialist_id}-${index}`}
+            className="grid gap-2 rounded-xl border border-border-dim bg-deep px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-ink-primary">
+                {incident?.title ?? allocation.incident_id}
+              </p>
+              <p className="truncate text-xs text-ink-muted">
+                {incident?.customer_name ?? allocation.customer_id ?? allocation.incident_id}
+              </p>
+            </div>
+            <span className="hidden text-ops-cyan sm:block" aria-hidden="true">→</span>
+            <div className="min-w-0 sm:text-right">
+              <p className="truncate text-sm font-extrabold text-ops-cyan">
+                {worker?.specialist_name ?? allocation.specialist_id}
+              </p>
+              <p className="text-xs text-ink-muted">
+                {usedAfter === null || capacity === null || capacity === undefined
+                  ? 'Capacity updates after execution'
+                  : `${usedAfter}/${capacity} used after · ${freeAfter} free`}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+      {visible.length < allocations.length && (
+        <p className="text-xs font-bold text-ink-muted">
+          +{allocations.length - visible.length} more assignment{allocations.length - visible.length === 1 ? '' : 's'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AlternativeCard({
   plan,
   summary,
+  portfolio,
   busy,
   onSelect,
 }: {
   plan: CandidatePlan;
   summary: CandidatePlanSummary | null;
+  portfolio: DemoPortfolio | null;
   busy: boolean;
   onSelect: (plan: CandidatePlan) => void;
 }) {
@@ -161,6 +243,10 @@ function AlternativeCard({
         <span className={`shrink-0 rounded-full border px-3 py-1 text-sm font-bold ${tone}`}>
           {summary ? `#${summary.rank}` : 'Option'}
         </span>
+      </div>
+
+      <div className="mt-4">
+        <AssignmentPreview plan={plan} portfolio={portfolio} limit={2} />
       </div>
 
       <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-border-dim">
@@ -188,9 +274,11 @@ function AlternativeCard({
 function PlanEvidence({
   plans,
   recommendedPlanId,
+  portfolio,
 }: {
   plans: CandidatePlan[];
   recommendedPlanId: string | null;
+  portfolio: DemoPortfolio | null;
 }) {
   return (
     <details className="group rounded-2xl border border-border-dim bg-deep">
@@ -200,7 +288,7 @@ function PlanEvidence({
       </summary>
       <div className="border-t border-border-dim p-5 space-y-3">
         {plans.map((plan) => {
-          const allocations = plan.assignments.length ? plan.assignments : plan.allocations;
+          const allocations = planAllocations(plan);
           return (
             <details key={plan.plan_id} className="rounded-xl border border-border-dim bg-abyss">
               <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 focus-ring rounded-xl">
@@ -214,20 +302,8 @@ function PlanEvidence({
                 <p className="text-sm leading-relaxed text-ink-secondary whitespace-pre-wrap">
                   {plan.explanation || plan.description}
                 </p>
-                <div className="grid sm:grid-cols-2 gap-2 mt-4">
-                  {allocations.map((allocation) => (
-                    <div
-                      key={`${allocation.incident_id}-${allocation.specialist_id}`}
-                      className="rounded-lg border border-border-dim bg-deep px-3 py-2 text-sm"
-                    >
-                      <span className="font-bold text-ink-primary">{allocation.incident_id}</span>
-                      <span className="text-ink-muted"> → </span>
-                      <span className="text-ops-cyan">{allocation.specialist_id}</span>
-                    </div>
-                  ))}
-                  {!allocations.length && (
-                    <p className="text-sm text-ink-muted">No assignments in this plan.</p>
-                  )}
+                <div className="mt-4">
+                  <AssignmentPreview plan={plan} portfolio={portfolio} />
                 </div>
                 <p className="text-sm text-ink-muted mt-4">
                   {plan.metadata.solver_type} · {plan.metadata.solver_status} ·{' '}
@@ -263,12 +339,27 @@ export function PlanWorkspace({
   const [decisionReason, setDecisionReason] = useState('');
   const [modificationInstruction, setModificationInstruction] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [portfolio, setPortfolio] = useState<DemoPortfolio | null>(null);
 
   useEffect(() => {
     if (pendingPlan && !plans.some((plan) => plan.plan_id === pendingPlan.plan_id)) {
       setPendingPlan(null);
     }
   }, [pendingPlan, plans]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDemoPortfolio()
+      .then((nextPortfolio) => {
+        if (!cancelled) setPortfolio(nextPortfolio);
+      })
+      .catch(() => {
+        // Plan IDs remain visible if live names and capacity are temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
 
   const handleApprove = async () => {
     if (!pendingPlan) return;
@@ -412,6 +503,7 @@ export function PlanWorkspace({
                   : 'Use this alternative instead of the AI recommendation.'}
               </p>
               </div>
+              <AssignmentPreview plan={pendingPlan} portfolio={portfolio} />
               <label className="block">
                 <span className="text-sm font-bold text-ink-secondary">
                   Why this choice? <span className="font-normal text-ink-muted">(optional)</span>
@@ -488,6 +580,11 @@ export function PlanWorkspace({
           </div>
         </div>
 
+        <div className="mt-5 border-t border-border-dim pt-5">
+          <p className="mb-3 text-sm font-bold text-ink-primary">Proposed work assignments</p>
+          <AssignmentPreview plan={recommended} portfolio={portfolio} />
+        </div>
+
         <div className="mt-5">
           <PlanMetrics plan={recommended} summary={recommendedSummary} />
         </div>
@@ -524,6 +621,7 @@ export function PlanWorkspace({
                 key={plan.plan_id}
                 plan={plan}
                 summary={summaryFor(plan, candidatePlanSummary)}
+                portfolio={portfolio}
                 busy={actionInFlight !== null}
                 onSelect={setPendingPlan}
               />
@@ -532,7 +630,11 @@ export function PlanWorkspace({
         </section>
       )}
 
-      <PlanEvidence plans={sorted} recommendedPlanId={recommended.plan_id} />
+      <PlanEvidence
+        plans={sorted}
+        recommendedPlanId={recommended.plan_id}
+        portfolio={portfolio}
+      />
 
       <ManualAssignmentPanel
         runId={runId}
