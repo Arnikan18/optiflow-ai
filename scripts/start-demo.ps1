@@ -57,7 +57,7 @@ if ($ResetData) {
 
 if ($PreferenceProfile) {
     Write-Host "Preparing mature $PreferenceProfile preference memory..."
-    & docker compose exec -T core-api python scripts/seed_preference_demo.py `
+    & docker compose exec -T core-api python -m scripts.seed_preference_demo `
         --profile $PreferenceProfile `
         --decisions 18 `
         --preferred-count 14 `
