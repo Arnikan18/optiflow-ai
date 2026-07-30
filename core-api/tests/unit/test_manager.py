@@ -62,7 +62,7 @@ def test_clarify_run_route_success():
         assert response.json()["status"] == "success"
         mock_resume.assert_called_once_with(
             run_id="RUN-EXIST-999", 
-            approval_status="APPROVED", 
+            approval_status="PENDING",
             clarification_reply="Here is the details"
         )
 
@@ -110,7 +110,7 @@ async def test_manager_resume_run_clarification():
          
         success = await resume_run_from_checkpoint(
             run_id="RUN-FAKE",
-            approval_status="APPROVED",
+            approval_status="PENDING",
             clarification_reply="Tier 1"
         )
         assert success is True
@@ -119,6 +119,7 @@ async def test_manager_resume_run_clarification():
         # Verify that state was updated with clarification context and ambiguities cleared
         assert mock_state["goal_text"] == "Optimize (Clarification: Tier 1)"
         assert mock_state["structured_goal"]["ambiguities"] == []
+        assert mock_state["approval_status"] == "PENDING"
         mock_create_task.assert_called_once()
 
 def test_get_run_status_success():

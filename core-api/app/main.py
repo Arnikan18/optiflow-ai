@@ -270,8 +270,8 @@ async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = D
         raise HTTPException(status_code=400, detail=f"Cannot clarify run in {row[0]} state. Run must be in WAITING_FOR_CLARIFICATION state.")
         
     success = await resume_run_from_checkpoint(
-        run_id=run_id, 
-        approval_status="APPROVED", 
+        run_id=run_id,
+        approval_status="PENDING",
         clarification_reply=body.clarification_reply
     )
     if not success:
