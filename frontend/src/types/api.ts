@@ -80,6 +80,20 @@ export interface CandidatePlanSummary {
   rank: number;
 }
 
+export type PreferenceLearningState = 'COLD_START' | 'LEARNING' | 'MATURE';
+export type PreferenceConfidenceLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface PersonalizedRecommendation {
+  candidate_plan_id: string;
+  candidate_index: number;
+  preference_score: number;
+  confidence: number;
+  confidence_level: PreferenceConfidenceLevel;
+  learning_state: PreferenceLearningState;
+  reason: string;
+  profile?: string | null;
+}
+
 export interface RunSummary {
   run_id: string;
   status: RunStatus;
@@ -94,7 +108,44 @@ export interface RunSummary {
   selected_tools: SelectedTool[];
   business_summary: string | Record<string, unknown> | null;
   change_summary: string | Record<string, unknown> | null;
+  personalized_recommendation: PersonalizedRecommendation | null;
   candidate_plan_summary: CandidatePlanSummary[];
+}
+
+export interface PreferenceRecommendationStatistics {
+  shown: number;
+  accepted: number;
+  rejected: number;
+  acceptance_rate: number;
+  last_updated: string | null;
+  last_recommendation_timestamp: string | null;
+}
+
+export interface RecentPreferenceDecision {
+  event_id: string;
+  run_id: string;
+  decision: string;
+  selected_profile: string | null;
+  personalized_profile: string | null;
+  accepted_personalized: boolean | null;
+  goal_text: string | null;
+  created_at: string;
+}
+
+export interface PreferenceSummary {
+  learning_state: PreferenceLearningState;
+  total_decisions: number;
+  runs_until_next_state: number;
+  cold_start_runs_required: number;
+  mature_runs_required: number;
+  profile_counts: Record<string, number>;
+  dominant_profile: string | null;
+  dominant_profile_share: number;
+  confidence: number;
+  recommendation_statistics: PreferenceRecommendationStatistics;
+  learned_constraints: string[];
+  recent_decisions: RecentPreferenceDecision[];
+  updated_at: string;
 }
 
 // SSE event

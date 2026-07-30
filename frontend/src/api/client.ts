@@ -22,6 +22,7 @@ import type {
   LLMProviderName,
   LLMSettingsPayload,
   LLMSettingsStatus,
+  PreferenceSummary,
   RunSummary,
   SimulationState,
   StartEnterpriseSimulationPayload,
@@ -130,6 +131,7 @@ function normalizeRunSummary(summary: RunSummary): RunSummary {
     selected_tools: summary.selected_tools ?? [],
     business_summary: summary.business_summary ?? null,
     change_summary: summary.change_summary ?? null,
+    personalized_recommendation: summary.personalized_recommendation ?? null,
     candidate_plan_summary: summary.candidate_plan_summary ?? [],
   };
 }
@@ -172,6 +174,11 @@ export const api = {
     return request(`/runs/${encodeURIComponent(run_id)}/cancel`, {
       method: 'POST',
     });
+  },
+
+  getPreferenceSummary(recent_limit = 5): Promise<PreferenceSummary> {
+    const limit = Math.min(20, Math.max(1, Math.trunc(recent_limit)));
+    return requestEnvelope(`/preferences/summary?recent_limit=${limit}`);
   },
 
   verifyExecution(

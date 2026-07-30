@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { LiveAIResponsePanel } from '../components/demo/LiveAIResponsePanel';
+import { PreferenceEngineCard } from '../components/demo/PreferenceEngineCard';
 import { useEnterpriseSimulation } from '../hooks/useEnterpriseSimulation';
+import { usePreferenceMemory } from '../hooks/usePreferenceMemory';
 import type {
   EnterpriseEventType,
   EnterpriseScenario,
@@ -83,6 +85,7 @@ function scenarioProgress(
 
 export function LiveDemoPage() {
   const simulation = useEnterpriseSimulation();
+  const preferenceMemory = usePreferenceMemory();
   const [mode, setMode] = useState<EnterpriseSimulationMode>('TIMELINE');
   const [scenarioId, setScenarioId] = useState('');
   const [selectedChallengeId, setSelectedChallengeId] = useState<ChallengeId>('new-ticket');
@@ -688,6 +691,14 @@ export function LiveDemoPage() {
                 </span>
               </label>
             </section>
+
+            <PreferenceEngineCard
+              data={preferenceMemory.data}
+              error={preferenceMemory.error}
+              loading={preferenceMemory.loading}
+              refreshing={preferenceMemory.refreshing}
+              onRefresh={preferenceMemory.refresh}
+            />
 
             <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
               <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-cyan">
