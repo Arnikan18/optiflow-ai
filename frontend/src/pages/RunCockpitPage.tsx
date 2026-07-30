@@ -77,12 +77,20 @@ export function RunCockpitPage() {
   const guide = !presentationCaughtUp && latestVisibleEvent
     ? getActiveGuide(null, latestVisibleEvent.source)
     : liveGuide;
+  const railGuide = [
+    ...playback.visibleEvents.map((event) => getActiveGuide(null, event.source)),
+    ...(presentationCaughtUp ? [liveGuide] : []),
+  ].reduce((furthest, candidate) => (
+    (PHASE_INDEX[candidate.id] ?? 0) > (PHASE_INDEX[furthest.id] ?? 0)
+      ? candidate
+      : furthest
+  ), PHASE_GUIDES[0]);
   const presentationStatus: RunStatus | null = presentationCaughtUp
     ? status
     : guide.id === 'receive'
       ? 'RECEIVED'
       : 'RUNNING';
-  const activeJourneyStage = normalizeJourneyStage(guide.id);
+  const activeJourneyStage = normalizeJourneyStage(railGuide.id);
   const reviewedGuide = selectedStageId
     ? PHASE_GUIDES.find((phase) => phase.id === selectedStageId) ?? null
     : null;
@@ -237,7 +245,7 @@ export function RunCockpitPage() {
       <section className="bg-abyss border-b border-border-dim">
         <div className="max-w-[1440px] mx-auto px-5 sm:px-8 pt-5 pb-5">
           <DecisionJourneyRail
-            activeId={guide.id}
+            activeId={railGuide.id}
             selectedId={selectedStageId}
             failed={status === 'FAILED' || status === 'FAILED_SAGA'}
             onSelect={handleStageSelect}
