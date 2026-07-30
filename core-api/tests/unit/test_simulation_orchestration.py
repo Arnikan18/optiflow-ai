@@ -207,11 +207,17 @@ async def test_complete_run_lifecycle_handling():
             "timeline_position": 4,
             "enterprise_state": {"incidents": [1]}
         }
-        await complete_run(state_saga_fail)
+        saga_result = await complete_run(state_saga_fail)
+        assert saga_result["status"] == "FAILED_SAGA"
         # Baseline snapshot must NOT be updated
         assert "baseline_enterprise_snapshot" not in state_saga_fail
         # Coordinator must NOT be notified
         assert len(notifier.complete_calls) == 0
+        saga_save = mock_save_run.call_args_list[-1].kwargs
+        assert saga_save["status"] == "FAILED_SAGA"
+        saga_event = mock_save_ev.call_args_list[-1].kwargs
+        assert saga_event["event_type"] == "RUN_FAILED"
+        assert "successfully" not in saga_event["summary"]
 
 
 class FailingNotifier:

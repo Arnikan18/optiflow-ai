@@ -4,13 +4,20 @@ import app.database.persistence as persistence
 from datetime import datetime
 
 async def complete_run(state: AgentState) -> dict:
-    print("[complete_run]\nRun completed")
-    
     run_id = state.get("run_id", "unknown")
     approval_status = state.get("approval_status")
     status = state.get("status")
-    
-    updates = {"status": "COMPLETED"}
+
+    if status == "FAILED_SAGA":
+        final_status = "FAILED_SAGA"
+    elif status in {"FAILED", "FAILED_SAFE"} and approval_status != "REJECTED":
+        final_status = "FAILED"
+    else:
+        final_status = "COMPLETED"
+
+    print(f"[complete_run]\nRun closed with status {final_status}")
+
+    updates = {"status": final_status}
     if approval_status == "APPROVED" and status == "EXECUTED":
         # 1. Update AgentState baseline snapshot (successful execution baseline)
         state["baseline_enterprise_snapshot"] = state.get("enterprise_state")
@@ -40,7 +47,15 @@ async def complete_run(state: AgentState) -> dict:
             )
             
     checkpoint_data = dict(state)
-    checkpoint_data["status"] = "COMPLETED"
+    checkpoint_data["status"] = final_status
+    event_type = "RUN_COMPLETED" if final_status == "COMPLETED" else "RUN_FAILED"
+    event_summary = (
+        "Agent execution run completed successfully"
+        if final_status == "COMPLETED" and status == "EXECUTED"
+        else "Decision route closed safely without execution"
+        if final_status == "COMPLETED"
+        else f"Agent execution stopped with status {final_status}"
+    )
     
     async with async_session() as session:
         async with session.begin():
@@ -48,7 +63,7 @@ async def complete_run(state: AgentState) -> dict:
                 session=session,
                 run_id=run_id,
                 scenario_id="phase2-demo",
-                status="COMPLETED",
+                status=final_status,
                 current_node="complete_run",
                 completed_at=datetime.utcnow()
             )
@@ -63,9 +78,9 @@ async def complete_run(state: AgentState) -> dict:
                 session=session,
                 run_id=run_id,
                 sequence_number=100,
-                event_type="RUN_COMPLETED",
+                event_type=event_type,
                 source="complete_run",
-                summary="Agent execution run completed successfully",
+                summary=event_summary,
                 state_version=1
             )
             
