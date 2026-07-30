@@ -1,160 +1,112 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { RunEvent } from '../../types/api';
+import { useMemo } from 'react';
+import {
+  deriveTeamReadiness,
+  deriveTodayProblems,
+} from '../../data/todayDecisionModel';
+import type {
+  DemoPortfolio,
+  RunEvent,
+  RunSummary,
+} from '../../types/api';
 
 interface CausalEvidenceMapProps {
   phaseId: string;
   events: RunEvent[];
+  portfolio: DemoPortfolio | null;
+  runData: RunSummary | null;
 }
 
-type DetailView = 'pulled' | 'checked' | 'decided' | 'alternatives';
-
 interface PhaseLogic {
-  checks: string[];
-  effect: string;
+  label: string;
+  reason: string;
   alternative: string;
+}
+
+type SignalTone = 'cyan' | 'rose' | 'violet' | 'orange' | 'emerald';
+
+interface DataSignal {
+  label: string;
+  value: string;
+  tone: SignalTone;
 }
 
 const PHASE_LOGIC: Record<string, PhaseLogic> = {
   receive: {
-    checks: ['Goal text is valid', 'Run identity is unique'],
-    effect: 'An auditable route can begin.',
-    alternative: 'Invalid or missing goal text would stop before interpretation.',
+    label: 'Goal received',
+    reason: 'Create one traceable decision route.',
+    alternative: 'Missing goal → stop',
   },
   interpret: {
-    checks: ['Priority is identifiable', 'Limits are separated', 'Time horizon is present'],
-    effect: 'A structured goal is ready for policy checks.',
-    alternative: 'Unresolved ambiguity sends the route to a human clarification branch.',
+    label: 'Intent understood',
+    reason: 'Separate the priority from its limits.',
+    alternative: 'Unclear intent → clarify',
   },
   validate: {
-    checks: ['Policy fit', 'Critical ambiguity', 'Decision owner is known'],
-    effect: 'The route continues or pauses without making an unsafe assumption.',
-    alternative: 'A failed guard can request clarification or close the route safely.',
+    label: 'Safety checked',
+    reason: 'Do not plan from an unsafe assumption.',
+    alternative: 'Failed guard → safe stop',
   },
   clarify: {
-    checks: ['Owner answered', 'Conflict is resolved', 'Answer is recorded'],
-    effect: 'Evidence collection can resume.',
-    alternative: 'No answer leaves the route paused; a conflicting answer returns to validation.',
+    label: 'Human answer recorded',
+    reason: 'Resolve the missing decision before planning.',
+    alternative: 'No answer → remain paused',
   },
   evidence: {
-    checks: ['Source availability', 'Data freshness', 'Cross-source conflicts'],
-    effect: 'A joined operational state becomes available for planning.',
-    alternative: 'Missing or stale sources produce partial evidence or a safe stop.',
+    label: 'Live evidence joined',
+    reason: 'Use current clients, risks, and team capacity.',
+    alternative: 'Source changes → rebuild evidence',
   },
   optimize: {
-    checks: ['Hard constraints', 'Plan feasibility', 'Profile tradeoffs'],
-    effect: 'Candidate plans can enter the human approval gate.',
-    alternative: 'SLA-first, revenue-first, fairness-first, and balanced profiles change who is helped and who waits.',
+    label: 'Plans compared',
+    reason: 'Test several valid trade-offs before choosing.',
+    alternative: 'Different priority → different winner',
   },
   approval: {
-    checks: ['Recommendation is visible', 'Tradeoff is understood', 'Consent is explicit'],
-    effect: 'Only the selected plan becomes eligible for execution.',
-    alternative: 'Modify returns to planning; reject closes safely; no answer leaves the route waiting.',
+    label: 'Human decision required',
+    reason: 'Only an explicitly chosen plan may execute.',
+    alternative: 'Modify → replan · Reject → close',
   },
   executing: {
-    checks: ['Write is confirmed', 'Next action is safe', 'Compensation is available'],
-    effect: 'The route advances one verified change at a time.',
-    alternative: 'A rejected assignment can replan; a failed write can compensate and stop.',
+    label: 'Plan applied safely',
+    reason: 'Verify each operational write before continuing.',
+    alternative: 'Rejected write → recover or replan',
   },
   complete: {
-    checks: ['Receipts are present', 'Final state is verified', 'Audit record is closed'],
-    effect: 'The outcome can be reviewed and audited.',
-    alternative: 'Failed verification keeps the route open for recovery instead of showing success.',
+    label: 'Outcome verified',
+    reason: 'Close only after receipts and final state agree.',
+    alternative: 'Failed verification → keep route open',
   },
   failed: {
-    checks: ['Failure is located', 'Partial work is reversed', 'State is consistent'],
-    effect: 'A manager can retry or revise without hidden partial work.',
-    alternative: 'Retry follows the recorded recovery point; revision returns to planning.',
+    label: 'Route stopped safely',
+    reason: 'Avoid leaving hidden partial work.',
+    alternative: 'Revise inputs → retry from checkpoint',
   },
 };
 
-const ENGINES = [
-  {
-    id: 'crm',
-    label: 'CRM',
-    aliases: ['crm', 'customer', 'arr', 'renewal', 'account'],
-    tone: 'border-ops-violet/35 bg-ops-violet/10 text-ops-violet',
-  },
-  {
-    id: 'incident',
-    label: 'INC',
-    aliases: ['incident', 'severity', 'sla', 'assignment_status'],
-    tone: 'border-ops-rose/35 bg-ops-rose/10 text-ops-rose',
-  },
-  {
-    id: 'workforce',
-    label: 'TEAM',
-    aliases: ['workforce', 'specialist', 'skill', 'capacity', 'workload', 'reservation'],
-    tone: 'border-ops-cyan/35 bg-ops-cyan/10 text-ops-cyan',
-  },
-  {
-    id: 'communication',
-    label: 'COMMS',
-    aliases: ['communication', 'notification', 'recipient', 'delivery', 'message'],
-    tone: 'border-ops-orange/35 bg-ops-orange/10 text-ops-orange',
-  },
-];
-
-const VIEW_META: Record<DetailView, {
-  number: string;
-  label: string;
-  prompt: string;
-  tone: string;
-  icon: 'download' | 'shield' | 'decision' | 'branch';
-}> = {
-  pulled: {
-    number: '01',
-    label: 'Pulled',
-    prompt: 'What came in?',
-    tone: 'text-ops-cyan border-ops-cyan/35 bg-ops-cyan/[0.055]',
-    icon: 'download',
-  },
-  checked: {
-    number: '02',
-    label: 'Checked',
-    prompt: 'What rules ran?',
-    tone: 'text-ops-violet border-ops-violet/35 bg-ops-violet/[0.055]',
-    icon: 'shield',
-  },
-  decided: {
-    number: '03',
-    label: 'Decided',
-    prompt: 'What was recorded?',
-    tone: 'text-ops-amber border-ops-amber/35 bg-ops-amber/[0.055]',
-    icon: 'decision',
-  },
-  alternatives: {
-    number: '04',
-    label: 'Alternatives',
-    prompt: 'What else could happen?',
-    tone: 'text-ops-orange border-ops-orange/35 bg-ops-orange/[0.055]',
-    icon: 'branch',
-  },
+const SIGNAL_CLASSES: Record<SignalTone, string> = {
+  cyan: 'border-ops-cyan/30 bg-ops-cyan/[0.07] text-ops-cyan',
+  rose: 'border-ops-rose/30 bg-ops-rose/[0.07] text-ops-rose',
+  violet: 'border-ops-violet/30 bg-ops-violet/[0.07] text-ops-violet',
+  orange: 'border-ops-orange/30 bg-ops-orange/[0.07] text-ops-orange',
+  emerald: 'border-ops-emerald/30 bg-ops-emerald/[0.07] text-ops-emerald',
 };
 
 function Icon({
   name,
-  className = 'w-4 h-4',
 }: {
-  name: 'download' | 'shield' | 'decision' | 'branch' | 'check';
-  className?: string;
+  name: 'data' | 'reason' | 'branch' | 'check';
 }) {
   const paths = {
-    download: (
+    data: (
       <>
-        <path d="M12 3v11M8 10l4 4 4-4" />
-        <path d="M5 18v2h14v-2" />
+        <ellipse cx="12" cy="5" rx="7" ry="3" />
+        <path d="M5 5v7c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 12v7c0 1.7 3.1 3 7 3s7-1.3 7-3v-7" />
       </>
     ),
-    shield: (
+    reason: (
       <>
-        <path d="M12 3 5 6v5c0 4.8 2.8 8 7 10 4.2-2 7-5.2 7-10V6l-7-3Z" />
-        <path d="m9 12 2 2 4-4" />
-      </>
-    ),
-    decision: (
-      <>
-        <circle cx="12" cy="12" r="8" />
-        <path d="m8.5 12 2.2 2.2 4.8-5" />
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.5 2.5L16.5 8" />
       </>
     ),
     branch: (
@@ -174,7 +126,7 @@ function Icon({
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
+      className="w-5 h-5"
       aria-hidden="true"
     >
       {paths[name]}
@@ -182,189 +134,284 @@ function Icon({
   );
 }
 
-function collectPayloadFields(
-  value: unknown,
-  prefix = '',
-  depth = 0,
-): string[] {
-  if (!value || typeof value !== 'object' || depth > 1) return [];
-
-  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
-    const field = prefix ? `${prefix}.${key}` : key;
-    return [field, ...collectPayloadFields(child, field, depth + 1)];
-  });
+function formatMoney(value: number | null | undefined): string {
+  if (value == null) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
-function readableEventType(eventType: string): string {
+function shortEventName(eventType: string): string {
   return eventType
     .toLowerCase()
     .replace(/_/g, ' ')
     .replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
-export function CausalEvidenceMap({ phaseId, events }: CausalEvidenceMapProps) {
-  const [activeView, setActiveView] = useState<DetailView>('pulled');
+function textValue(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (Array.isArray(value) && value.length > 0) {
+    return value.map(String).slice(0, 3).join(' · ');
+  }
+  return null;
+}
+
+export function CausalEvidenceMap({
+  phaseId,
+  events,
+  portfolio,
+  runData,
+}: CausalEvidenceMapProps) {
   const logic = PHASE_LOGIC[phaseId] ?? PHASE_LOGIC.receive;
   const latestEvent = events.at(-1);
-  const payloadFields = useMemo(() => Array.from(
-    new Set(events.flatMap((event) => collectPayloadFields(event.payload))),
-  ).slice(0, 8), [events]);
-  const sourceLabels = Array.from(new Set(events.map((event) => event.source))).slice(0, 4);
-  const presentedEvidence = JSON.stringify(
-    events.map((event) => ({ source: event.source, payload: event.payload })),
-  ).toLowerCase();
-  const inputs = payloadFields.length > 0 ? payloadFields : sourceLabels;
-  const outcome = latestEvent?.summary
-    ?? (latestEvent ? readableEventType(latestEvent.event_type) : 'Waiting for a recorded event');
+  const problems = useMemo(
+    () => portfolio ? deriveTodayProblems(portfolio) : [],
+    [portfolio],
+  );
+  const workers = useMemo(
+    () => portfolio ? deriveTeamReadiness(portfolio) : [],
+    [portfolio],
+  );
 
-  useEffect(() => {
-    setActiveView('pulled');
-  }, [phaseId]);
+  const signals = useMemo<DataSignal[]>(() => {
+    if (phaseId === 'evidence') {
+      const prioritySignals = problems.slice(0, 3).map((problem) => ({
+        label: problem.customer?.customer_name ?? problem.incident.incident_id,
+        value: `${problem.incident.severity ?? 'Unknown'} · ${problem.deadlineLabel}`,
+        tone: 'rose' as const,
+      }));
+      const readyWorkers = workers.filter((worker) => worker.state === 'ready').length;
+      return [
+        ...prioritySignals,
+        {
+          label: 'Team capacity',
+          value: `${readyWorkers}/${workers.length} ready`,
+          tone: 'cyan',
+        },
+      ];
+    }
 
-  const panelContent: Record<DetailView, React.ReactNode> = {
-    pulled: (
-      <div>
-        <div className="flex flex-wrap gap-1.5">
-          {ENGINES.map((engine) => {
-            const mentioned = engine.aliases.some((alias) => presentedEvidence.includes(alias));
-            return (
-              <span
-                key={engine.id}
-                className={`rounded-full border px-2.5 py-1 text-[8px] font-mono font-bold ${
-                  mentioned ? engine.tone : 'border-border-dim bg-deep text-ink-ghost'
-                }`}
-              >
-                {engine.label}
-                <span className={`inline-block w-1 h-1 rounded-full ml-1.5 ${
-                  mentioned ? 'bg-current' : 'bg-ink-ghost'
-                }`} />
-              </span>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-1.5 mt-4">
-          {inputs.length > 0 ? inputs.map((input) => (
-            <code key={input} className="rounded-lg border border-border-dim bg-abyss px-2.5 py-1.5 text-[8px] text-ink-secondary">
-              {input}
-            </code>
-          )) : (
-            <p className="text-[10px] text-ink-muted">No fields have been presented for this node yet.</p>
-          )}
-        </div>
-      </div>
-    ),
-    checked: (
-      <ul className="grid sm:grid-cols-3 gap-2">
-        {logic.checks.map((check) => (
-          <li key={check} className="rounded-xl border border-border-dim bg-abyss p-3 flex items-start gap-2">
-            <span className="w-5 h-5 shrink-0 rounded-full bg-ops-violet/10 text-ops-violet flex items-center justify-center">
-              <Icon name="check" className="w-3 h-3" />
-            </span>
-            <span className="text-[10px] font-semibold leading-relaxed text-ink-secondary">{check}</span>
-          </li>
-        ))}
-      </ul>
-    ),
-    decided: (
-      <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-center">
-        <div className="rounded-xl border border-ops-amber/30 bg-ops-amber/5 p-4">
-          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ops-amber">Recorded result</p>
-          <p className="text-xs font-bold leading-relaxed text-ink-primary mt-2">{outcome}</p>
-        </div>
-        <div className="max-w-xs">
-          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">Effect</p>
-          <p className="text-[10px] leading-relaxed text-ink-secondary mt-2">{logic.effect}</p>
-        </div>
-      </div>
-    ),
-    alternatives: (
-      <div className="rounded-xl border border-ops-orange/30 bg-ops-orange/5 p-4 flex items-start gap-3">
-        <span className="w-8 h-8 shrink-0 rounded-full bg-ops-orange/10 text-ops-orange flex items-center justify-center">
-          <Icon name="branch" />
-        </span>
-        <div>
-          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ops-orange">Other path</p>
-          <p className="text-[10px] leading-relaxed text-ink-secondary mt-2">{logic.alternative}</p>
-        </div>
-      </div>
-    ),
-  };
+    if (phaseId === 'optimize' || phaseId === 'approval') {
+      return (runData?.candidate_plans ?? []).slice(0, 4).map((plan) => ({
+        label: plan.profile,
+        value: `${plan.metrics.assigned_count} placed · ${formatMoney(plan.metrics.arr_protected)}`,
+        tone: plan.plan_id === runData?.recommended_plan_id ? 'emerald' : 'violet',
+      }));
+    }
+
+    if (phaseId === 'executing' || phaseId === 'complete' || phaseId === 'failed') {
+      return events.slice(-4).map((event) => ({
+        label: event.source.replace(/_/g, ' '),
+        value: event.summary ?? shortEventName(event.event_type),
+        tone: event.event_type.includes('FAIL') ? 'rose' : 'emerald',
+      }));
+    }
+
+    const objective = textValue(runData?.structured_goal?.objective)
+      ?? textValue(runData?.structured_goal?.objectives);
+    const constraints = textValue(runData?.structured_goal?.constraints);
+    const ambiguities = textValue(runData?.structured_goal?.ambiguities);
+    const selectedToolCount = runData?.selected_tools.filter((tool) => tool.selected).length ?? 0;
+
+    return [
+      ...(objective ? [{ label: 'Priority', value: objective, tone: 'orange' as const }] : []),
+      ...(constraints ? [{ label: 'Limits', value: constraints, tone: 'cyan' as const }] : []),
+      ...(ambiguities ? [{ label: 'Needs answer', value: ambiguities, tone: 'rose' as const }] : []),
+      ...(selectedToolCount > 0 ? [{
+        label: 'Evidence sources',
+        value: `${selectedToolCount} selected`,
+        tone: 'violet' as const,
+      }] : []),
+    ];
+  }, [events, phaseId, problems, runData, workers]);
+
+  const recordedResult = latestEvent?.summary
+    ?? (latestEvent ? shortEventName(latestEvent.event_type) : logic.label);
 
   return (
-    <section className="rounded-2xl border border-border-dim bg-deep/50 p-4 sm:p-5 mb-6" aria-labelledby="node-questions-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section
+      id="decision-node-detail"
+      className="rounded-[1.4rem] border border-border-base bg-deep/65 p-5 sm:p-6 mb-6 animate-fade-up"
+      aria-labelledby="node-detail-title"
+    >
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.17em] text-ops-cyan">
-            Selected node
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
+            Selected step
           </p>
-          <h2 id="node-questions-title" className="text-sm font-extrabold tracking-[-0.025em] text-ink-primary mt-1">
-            Four answers. Full evidence on demand.
+          <h2 id="node-detail-title" className="text-xl sm:text-2xl font-extrabold tracking-[-0.035em] text-ink-primary mt-1.5">
+            {logic.label}
           </h2>
         </div>
-        <span className="rounded-full border border-border-dim bg-abyss px-2.5 py-1 text-[8px] font-mono text-ink-muted">
-          {events.length} event{events.length === 1 ? '' : 's'}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4" role="tablist" aria-label="Node explanation">
-        {(Object.keys(VIEW_META) as DetailView[]).map((view) => {
-          const meta = VIEW_META[view];
-          const active = activeView === view;
-          return (
-            <button
-              key={view}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setActiveView(view)}
-              className={`rounded-xl border p-3 text-left transition-all focus-ring ${
-                active ? `${meta.tone} shadow-card -translate-y-0.5` : 'border-border-dim bg-abyss text-ink-muted hover:border-border-base'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <Icon name={meta.icon} />
-                <span className="text-[8px] font-mono opacity-60">{meta.number}</span>
-              </div>
-              <p className="text-[10px] font-extrabold mt-2">{meta.label}</p>
-              <p className="text-[8px] mt-0.5 opacity-70">{meta.prompt}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        role="tabpanel"
-        className="rounded-xl border border-border-dim bg-deep/70 p-4 mt-2 min-h-[104px] animate-fade-in"
-        key={activeView}
-      >
-        {panelContent[activeView]}
-      </div>
-
-      <details className="group mt-3">
-        <summary className="cursor-pointer list-none rounded-xl border border-border-dim bg-abyss px-4 py-3 flex items-center justify-between gap-3 text-[9px] font-semibold text-ink-secondary hover:border-border-base focus-ring">
-          <span>View complete presented evidence</span>
-          <span className="text-ops-cyan group-open:rotate-45 transition-transform">+</span>
-        </summary>
-        <div className="rounded-xl border border-border-dim bg-abyss p-4 mt-2 space-y-3">
-          {events.length > 0 ? events.map((event, index) => (
-            <article key={`${event.event_type}-${index}`} className="border-b border-border-dim pb-3 last:border-0 last:pb-0">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[9px] font-mono font-bold text-ink-secondary">
-                  {readableEventType(event.event_type)}
-                </p>
-                <span className="text-[8px] font-mono text-ink-muted">{event.source}</span>
-              </div>
-              {event.summary && (
-                <p className="text-[9px] leading-relaxed text-ink-muted mt-1.5">{event.summary}</p>
-              )}
-              <pre className="max-h-52 overflow-auto rounded-lg bg-deep p-3 mt-2 text-[8px] leading-relaxed text-ink-muted">
-                {JSON.stringify(event.payload, null, 2)}
-              </pre>
-            </article>
-          )) : (
-            <p className="text-[10px] text-ink-muted">No event payload is available for this node yet.</p>
+        <div className="flex items-center gap-2">
+          {runData?.confidence_report && (
+            <span className="rounded-full border border-ops-cyan/25 bg-ops-cyan/[0.07] px-3 py-1.5 text-[11px] font-mono font-semibold text-ops-cyan">
+              {Math.round(runData.confidence_report.score)}% confidence
+            </span>
           )}
+          <span className="rounded-full border border-border-dim bg-abyss px-3 py-1.5 text-[11px] font-mono text-ink-muted">
+            {events.length} record{events.length === 1 ? '' : 's'}
+          </span>
         </div>
+      </header>
+
+      <div className="grid lg:grid-cols-[1.4fr_1fr_1fr] gap-3 mt-5">
+        <article className="rounded-2xl border border-border-dim bg-abyss p-4">
+          <div className="flex items-center gap-2 text-ops-cyan">
+            <span className="w-9 h-9 rounded-xl bg-ops-cyan/10 flex items-center justify-center">
+              <Icon name="data" />
+            </span>
+            <h3 className="text-sm font-extrabold text-ink-primary">Data used</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2 mt-4">
+            {signals.length > 0 ? signals.map((signal, index) => (
+              <div
+                key={`${signal.label}-${index}`}
+                className={`rounded-xl border px-3 py-2.5 ${SIGNAL_CLASSES[signal.tone]}`}
+              >
+                <p className="text-[10px] font-mono font-bold uppercase tracking-[0.08em]">
+                  {signal.label}
+                </p>
+                <p className="text-xs font-semibold leading-snug text-ink-primary mt-1">
+                  {signal.value}
+                </p>
+              </div>
+            )) : (
+              <p className="text-sm text-ink-muted sm:col-span-2">Waiting for this step&apos;s data.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-ops-emerald/25 bg-ops-emerald/[0.045] p-4">
+          <div className="flex items-center gap-2 text-ops-emerald">
+            <span className="w-9 h-9 rounded-xl bg-ops-emerald/10 flex items-center justify-center">
+              <Icon name="reason" />
+            </span>
+            <h3 className="text-sm font-extrabold text-ink-primary">Why</h3>
+          </div>
+          <p className="text-base font-extrabold leading-snug text-ink-primary mt-4">
+            {recordedResult}
+          </p>
+          <p className="text-sm leading-relaxed text-ink-secondary mt-2">
+            {logic.reason}
+          </p>
+        </article>
+
+        <article className="rounded-2xl border border-ops-orange/25 bg-ops-orange/[0.045] p-4">
+          <div className="flex items-center gap-2 text-ops-orange">
+            <span className="w-9 h-9 rounded-xl bg-ops-orange/10 flex items-center justify-center">
+              <Icon name="branch" />
+            </span>
+            <h3 className="text-sm font-extrabold text-ink-primary">If data changes</h3>
+          </div>
+          <p className="text-base font-extrabold leading-snug text-ink-primary mt-4">
+            {logic.alternative}
+          </p>
+          <div className="flex items-center gap-2 mt-4 text-xs font-semibold text-ops-orange">
+            <span className="w-5 h-5 rounded-full bg-ops-orange/10 flex items-center justify-center">
+              <Icon name="check" />
+            </span>
+            Route recalculates
+          </div>
+        </article>
+      </div>
+
+      <details className="group mt-4">
+        <summary className="cursor-pointer list-none rounded-xl border border-border-dim bg-abyss px-4 py-3.5 flex items-center justify-between gap-3 text-sm font-bold text-ink-secondary hover:border-border-base focus-ring">
+          <span>View all data</span>
+          <span className="text-ops-cyan group-open:rotate-45 transition-transform text-xl leading-none">+</span>
+        </summary>
+        <div className="grid xl:grid-cols-3 gap-3 mt-3">
+          <section className="rounded-xl border border-border-dim bg-abyss p-4">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ops-rose">
+              Priority incidents · {problems.length}
+            </h3>
+            <div className="space-y-2 mt-3">
+              {problems.map((problem) => (
+                <div key={problem.incident.incident_id} className="rounded-lg bg-deep px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-ink-primary">
+                      {problem.customer?.customer_name ?? problem.incident.incident_id}
+                    </p>
+                    <span className="text-[10px] font-mono font-bold text-ops-rose">
+                      {problem.incident.severity ?? 'UNKNOWN'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-muted mt-1">
+                    {problem.deadlineLabel} · {problem.incident.incident_id}
+                  </p>
+                </div>
+              ))}
+              {problems.length === 0 && <p className="text-sm text-ink-muted">No active incidents.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border-dim bg-abyss p-4">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ops-cyan">
+              Workforce · {workers.length}
+            </h3>
+            <div className="space-y-2 mt-3">
+              {workers.map((worker) => (
+                <div key={worker.specialist.specialist_id} className="rounded-lg bg-deep px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-ink-primary">{worker.specialist.specialist_name}</p>
+                    <span className="text-[10px] font-mono font-bold uppercase text-ops-cyan">
+                      {worker.state}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-muted mt-1">
+                    {worker.remainingCapacity} free · {worker.utilisation}% used
+                  </p>
+                </div>
+              ))}
+              {workers.length === 0 && <p className="text-sm text-ink-muted">No workforce data.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border-dim bg-abyss p-4">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ops-violet">
+              Clients · {portfolio?.customers.length ?? 0}
+            </h3>
+            <div className="space-y-2 mt-3">
+              {(portfolio?.customers ?? []).map((customer) => (
+                <div key={customer.customer_id} className="rounded-lg bg-deep px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-ink-primary">{customer.customer_name}</p>
+                    <span className="text-xs font-semibold text-ops-violet">{formatMoney(customer.arr)}</span>
+                  </div>
+                  <p className="text-xs text-ink-muted mt-1">
+                    {customer.current_incident_count} incident{customer.current_incident_count === 1 ? '' : 's'}
+                    {customer.renewal_risk ? ' · renewal risk' : ''}
+                  </p>
+                </div>
+              ))}
+              {!portfolio?.customers.length && <p className="text-sm text-ink-muted">No client data.</p>}
+            </div>
+          </section>
+        </div>
+
+        <section className="rounded-xl border border-border-dim bg-abyss p-4 mt-3">
+          <h3 className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ink-secondary">
+            Recorded events · {events.length}
+          </h3>
+          <div className="space-y-2 mt-3">
+            {events.map((event) => (
+              <details key={event.event_id} className="rounded-lg border border-border-dim bg-deep">
+                <summary className="cursor-pointer list-none px-3 py-2.5 flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-ink-primary">{shortEventName(event.event_type)}</span>
+                  <span className="text-[11px] font-mono text-ink-muted">{event.source}</span>
+                </summary>
+                <pre className="max-h-72 overflow-auto border-t border-border-dim p-3 text-[11px] leading-relaxed text-ink-secondary">
+                  {JSON.stringify(event.payload, null, 2)}
+                </pre>
+              </details>
+            ))}
+            {events.length === 0 && <p className="text-sm text-ink-muted">No records for this step yet.</p>}
+          </div>
+        </section>
       </details>
     </section>
   );
