@@ -116,9 +116,9 @@ export function SummaryPanel({ runData, events }: SummaryPanelProps) {
     : hasVerifiedWrites
       ? {
           eyebrow: 'Verified execution outcome',
-          title: `${successfulReceipts.length} allocation ${successfulReceipts.length === 1 ? 'receipt confirms' : 'receipts confirm'} the approved change.`,
+          title: 'Work assigned successfully.',
           description:
-            'These results come from SAGA receipts in the audit stream. Each receipt names the allocation and the operations recorded for it.',
+            `${successfulReceipts.length} verified ${successfulReceipts.length === 1 ? 'assignment was' : 'assignments were'} recorded across Workforce, Incident, and Communication.`,
           border: 'border-ops-emerald/35 bg-ops-emerald/[0.055]',
           tone: 'text-ops-emerald',
         }

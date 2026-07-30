@@ -25,7 +25,7 @@ const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
   EXECUTING: { label: 'Applying decision', cls: 'text-ops-orange bg-ops-orange/10' },
   REPLANNING: { label: 'Replanning route', cls: 'text-ops-violet bg-ops-violet/10' },
   EXECUTED: { label: 'Execution complete', cls: 'text-ops-cyan bg-ops-cyan/10' },
-  FAILED_SAGA: { label: 'Execution recovered', cls: 'text-ops-rose bg-ops-rose/10' },
+  FAILED_SAGA: { label: 'Execution stopped', cls: 'text-ops-rose bg-ops-rose/10' },
   COMPLETED: { label: 'Route complete', cls: 'text-ops-emerald bg-ops-emerald/10' },
   FAILED: { label: 'Safely stopped', cls: 'text-ops-rose bg-ops-rose/10' },
   CANCELLED: { label: 'Cancelled', cls: 'text-ink-secondary bg-surface' },
@@ -70,7 +70,10 @@ export function RunCockpitPage() {
   const streamUnavailable = usingFallback && events.length === 0;
   const presentationCaughtUp = playback.isCaughtUp || streamUnavailable;
   const latestVisibleEvent = playback.visibleEvents.at(-1);
-  const liveGuide = getActiveGuide(status, runData?.current_node ?? null);
+  const liveGuide = getActiveGuide(
+    status === 'FAILED_SAGA' ? 'FAILED' : status,
+    status === 'FAILED_SAGA' ? null : runData?.current_node ?? null,
+  );
   const guide = !presentationCaughtUp && latestVisibleEvent
     ? getActiveGuide(null, latestVisibleEvent.source)
     : liveGuide;
@@ -97,7 +100,12 @@ export function RunCockpitPage() {
   const isApproval = presentationCaughtUp && status === 'WAITING_FOR_APPROVAL';
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
   const isTerminal = presentationCaughtUp
-    && (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED');
+    && (
+      status === 'COMPLETED'
+      || status === 'FAILED'
+      || status === 'FAILED_SAGA'
+      || status === 'CANCELLED'
+    );
   const hasExecutionHistory = events.some((event) => event.source === 'execute_saga');
   const latestSagaOutcome = [...events].reverse().find((event) =>
     event.event_type === 'SAGA_COMPLETED' || event.event_type === 'SAGA_FAILED',
@@ -232,7 +240,7 @@ export function RunCockpitPage() {
           <DecisionJourneyRail
             activeId={guide.id}
             selectedId={selectedStageId}
-            failed={status === 'FAILED'}
+            failed={status === 'FAILED' || status === 'FAILED_SAGA'}
             onSelect={handleStageSelect}
           />
         </div>
