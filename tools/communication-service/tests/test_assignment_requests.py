@@ -82,6 +82,29 @@ def test_create_assignment_request_success_duplicate_and_validation(client, auth
         )
 
 
+def test_demo_default_response_accepts_when_no_explicit_rule(client, auth_headers, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("DEMO_DEFAULT_ASSIGNMENT_RESPONSE", "ACCEPTED")
+    get_settings.cache_clear()
+
+    created = assert_success(
+        client.post(
+            "/communication/api/v1/assignment-requests",
+            json=assignment_payload(request_id="AR-DEMO-DEFAULT", incident_id="INC-DEMO-DEFAULT"),
+            headers=auth_headers,
+        ),
+        201,
+    )
+    assert created["status"] == "PENDING"
+
+    accepted = assert_success(
+        client.get("/communication/api/v1/assignment-requests/AR-DEMO-DEFAULT", headers=auth_headers)
+    )
+    assert accepted["status"] == "ACCEPTED"
+    assert accepted["response_reason"] == "Configured demo default response."
+
+
 def test_create_assignment_request_idempotency_replay_and_payload_mismatch(client, auth_headers):
     payload = assignment_payload(
         request_id="AR-IDEM-001",
