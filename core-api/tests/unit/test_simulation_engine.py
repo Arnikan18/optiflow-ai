@@ -76,6 +76,20 @@ class FakeClient:
         self.specialists[specialist_id]["availability"] = available
         return self.specialists[specialist_id]
 
+    async def set_specialist_capacity(
+        self,
+        specialist_id,
+        *,
+        capacity,
+        current_workload,
+        reason,
+    ):
+        if capacity is not None:
+            self.specialists[specialist_id]["capacity"] = capacity
+        if current_workload is not None:
+            self.specialists[specialist_id]["current_workload"] = current_workload
+        return self.specialists[specialist_id]
+
     async def release_incident_workload(self, incident_id, reason):
         return {"incident_id": incident_id, "released_reservations": 1}
 
@@ -184,6 +198,43 @@ async def test_event_engine_rejects_non_meaningful_priority_escalation(session):
     assert result.accepted is False
     assert result.processing_status == EventProcessingStatus.FAILED
     assert result.errors[0]["error_code"] == "SIMULATION_PRIORITY_NOT_ESCALATED"
+
+
+@pytest.mark.asyncio
+async def test_event_engine_changes_worker_capacity(session):
+    FakeClient.specialists = {
+        "SPEC-1": {
+            "specialist_id": "SPEC-1",
+            "availability": True,
+            "capacity": 3,
+            "current_workload": 1,
+        }
+    }
+    engine = EnterpriseEventEngine(client_factory=FakeClient)
+    request = JudgeEventRequest(
+        event_id="EVT-WORKER-CAPACITY",
+        event_type="CHANGE_WORKER_CAPACITY",
+        payload={
+            "specialist_id": "SPEC-1",
+            "capacity": 4,
+            "current_workload": 3,
+            "reason": "Judge changed the live team load",
+        },
+    )
+
+    result = await engine.process_event(
+        session,
+        request,
+        simulation_id="SIM-1",
+        request_id="REQ-1",
+        current_stage=None,
+        current_simulation_time=None,
+    )
+
+    assert result.accepted is True
+    assert result.changed_entities[0]["change"] == "worker_capacity_changed"
+    assert FakeClient.specialists["SPEC-1"]["capacity"] == 4
+    assert FakeClient.specialists["SPEC-1"]["current_workload"] == 3
 
 
 @pytest.mark.asyncio

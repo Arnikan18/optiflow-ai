@@ -11,6 +11,7 @@ from app.database.models import SimulationEventHistory, SimulationNotification
 from app.simulation.schemas import (
     ChangeEstimatedEffortPayload,
     ChangeSLAPayload,
+    ChangeWorkerCapacityPayload,
     EngineerAvailabilityPayload,
     EnterpriseEventType,
     EscalatePriorityPayload,
@@ -298,6 +299,8 @@ class EnterpriseEventEngine:
             return await self._change_sla(client, payload)
         if event_type == EnterpriseEventType.CHANGE_ESTIMATED_EFFORT:
             return await self._change_estimated_effort(client, payload)
+        if event_type == EnterpriseEventType.CHANGE_WORKER_CAPACITY:
+            return await self._change_worker_capacity(client, payload)
         if event_type == EnterpriseEventType.ENGINEER_ON_LEAVE:
             return await self._engineer_availability(client, payload, available=False)
         if event_type == EnterpriseEventType.ENGINEER_RETURNED:
@@ -369,6 +372,26 @@ class EnterpriseEventEngine:
             {"estimated_effort_minutes": payload.estimated_effort_minutes},
         )
         return [{"entity_type": "incident", "entity_id": updated["incident_id"], "change": "estimated_effort_changed"}]
+
+    async def _change_worker_capacity(
+        self,
+        client: EnterpriseServiceClient,
+        payload: ChangeWorkerCapacityPayload,
+    ) -> list[dict[str, Any]]:
+        await client.get_specialist(payload.specialist_id)
+        updated = await client.set_specialist_capacity(
+            payload.specialist_id,
+            capacity=payload.capacity,
+            current_workload=payload.current_workload,
+            reason=payload.reason,
+        )
+        return [
+            {
+                "entity_type": "specialist",
+                "entity_id": updated["specialist_id"],
+                "change": "worker_capacity_changed",
+            }
+        ]
 
     async def _engineer_availability(
         self,
