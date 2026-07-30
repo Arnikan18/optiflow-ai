@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import type { CandidatePlan, CandidatePlanSummary } from '../../types/api';
+import { ManualAssignmentPanel } from './ManualAssignmentPanel';
 
 interface PlanWorkspaceProps {
   runId: string;
@@ -532,6 +533,12 @@ export function PlanWorkspace({
       )}
 
       <PlanEvidence plans={sorted} recommendedPlanId={recommended.plan_id} />
+
+      <ManualAssignmentPanel
+        runId={runId}
+        plan={recommended}
+        onApproved={onApproved}
+      />
 
       <details className="rounded-2xl border border-border-dim bg-deep">
         <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-base font-bold text-ink-primary focus-ring rounded-2xl">
