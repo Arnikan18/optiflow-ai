@@ -4,6 +4,7 @@ import json
 from typing import Dict, Any, Optional
 from sqlalchemy import text
 from app.agent.graph import compiled_graph
+from app.config.settings import settings
 from app.database.session import async_session
 
 logger = logging.getLogger("core-api.agent.manager")
@@ -13,7 +14,10 @@ async def run_agent_background(state: Dict[str, Any]) -> None:
     run_id = state.get("run_id", "unknown")
     print(f"[ExecutionManager] Starting background task for run: {run_id}")
     try:
-        await compiled_graph.ainvoke(state)
+        await compiled_graph.ainvoke(
+            state,
+            config={"recursion_limit": settings.max_graph_steps},
+        )
         print(f"[ExecutionManager] Background task completed for run: {run_id}")
     except Exception as e:
         logger.error(f"[ExecutionManager] Critical error running agent graph for {run_id}: {str(e)}")

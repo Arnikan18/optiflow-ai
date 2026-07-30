@@ -1,9 +1,26 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+
+
+@pytest.mark.asyncio
+async def test_background_run_uses_configured_graph_step_limit():
+    from app.agent.manager import run_agent_background
+    from app.config.settings import settings
+
+    state = {"run_id": "RUN-REPLAN", "status": "REPLANNING"}
+    graph = MagicMock()
+    graph.ainvoke = AsyncMock()
+    with patch("app.agent.manager.compiled_graph", graph):
+        await run_agent_background(state)
+
+    graph.ainvoke.assert_awaited_once_with(
+        state,
+        config={"recursion_limit": settings.max_graph_steps},
+    )
 
 def test_create_run_route():
     with patch("app.main.start_new_run") as mock_start:
