@@ -19,7 +19,8 @@ export default function App() {
           <Route path="/run/:runId" element={<RunCockpitPage />} />
           <Route path="/history" element={<RunHistoryPage />} />
           <Route path="/demo-lab" element={<DemoLabPage />} />
-          <Route path="/live-demo" element={<LiveDemoPage />} />
+          <Route path="/judge" element={<LiveDemoPage />} />
+          <Route path="/live-demo" element={<Navigate to="/judge" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route
             path="*"
