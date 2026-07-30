@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { LiveAIResponsePanel } from '../components/demo/LiveAIResponsePanel';
+import { LiveDemoJourneyStrip } from '../components/demo/LiveDemoJourneyStrip';
 import {
   LiveEnterpriseEditor,
   type EnterpriseChange,
@@ -71,7 +72,7 @@ function scenarioProgress(
 export function LiveDemoPage() {
   const simulation = useEnterpriseSimulation();
   const preferenceMemory = usePreferenceMemory();
-  const [mode, setMode] = useState<EnterpriseSimulationMode>('TIMELINE');
+  const [mode, setMode] = useState<EnterpriseSimulationMode>('INTERACTIVE');
   const [scenarioId, setScenarioId] = useState('');
   const [launchingAI, setLaunchingAI] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -183,20 +184,19 @@ export function LiveDemoPage() {
                   {simulationStatus}
                 </span>
               </div>
-              <h1 className="text-4xl sm:text-6xl font-extrabold tracking-[-0.06em] leading-[0.95] mt-4">
-                Watch the business change.
-                <span className="block text-ops-amber">Watch the decision respond.</span>
+              <h1 className="text-4xl sm:text-5xl font-extrabold tracking-[-0.055em] leading-[0.98] mt-4">
+                Change one signal.
+                <span className="block text-ops-amber">See the whole decision respond.</span>
               </h1>
-              <p className="max-w-2xl text-base leading-relaxed text-ink-secondary mt-5">
-                Run the planned release-day timeline or let judges change the same live enterprise
-                directly. Every AI analysis still uses the governed OptiFlow decision route.
+              <p className="max-w-2xl text-base text-ink-secondary mt-4">
+                Edit real demo data, compare the new recommendation, then make the final decision.
               </p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-2 min-w-0 xl:min-w-[430px]">
               {([
-                ['TIMELINE', 'Timeline', 'Advance the prepared release-day story'],
-                ['INTERACTIVE', 'Judge challenge', 'Change the live enterprise directly'],
+                ['INTERACTIVE', 'Live controls', 'Judges edit a problem or worker'],
+                ['TIMELINE', 'Guided story', 'Advance the prepared release day'],
               ] as const).map(([value, label, detail]) => (
                 <button
                   key={value}
@@ -231,7 +231,7 @@ export function LiveDemoPage() {
 
         <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
           <div className="grid xl:grid-cols-[minmax(260px,1fr)_auto] gap-5 items-end">
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${mode === 'TIMELINE' ? 'sm:grid-cols-2' : ''}`}>
               <label className="block">
                 <span className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ink-muted">
                   Scenario
@@ -247,19 +247,21 @@ export function LiveDemoPage() {
                   ))}
                 </select>
               </label>
-              <div>
-                <p className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ink-muted">
-                  Simulation clock
-                </p>
-                <div className="mt-2 rounded-xl border border-border-dim bg-deep px-4 py-2.5 flex items-center justify-between gap-3">
-                  <span className="text-2xl font-extrabold text-ink-primary">
-                    {formatClock(simulation.status?.current_time)}
-                  </span>
-                  <span className="text-xs font-mono text-ops-cyan">
-                    {simulation.status?.current_stage ?? 'Not started'}
-                  </span>
+              {mode === 'TIMELINE' && (
+                <div>
+                  <p className="text-xs font-mono font-bold uppercase tracking-[0.12em] text-ink-muted">
+                    Simulation clock
+                  </p>
+                  <div className="mt-2 rounded-xl border border-border-dim bg-deep px-4 py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-2xl font-extrabold text-ink-primary">
+                      {formatClock(simulation.status?.current_time)}
+                    </span>
+                    <span className="text-xs font-mono text-ops-cyan">
+                      {simulation.status?.current_stage ?? 'Not started'}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -269,9 +271,9 @@ export function LiveDemoPage() {
                 onClick={() => void simulation.start(scenarioId, mode)}
                 className="rounded-xl bg-ink-primary px-4 py-3 text-sm font-bold text-white hover:bg-ops-amber disabled:opacity-40 focus-ring"
               >
-                {simulation.busyAction === 'start' ? 'Starting...' : 'Start demo'}
+                {simulation.busyAction === 'start' ? 'Loading…' : 'Load baseline'}
               </button>
-              {canPause && (
+              {mode === 'TIMELINE' && canPause && (
                 <button
                   type="button"
                   disabled={simulation.busyAction !== null}
@@ -281,7 +283,7 @@ export function LiveDemoPage() {
                   Pause
                 </button>
               )}
-              {canResume && (
+              {mode === 'TIMELINE' && canResume && (
                 <button
                   type="button"
                   disabled={simulation.busyAction !== null}
@@ -297,7 +299,7 @@ export function LiveDemoPage() {
                 onClick={() => void simulation.reset(scenarioId)}
                 className="rounded-xl border border-border-base bg-deep px-4 py-3 text-sm font-bold text-ink-secondary hover:text-ops-rose disabled:opacity-40 focus-ring"
               >
-                Reset
+                Reset data
               </button>
               {mode === 'TIMELINE' && (
                 <button
@@ -312,6 +314,13 @@ export function LiveDemoPage() {
             </div>
           </div>
         </section>
+
+        <LiveDemoJourneyStrip
+          hasPortfolio={Boolean(portfolio)}
+          demoStarted={simulationStatus === 'RUNNING'}
+          changeDetected={Boolean(simulation.portfolioDelta)}
+          analysisStarted={Boolean(activeRunId) || launchingAI}
+        />
 
         {aiError && (
           <div className="rounded-2xl border border-ops-rose/30 bg-ops-rose/[0.06] px-5 py-4 flex items-center justify-between gap-4" role="alert">
@@ -333,7 +342,8 @@ export function LiveDemoPage() {
 
         <div className="grid xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.55fr)] gap-5">
           <main className="space-y-5">
-            <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5 sm:p-6 overflow-hidden">
+            {mode === 'TIMELINE' && (
+              <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5 sm:p-6 overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-cyan">
@@ -384,7 +394,8 @@ export function LiveDemoPage() {
                   </div>
                 </div>
               </div>
-            </section>
+              </section>
+            )}
 
             {mode === 'INTERACTIVE' && (
               <LiveEnterpriseEditor
