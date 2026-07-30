@@ -3,17 +3,18 @@ from datetime import datetime, timedelta, timezone
 from math import ceil
 from typing import Optional
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database.models import AssignmentRequest, ConfiguredResponse, FailureMode
+from app.database.models import AssignmentRequest, ConfiguredResponse, FailureMode, Notification
 from app.database.seed import seed_database
 from app.schemas.requests import (
     AssignmentRequestCreateRequest,
     AssignmentRequestVerificationRequest,
     AssignmentResponseRequest,
+    CommunicationSimulationLoadStateRequest,
     normalize_assignment_status,
     normalize_datetime,
     normalize_incident_id,
@@ -497,6 +498,43 @@ async def reset_communication(session: AsyncSession) -> dict[str, int]:
         counts = await seed_database(session)
         _LAST_RESET_AT = _utc_now_iso()
         return counts
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def load_simulation_communication(
+    session: AsyncSession,
+    payload: CommunicationSimulationLoadStateRequest,
+) -> dict[str, int | str]:
+    try:
+        global _LAST_RESET_AT
+        await session.execute(delete(Notification))
+        await session.execute(delete(AssignmentRequest))
+        await session.execute(delete(ConfiguredResponse))
+        await session.execute(delete(FailureMode))
+
+        assignments = [
+            AssignmentRequest(**item.model_dump(exclude_none=True))
+            for item in payload.assignment_requests
+        ]
+        notifications = [
+            Notification(**item.model_dump(exclude_none=True))
+            for item in payload.notifications
+        ]
+
+        session.add_all(assignments)
+        await session.flush()
+        session.add_all(notifications)
+        await session.flush()
+        await get_failure_mode(session)
+        await session.commit()
+        _LAST_RESET_AT = _utc_now_iso()
+        return {
+            "scenario_id": payload.scenario_id,
+            "assignment_request_count": len(assignments),
+            "notification_count": len(notifications),
+        }
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc

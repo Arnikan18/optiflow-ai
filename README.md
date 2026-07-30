@@ -2,6 +2,9 @@
 
 # OptiFlow AI
 
+Dynamic enterprise simulation backend documentation is available in
+[`docs/dynamic-enterprise-simulation.md`](docs/dynamic-enterprise-simulation.md).
+
 ### Autonomous Customer Escalation Portfolio Governor for B2B SaaS
 
 A human-governed autonomous decision platform for allocating scarce enterprise specialists across competing customer escalations.
