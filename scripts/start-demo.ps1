@@ -59,8 +59,6 @@ if ($PreferenceProfile) {
     Write-Host "Preparing mature $PreferenceProfile preference memory..."
     & docker compose exec -T core-api python -m scripts.seed_preference_demo `
         --profile $PreferenceProfile `
-        --decisions 18 `
-        --preferred-count 14 `
         --apply
     if ($LASTEXITCODE -ne 0) {
         throw "Preference-memory seed failed."

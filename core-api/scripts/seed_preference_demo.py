@@ -26,6 +26,8 @@ from app.services.manager_preference_service import (
 
 
 SEED_RUN_PREFIX = "RUN-PREF-DEMO-"
+DEFAULT_DECISIONS = PreferenceConfig.MATURE_LEARNING_RUNS
+DEFAULT_PREFERRED_COUNT = max(1, round(DEFAULT_DECISIONS * 0.8))
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,14 +41,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--decisions",
         type=int,
-        default=18,
-        help="Total approval decisions to seed",
+        default=DEFAULT_DECISIONS,
+        help="Total approval decisions to seed (defaults to the mature threshold)",
     )
     parser.add_argument(
         "--preferred-count",
         type=int,
-        default=14,
-        help="Decisions that select the preferred profile",
+        default=DEFAULT_PREFERRED_COUNT,
+        help="Decisions that select the preferred profile (defaults to 80%)",
     )
     parser.add_argument(
         "--backup-path",
