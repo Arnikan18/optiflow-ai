@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
-type NavIcon = 'today' | 'history' | 'lab' | 'settings';
+type NavIcon = 'today' | 'live' | 'history' | 'lab' | 'settings';
 
 type NavigationItem = {
   number: string;
@@ -23,6 +23,14 @@ const NAVIGATION: NavigationItem[] = [
   },
   {
     number: '02',
+    label: 'Live Demo',
+    shortLabel: 'Live Demo',
+    description: 'Timeline and judge challenges',
+    to: '/live-demo',
+    icon: 'live',
+  },
+  {
+    number: '03',
     label: 'History',
     shortLabel: 'History',
     description: 'Continue and review decisions',
@@ -30,7 +38,7 @@ const NAVIGATION: NavigationItem[] = [
     icon: 'history',
   },
   {
-    number: '03',
+    number: '04',
     label: 'Scenario Lab',
     shortLabel: 'Scenarios',
     description: 'Test controlled outcomes',
@@ -38,7 +46,7 @@ const NAVIGATION: NavigationItem[] = [
     icon: 'lab',
   },
   {
-    number: '04',
+    number: '05',
     label: 'Settings',
     shortLabel: 'Settings',
     description: 'Appearance and playback',
@@ -54,6 +62,13 @@ function Icon({ name }: { name: NavIcon }) {
         <path d="M4 19.5V8.8a2 2 0 0 1 1-1.7l6-3.5a2 2 0 0 1 2 0l6 3.5a2 2 0 0 1 1 1.7v10.7" />
         <path d="M8 21v-7h8v7M3 21h18" />
         <path d="m9.5 10.2 1.6 1.6 3.5-3.6" />
+      </>
+    ),
+    live: (
+      <>
+        <path d="M3 12h4l2.2-5 4.1 10 2.2-5H21" />
+        <circle cx="3" cy="12" r="1.2" />
+        <circle cx="21" cy="12" r="1.2" />
       </>
     ),
     history: (
@@ -102,6 +117,7 @@ function isItemActive(pathname: string, item: NavigationItem): boolean {
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const isRunPage = pathname.startsWith('/run/');
+  const isLiveDemoPage = pathname.startsWith('/live-demo');
 
   return (
     <div className="min-h-screen bg-void flex flex-col overflow-x-hidden">
@@ -128,6 +144,12 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-3">
+            {isLiveDemoPage && (
+              <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-ops-violet/30 bg-ops-violet/10 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-[0.12em] text-ops-violet">
+                <span className="w-1.5 h-1.5 rounded-full bg-ops-violet animate-pulse" />
+                Live demo mode
+              </span>
+            )}
             {isRunPage && (
               <Link
                 to="/"
