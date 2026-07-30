@@ -5,9 +5,9 @@ import { RunCockpitPage } from './pages/RunCockpitPage';
 import { LiveDemoPage } from './pages/LiveDemoPage';
 import {
   DemoLabPage,
-  SettingsPage,
 } from './pages/WorkspacePages';
 import { DecisionsPage } from './pages/DecisionsPage';
+import { SimpleSettingsPage } from './pages/SimpleSettingsPage';
 
 export default function App() {
   return (
@@ -21,7 +21,7 @@ export default function App() {
           <Route path="/demo-lab" element={<DemoLabPage />} />
           <Route path="/judge" element={<LiveDemoPage />} />
           <Route path="/live-demo" element={<Navigate to="/judge" replace />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<SimpleSettingsPage />} />
           <Route
             path="*"
             element={(
