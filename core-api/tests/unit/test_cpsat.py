@@ -88,6 +88,21 @@ def test_cpsat_respects_excluded_pairs(sample_data):
         assert "INC-1" in plan["unassigned_incidents"]
 
 
+def test_cpsat_preserves_existing_assignments(sample_data):
+    customers, escalations, specialists = sample_data
+    escalations[0]["status"] = "IN_PROGRESS"
+    escalations[0]["assigned_specialist_id"] = "SPEC-ALICE"
+    specialists[0]["current_workload"] = 1
+
+    plans = CPSatOptimizer().generate_plans(customers, escalations, specialists)
+
+    for plan in plans:
+        allocation_ids = {item["incident_id"] for item in plan["allocations"]}
+        assert "INC-1" not in allocation_ids
+        assert allocation_ids == {"INC-2"}
+        assert plan["metrics"]["assigned_count"] == 1
+
+
 def test_cpsat_profiles_have_distinct_weights(sample_data):
     customers, escalations, specialists = sample_data
     plans = CPSatOptimizer().generate_plans(customers, escalations, specialists)
