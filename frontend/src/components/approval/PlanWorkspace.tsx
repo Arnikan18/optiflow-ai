@@ -257,6 +257,8 @@ export function PlanWorkspace({
   const [confirmReject, setConfirmReject] = useState(false);
   const [actionInFlight, setActionInFlight] = useState<'approve' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [decisionReason, setDecisionReason] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (pendingPlan && !plans.some((plan) => plan.plan_id === pendingPlan.plan_id)) {
@@ -272,6 +274,10 @@ export function PlanWorkspace({
       await api.approveRun(runId, {
         approval_status: 'APPROVED',
         recommended_plan: pendingPlan,
+        decision_reason: decisionReason.trim() || undefined,
+        decision_source: pendingPlan.plan_id === recommended.plan_id
+          ? 'AI_RECOMMENDATION'
+          : 'ALTERNATIVE_PLAN',
       });
       onApproved();
     } catch (caught: unknown) {
@@ -284,7 +290,11 @@ export function PlanWorkspace({
     setActionInFlight('reject');
     setError(null);
     try {
-      await api.approveRun(runId, { approval_status: 'REJECTED' });
+      await api.approveRun(runId, {
+        approval_status: 'REJECTED',
+        decision_reason: rejectionReason.trim() || undefined,
+        decision_source: 'REJECT_ALL',
+      });
       onApproved();
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'The plans could not be rejected.');
@@ -325,14 +335,29 @@ export function PlanWorkspace({
       {pendingPlan && (
         <section className="rounded-2xl border border-ops-amber/50 bg-ops-amber/[0.06] p-5">
           <p className="text-sm font-bold uppercase tracking-wide text-ops-amber">Final check</p>
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-2">
-            <div>
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_auto] gap-5 items-end mt-2">
+            <div className="space-y-4">
+              <div>
               <h3 className="text-xl font-extrabold text-ink-primary">{profileName(pendingPlan)}</h3>
               <p className="text-sm text-ink-secondary mt-1">
                 {pendingPlan.plan_id === recommended.plan_id
                   ? 'Continue with the AI recommendation.'
                   : 'Use this alternative instead of the AI recommendation.'}
               </p>
+              </div>
+              <label className="block">
+                <span className="text-sm font-bold text-ink-secondary">
+                  Why this choice? <span className="font-normal text-ink-muted">(optional)</span>
+                </span>
+                <textarea
+                  value={decisionReason}
+                  maxLength={1000}
+                  rows={2}
+                  onChange={(event) => setDecisionReason(event.target.value)}
+                  placeholder="Add context for the decision history"
+                  className="mt-2 w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+                />
+              </label>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -433,9 +458,24 @@ export function PlanWorkspace({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm font-bold text-ops-rose">No plan will be executed.</p>
-              <div className="flex gap-2">
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-bold text-ops-rose">No plan will be executed.</p>
+                <label className="mt-3 block">
+                  <span className="text-sm font-bold text-ink-secondary">
+                    Why are these plans unsuitable? <span className="font-normal text-ink-muted">(optional)</span>
+                  </span>
+                  <textarea
+                    value={rejectionReason}
+                    maxLength={1000}
+                    rows={2}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    placeholder="Record what the next plan should consider"
+                    className="mt-2 w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setConfirmReject(false)}
