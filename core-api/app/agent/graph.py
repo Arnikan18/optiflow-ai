@@ -21,6 +21,18 @@ from app.agent.nodes.pause_for_approval import pause_for_approval
 from app.agent.nodes.execute_saga import execute_saga
 from app.agent.nodes.complete_run import complete_run
 from app.agent.nodes.update_preference_memory import update_preference_memory
+from app.agent.nodes.enterprise_monitor import enterprise_monitor
+
+
+def route_after_monitoring(state: AgentState) -> str:
+    """Routes the workflow based on whether replanning is needed under simulation mode."""
+    if not state.get("simulation_mode"):
+        return "evaluate_quality"
+    if state.get("status") == "REPLANNING":
+        return "evaluate_quality"
+    if state.get("replan_needed", True):
+        return "evaluate_quality"
+    return "complete_run"
 
 
 def route_after_validation(state: AgentState) -> str:
@@ -87,6 +99,7 @@ def build_graph() -> StateGraph:
     graph.add_node("execute_saga", execute_saga)
     graph.add_node("complete_run", complete_run)
     graph.add_node("update_preference_memory", update_preference_memory)
+    graph.add_node("enterprise_monitor", enterprise_monitor)
     
     # 2. Establish links and conditional routing paths
     graph.add_edge(START, "receive_goal")
@@ -111,7 +124,17 @@ def build_graph() -> StateGraph:
     graph.add_edge("plan_evidence", "select_tools")
     graph.add_edge("select_tools", "execute_tools")
     graph.add_edge("execute_tools", "build_state")
-    graph.add_edge("build_state", "evaluate_quality")
+    graph.add_edge("build_state", "enterprise_monitor")
+    
+    # Conditional edge after monitoring checks
+    graph.add_conditional_edges(
+        "enterprise_monitor",
+        route_after_monitoring,
+        {
+            "evaluate_quality": "evaluate_quality",
+            "complete_run": "complete_run"
+        }
+    )
     graph.add_edge("evaluate_quality", "generate_plans")
     graph.add_edge("generate_plans", "generate_personalized_plan")
     graph.add_edge("generate_personalized_plan", "pause_for_approval")

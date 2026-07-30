@@ -52,4 +52,16 @@ class AgentState(TypedDict, total=False):
     created_at: str
     updated_at: str
     clarification_resolved: bool
+    
+    # 3. Dynamic Enterprise Simulation Metadata (Member 1 Orchestration)
+    simulation_mode: Optional[str]
+    scenario_id: Optional[str]
+    simulation_time: Optional[str]
+    timeline_position: Optional[int]
+    baseline_enterprise_snapshot: Optional[Dict[str, Any]]
+    latest_event: Optional[Dict[str, Any]]
+    simulation_status: Optional[str]
+    replan_needed: Optional[bool]
+
+
 
