@@ -72,8 +72,26 @@ body {
   background-color: rgb(var(--bg-void));
   color: rgb(var(--text-primary));
   font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+}
+
+/* Accessibility floor for legacy micro-labels across the application. */
+.text-\[7px\],
+.text-\[8px\] {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+
+.text-\[9px\] {
+  font-size: 0.75rem;
+  line-height: 1.05rem;
+}
+
+.text-\[10px\] {
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
 }
 
 /* Dark authority surfaces remain inverse in both appearance modes. */
