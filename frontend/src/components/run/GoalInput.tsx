@@ -157,7 +157,7 @@ export function GoalInput({
           maxLength={500}
           disabled={loading}
           aria-describedby="goal-guidance"
-          className="w-full bg-transparent px-4 sm:px-5 py-3 text-ink-primary placeholder:text-ink-muted resize-none focus:outline-none text-sm sm:text-base leading-relaxed disabled:opacity-50"
+          className="focus-ring w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm leading-relaxed text-ink-primary placeholder:text-ink-muted disabled:opacity-50 sm:px-5 sm:text-base"
         />
         <div className="px-4 sm:px-5 py-3 border-t border-border-dim flex items-center justify-between gap-3">
           <span id="goal-guidance" className="text-[10px] leading-relaxed text-ink-muted">
