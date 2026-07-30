@@ -637,7 +637,7 @@ optiflow-ai/
 # Getting Started
 
 For the competition walkthrough and the one-command fresh-laptop setup, use
-[`docs/demo-presentation-runbook.md`](docs/demo-presentation-runbook.md).
+[`docs/container-demo-setup.md`](docs/container-demo-setup.md).
 
 ## Prerequisites
 
@@ -646,11 +646,9 @@ Install:
 - Git
 - Docker Desktop
 - Docker Compose v2
-- Python 3.12
-- Node.js 22 LTS
 
-Docker Compose runs the backend and enterprise services. The React frontend
-runs separately with Vite so UI changes are available immediately.
+Docker Compose runs PostgreSQL, the four enterprise services, Core, and the
+Nginx-served React frontend. Python and Node.js are not required on the demo laptop.
 
 ---
 
@@ -697,50 +695,24 @@ The project uses one root `.env` file as the local source of configuration.
 
 ---
 
-## 3. Start the backend
+## 3. Start the complete seeded application
 
 ### Windows PowerShell
 
 ```powershell
-docker compose --profile full-stack up --build
+powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Fresh -Force
 ```
 
-Detached mode:
-
-```powershell
-docker compose --profile full-stack up --build -d
-```
-
-### Linux / Git Bash
+### Linux / macOS
 
 ```bash
-docker compose --profile full-stack up --build
-```
-
-Run in detached mode:
-
-```bash
-docker compose --profile full-stack up --build -d
+chmod +x scripts/start-demo.sh scripts/reset-demo.sh
+./scripts/start-demo.sh --fresh --force
 ```
 
 ---
 
-## 4. Start the frontend
-
-Open a second terminal:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-`npm install` is only required on a fresh clone or after dependencies change.
-The UI runs at `http://localhost:3000`; it is not a Docker service.
-
----
-
-## 5. Open the application
+## 4. Open the application
 
 | Service | Address |
 |---|---|
@@ -755,7 +727,7 @@ The UI runs at `http://localhost:3000`; it is not a Docker service.
 
 ---
 
-## 6. Check container status
+## 5. Check container status
 
 ### Windows PowerShell
 
@@ -771,7 +743,7 @@ docker compose --profile full-stack ps
 
 ---
 
-## 7. Health check
+## 6. Health check
 
 ### Windows PowerShell
 
@@ -789,7 +761,7 @@ The health scripts check PostgreSQL, Core API, CRM, Incident, Workforce and Comm
 
 ---
 
-## 8. Reset demo data
+## 7. Reset demo data
 
 Normal deterministic reset:
 
@@ -815,7 +787,7 @@ The destructive path asks for confirmation unless `-Force` or `--force` is suppl
 
 ---
 
-## 9. Run backend tests
+## 8. Run backend tests
 
 ### Windows PowerShell
 
@@ -837,7 +809,7 @@ The scripts continue through all selected suites, print a summary, and return no
 
 ---
 
-## 10. View logs
+## 9. View logs
 
 All services:
 
@@ -859,7 +831,7 @@ docker compose --profile full-stack logs -f crm-service
 
 ---
 
-## 11. Stop the system
+## 10. Stop the system
 
 ### Windows PowerShell
 
@@ -885,7 +857,7 @@ Use `-v` only when all stored local database data should be removed.
 
 ---
 
-## 12. Troubleshooting
+## 11. Troubleshooting
 
 - If `docker compose --profile full-stack ps` shows no services, start with `docker compose --profile full-stack up --build -d`.
 - If ports are busy, change the host-side `*_PORT` values in `.env`; scripts derive host URLs from those values.
