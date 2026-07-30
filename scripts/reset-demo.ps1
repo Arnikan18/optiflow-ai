@@ -61,7 +61,7 @@ function Get-LocalBaseUrl {
 }
 
 function Assert-RunningServices {
-    $required = @("postgres", "core-api", "crm-service", "incident-service", "workforce-service", "communication-service")
+    $required = @("postgres", "core-api", "frontend", "crm-service", "incident-service", "workforce-service", "communication-service")
     $running = & docker compose --profile $ComposeProfile ps --services --filter "status=running"
     if ($LASTEXITCODE -ne 0) {
         throw "Could not read Docker Compose service status."

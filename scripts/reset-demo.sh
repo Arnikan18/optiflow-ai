@@ -68,7 +68,7 @@ core_url() {
 }
 
 assert_running_services() {
-  local required=(postgres core-api crm-service incident-service workforce-service communication-service)
+  local required=(postgres core-api frontend crm-service incident-service workforce-service communication-service)
   local running
   if ! running="$(docker compose --profile "${COMPOSE_PROFILE}" ps --services --filter status=running 2>/dev/null)"; then
     echo "Could not read Docker Compose service status."

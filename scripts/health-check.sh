@@ -107,6 +107,7 @@ load_env
 CORE_URL="$(core_url)"
 
 check_postgres
+check_http "frontend" "$(local_base_url FRONTEND_PORT 3000)/"
 check_http "core-api" "${CORE_URL}/health"
 check_http "core-demo-health" "${CORE_URL}/api/v1/demo/health" 1
 check_http "crm-service" "$(local_base_url CRM_SERVICE_PORT 8101)/health"
