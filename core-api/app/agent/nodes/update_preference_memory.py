@@ -20,6 +20,8 @@ async def update_preference_memory(state: AgentState) -> dict:
     recommended_plan = state.get("recommended_plan") or {}
     personalized_rec = state.get("personalized_recommendation") or {}
     goal_text = state.get("goal_text")
+    decision_reason = state.get("decision_reason")
+    decision_source = state.get("decision_source")
     
     selected_profile = recommended_plan.get("profile")
     personalized_profile = personalized_rec.get("profile")
@@ -60,6 +62,8 @@ async def update_preference_memory(state: AgentState) -> dict:
                         "decision": approval_status,
                         "selected_profile": selected_profile,
                         "personalized_profile": personalized_profile,
+                        "decision_reason": decision_reason,
+                        "decision_source": decision_source,
                         "total_runs": updated_memory.total_runs,
                         "profile_counts": updated_memory.profile_counts,
                         "learned_constraints": updated_memory.learned_constraints
