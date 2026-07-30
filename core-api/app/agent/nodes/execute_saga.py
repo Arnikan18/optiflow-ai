@@ -111,6 +111,8 @@ async def execute_saga(state: AgentState) -> dict:
                         specialist_id=spec_id,
                         incident_id=inc_id,
                         expires_in_seconds=300,
+                        run_id=run_id,
+                        idempotency_key=res_id,
                     )
                     created_reservations.append(res_id)
                     execution_actions.append(
@@ -135,6 +137,9 @@ async def execute_saga(state: AgentState) -> dict:
                 specialist_id=spec_id,
                 message=f"OptiFlow Assignment: Please review SLA Escalation {inc_id} immediately.",
                 expires_in_seconds=300,
+                run_id=run_id,
+                reservation_id=res_id,
+                idempotency_key=req_id,
             )
             execution_actions.append(
                 {"action": "CREATE_NOTIFICATION", "entity": "communication-service", "id": req_id}
@@ -155,7 +160,12 @@ async def execute_saga(state: AgentState) -> dict:
                 # ── STEP D: Confirm reservation and assign incident ──────────
                 print(f"  [SAGA] Specialist ACCEPTED {req_id}. Confirming reservation {res_id}...")
                 await client.confirm_reservation(reservation_id=res_id)
-                await client.assign_incident_specialist(incident_id=inc_id, specialist_id=spec_id)
+                await client.assign_incident_specialist(
+                    incident_id=inc_id,
+                    specialist_id=spec_id,
+                    run_id=run_id,
+                    idempotency_key=f"ASSIGN-{run_id}-{inc_id}",
+                )
                 await client.patch_incident_status(incident_id=inc_id, incident_status="IN_PROGRESS")
                 updated_incidents.append(inc_id)
                 execution_actions.append(
