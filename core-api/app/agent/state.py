@@ -66,6 +66,8 @@ class AgentState(TypedDict, total=False):
     # 4. Decision Intelligence & Explainability Layer
     decision_explanation: Optional[Dict[str, Any]]
     decision_history: Optional[List[Dict[str, Any]]]
+    business_summary: Optional[str]
+    change_summary: Optional[str]
 
 
 

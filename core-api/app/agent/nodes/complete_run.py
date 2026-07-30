@@ -10,9 +10,11 @@ async def complete_run(state: AgentState) -> dict:
     approval_status = state.get("approval_status")
     status = state.get("status")
     
+    updates = {"status": "COMPLETED"}
     if approval_status == "APPROVED" and status == "EXECUTED":
         # 1. Update AgentState baseline snapshot (successful execution baseline)
         state["baseline_enterprise_snapshot"] = state.get("enterprise_state")
+        updates["baseline_enterprise_snapshot"] = state.get("enterprise_state")
         
         # 2. Invoke Simulation Coordinator callback (best-effort notification)
         timeline_position = state.get("timeline_position") or 0
@@ -67,4 +69,4 @@ async def complete_run(state: AgentState) -> dict:
                 state_version=1
             )
             
-    return {"status": "COMPLETED"}
+    return updates
