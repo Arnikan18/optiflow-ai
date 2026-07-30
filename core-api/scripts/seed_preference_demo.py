@@ -126,9 +126,10 @@ async def seed(args: argparse.Namespace) -> None:
             if not saved:
                 raise RuntimeError("Preference memory seed could not be saved")
 
+            alternate_count = args.decisions - args.preferred_count
             for index in range(args.decisions):
                 run_id = f"{SEED_RUN_PREFIX}{index + 1:03d}"
-                selected = preferred if index < args.preferred_count else alternate
+                selected = alternate if index < alternate_count else preferred
                 await save_agent_run(
                     session=session,
                     run_id=run_id,
