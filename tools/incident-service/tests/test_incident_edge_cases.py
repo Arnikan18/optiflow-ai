@@ -1,5 +1,6 @@
 import asyncio
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -140,7 +141,7 @@ def test_seed_is_idempotent_and_does_not_overwrite_existing_data(tmp_path, monke
             await conn.run_sync(Base.metadata.create_all)
 
         async with db_session.async_session() as session:
-            assert await seed_incidents_if_empty(session) == 5
+            assert await seed_incidents_if_empty(session) == 9
         async with db_session.async_session() as session:
             assert await seed_incidents_if_empty(session) == 0
         async with db_session.async_session() as session:
@@ -150,7 +151,11 @@ def test_seed_is_idempotent_and_does_not_overwrite_existing_data(tmp_path, monke
             await session.commit()
         async with db_session.async_session() as session:
             assert await seed_incidents_if_empty(session) == 0
-            result = await session.get(Incident, 6)
+            result = (
+                await session.execute(
+                    select(Incident).where(Incident.incident_id == "INC-CUSTOM-001")
+                )
+            ).scalar_one()
             assert result.incident_id == "INC-CUSTOM-001"
         await db_session.engine.dispose()
         get_settings.cache_clear()

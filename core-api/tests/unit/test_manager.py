@@ -62,7 +62,7 @@ def test_clarify_run_route_success():
         assert response.json()["status"] == "success"
         mock_resume.assert_called_once_with(
             run_id="RUN-EXIST-999", 
-            approval_status="APPROVED", 
+            approval_status="PENDING",
             clarification_reply="Here is the details"
         )
 
@@ -110,7 +110,7 @@ async def test_manager_resume_run_clarification():
          
         success = await resume_run_from_checkpoint(
             run_id="RUN-FAKE",
-            approval_status="APPROVED",
+            approval_status="PENDING",
             clarification_reply="Tier 1"
         )
         assert success is True
@@ -119,6 +119,7 @@ async def test_manager_resume_run_clarification():
         # Verify that state was updated with clarification context and ambiguities cleared
         assert mock_state["goal_text"] == "Optimize (Clarification: Tier 1)"
         assert mock_state["structured_goal"]["ambiguities"] == []
+        assert mock_state["approval_status"] == "PENDING"
         mock_create_task.assert_called_once()
 
 def test_get_run_status_success():
@@ -158,3 +159,25 @@ def test_get_run_status_success():
         assert data["business_summary"] == "Summary markdown"
         assert data["change_summary"] == "Change markdown"
 
+def test_get_run_status_handles_nullable_partial_checkpoint():
+    with patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute, \
+         patch("app.main.load_last_checkpoint") as mock_load:
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            "RUN-PARTIAL-123",
+            "WAITING_FOR_CLARIFICATION",
+            "pause_for_clarification",
+            None,
+        )
+        mock_execute.return_value = mock_result
+        mock_load.return_value = {
+            "candidate_plans": None,
+            "enterprise_state": None,
+        }
+
+        response = client.get("/api/v1/runs/RUN-PARTIAL-123")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["candidate_plans"] == []
+        assert data["candidate_plan_summary"] == []

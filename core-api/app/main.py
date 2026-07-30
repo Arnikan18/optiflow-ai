@@ -203,12 +203,12 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Run not found")
         
     checkpoint = await load_last_checkpoint(run_id) or {}
-    candidate_plans = checkpoint.get("candidate_plans", [])
+    candidate_plans = checkpoint.get("candidate_plans") or []
     
     # ── Populate Candidate Summaries dynamically ──────────────────────────────
     from app.services.candidate_comparison_builder import CandidateComparisonBuilder
     
-    enterprise_state = checkpoint.get("enterprise_state", {})
+    enterprise_state = checkpoint.get("enterprise_state") or {}
     customers = enterprise_state.get("customers", [])
     
     pers_rec = checkpoint.get("personalized_recommendation")
@@ -272,8 +272,8 @@ async def clarify_run(run_id: str, body: ClarifyRunRequest, db: AsyncSession = D
         raise HTTPException(status_code=400, detail=f"Cannot clarify run in {row[0]} state. Run must be in WAITING_FOR_CLARIFICATION state.")
         
     success = await resume_run_from_checkpoint(
-        run_id=run_id, 
-        approval_status="APPROVED", 
+        run_id=run_id,
+        approval_status="PENDING",
         clarification_reply=body.clarification_reply
     )
     if not success:

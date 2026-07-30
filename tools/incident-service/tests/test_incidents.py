@@ -45,7 +45,7 @@ def test_list_default_pagination_and_legacy_active_route(client, auth_headers):
     data = assert_success(client.get("/incident/api/v1/incidents", headers=auth_headers))
     assert data["page"] == 1
     assert data["page_size"] == 20
-    assert data["total_items"] == 5
+    assert data["total_items"] == 9
     assert data["total_pages"] == 1
     assert [item["incident_id"] for item in data["incidents"]][:2] == [
         "INC-OMEGA-001",
@@ -63,24 +63,46 @@ def test_list_default_pagination_and_legacy_active_route(client, auth_headers):
         "INC-ALPHA-001",
         "INC-NOVA-001",
         "INC-GREEN-001",
+        "INC-ORBIT-001",
+        "INC-HARBOR-001",
+        "INC-NOVA-002",
+        "INC-SUMMIT-001",
     }
 
 
 def test_list_filters_search_and_sla_ranges(client, auth_headers):
     critical = assert_success(client.get("/incident/api/v1/incidents?priority=critical", headers=auth_headers))
-    assert [item["incident_id"] for item in critical["incidents"]] == ["INC-ALPHA-001"]
+    assert [item["incident_id"] for item in critical["incidents"]] == [
+        "INC-ALPHA-001",
+        "INC-ORBIT-001",
+    ]
 
     open_items = assert_success(client.get("/incident/api/v1/incidents?status=open", headers=auth_headers))
-    assert {item["incident_id"] for item in open_items["incidents"]} == {"INC-ALPHA-001", "INC-GREEN-001"}
+    assert {item["incident_id"] for item in open_items["incidents"]} == {
+        "INC-ALPHA-001",
+        "INC-GREEN-001",
+        "INC-NOVA-002",
+        "INC-ORBIT-001",
+        "INC-SUMMIT-001",
+    }
 
     customer = assert_success(client.get("/incident/api/v1/incidents?customer_id= cus-nova ", headers=auth_headers))
-    assert [item["incident_id"] for item in customer["incidents"]] == ["INC-NOVA-001"]
+    assert [item["incident_id"] for item in customer["incidents"]] == [
+        "INC-NOVA-002",
+        "INC-NOVA-001",
+    ]
 
     assigned = assert_success(client.get("/incident/api/v1/incidents?assigned_specialist_id=spec-nimal", headers=auth_headers))
     assert [item["incident_id"] for item in assigned["incidents"]] == ["INC-NOVA-001"]
 
     unassigned = assert_success(client.get("/incident/api/v1/incidents?unassigned=true", headers=auth_headers))
-    assert {item["incident_id"] for item in unassigned["incidents"]} == {"INC-ALPHA-001", "INC-GREEN-001"}
+    assert {item["incident_id"] for item in unassigned["incidents"]} == {
+        "INC-ALPHA-001",
+        "INC-GREEN-001",
+        "INC-NOVA-002",
+        "INC-ORBIT-001",
+        "INC-SUMMIT-001",
+    }
 
     overdue = assert_success(client.get("/incident/api/v1/incidents?overdue=true", headers=auth_headers))
     assert [item["incident_id"] for item in overdue["incidents"]] == ["INC-ALPHA-001"]
@@ -362,9 +384,9 @@ def test_admin_reset_auth_and_determinism(client, auth_headers, admin_headers, m
         201,
     )
     reset = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert reset["seeded_records"] == 5
+    assert reset["seeded_records"] == 9
     second_reset = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert second_reset["seeded_records"] == 5
+    assert second_reset["seeded_records"] == 9
     assert_error(client.get("/incident/api/v1/incidents/INC-RESET-001", headers=auth_headers), 404, "INCIDENT_404")
 
     from app.config import get_settings

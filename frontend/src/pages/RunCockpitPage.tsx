@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRunStatus } from '../hooks/useRunStatus';
 import { useRunStream } from '../hooks/useRunStream';
-import { EventTimeline } from '../components/run/EventTimeline';
 import { PlaybackControls } from '../components/run/PlaybackControls';
 import { CausalEvidenceMap } from '../components/run/CausalEvidenceMap';
-import { DecisionTrustPanel } from '../components/run/DecisionTrustPanel';
 import { ExecutionRelay } from '../components/run/ExecutionRelay';
 import {
   DecisionJourneyRail,
@@ -14,10 +12,10 @@ import {
 import { PlanWorkspace } from '../components/approval/PlanWorkspace';
 import { ClarifyPanel } from '../components/clarification/ClarifyPanel';
 import { SummaryPanel } from '../components/completion/SummaryPanel';
-import { MissionGuide } from '../components/guide/MissionGuide';
 import { getActiveGuide, PHASE_GUIDES } from '../data/guideContent';
 import { useGuidedPlayback } from '../hooks/useGuidedPlayback';
-import type { RecentRun, RunStatus } from '../types/api';
+import { api } from '../api/client';
+import type { DemoPortfolio, RecentRun, RunStatus } from '../types/api';
 
 const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
   RECEIVED: { label: 'Route received', cls: 'text-ink-secondary bg-surface' },
@@ -65,6 +63,7 @@ export function RunCockpitPage() {
   });
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [receivedWaitSeconds, setReceivedWaitSeconds] = useState(0);
+  const [portfolio, setPortfolio] = useState<DemoPortfolio | null>(null);
 
   const status = runData?.status ?? null;
   const badge = status ? STATUS_BADGE[status] : null;
@@ -80,9 +79,6 @@ export function RunCockpitPage() {
     : guide.id === 'receive'
       ? 'RECEIVED'
       : 'RUNNING';
-  const presentationNode = presentationCaughtUp
-    ? runData?.current_node ?? null
-    : latestVisibleEvent?.source ?? null;
   const activeJourneyStage = normalizeJourneyStage(guide.id);
   const reviewedGuide = selectedStageId
     ? PHASE_GUIDES.find((phase) => phase.id === selectedStageId) ?? null
@@ -94,7 +90,6 @@ export function RunCockpitPage() {
   const reviewedEvents = reviewedGuide
     ? playback.visibleEvents.filter((event) => reviewedGuide.matchNodes.includes(event.source))
     : playback.visibleEvents;
-  const briefingNode = reviewedGuide?.matchNodes[0] ?? presentationNode;
   const briefingEvents = playback.visibleEvents.filter(
     (event) => briefingGuide.matchNodes.includes(event.source),
   );
@@ -116,6 +111,39 @@ export function RunCockpitPage() {
     ?? runData?.structured_goal?.objective
     ?? runData?.structured_goal?.objectives?.[0]
     ?? 'Operational decision goal';
+
+  const handleStageSelect = (stageId: string | null) => {
+    setSelectedStageId(stageId);
+    window.requestAnimationFrame(() => {
+      document.getElementById('decision-node-detail')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshPortfolio = async () => {
+      try {
+        const nextPortfolio = await api.getDemoPortfolio();
+        if (!cancelled) setPortfolio(nextPortfolio);
+      } catch {
+        // The run remains usable from its recorded events when live demo data is unavailable.
+      }
+    };
+
+    void refreshPortfolio();
+    const refreshTimer = window.setInterval(() => {
+      void refreshPortfolio();
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [runId]);
 
   useEffect(() => {
     if (status !== 'RECEIVED' || runData?.current_node !== 'receive_goal') {
@@ -174,17 +202,17 @@ export function RunCockpitPage() {
         <div className="max-w-[1440px] mx-auto px-5 sm:px-8 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-[8px] font-mono font-semibold uppercase tracking-[0.18em] text-ops-amber">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.18em] text-ops-amber">
                 Today’s goal
               </span>
-              <span className="text-[9px] font-mono text-ink-muted">#{runId.slice(0, 12)}</span>
+              <span className="text-[11px] font-mono text-ink-muted">#{runId.slice(0, 12)}</span>
               {badge && (
-                <span className={`text-[8px] font-mono px-2 py-1 rounded-full uppercase tracking-[0.1em] font-semibold ${badge.cls}`}>
+                <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full uppercase tracking-[0.1em] font-semibold ${badge.cls}`}>
                   {badge.label}
                 </span>
               )}
             </div>
-            <h1 className="text-sm sm:text-base font-extrabold tracking-[-0.025em] text-ink-primary mt-1.5 truncate">
+            <h1 className="text-base sm:text-lg font-extrabold leading-snug tracking-[-0.025em] text-ink-primary mt-2">
               {goalText}
             </h1>
           </div>
@@ -192,7 +220,7 @@ export function RunCockpitPage() {
             <span className={`relative w-2 h-2 rounded-full ${connected ? 'bg-ops-cyan' : 'bg-ops-orange'}`}>
               <span className="absolute inset-0 rounded-full bg-current animate-ping opacity-30" />
             </span>
-            <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-ink-muted">
+            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-ink-muted">
               {connected ? 'Live updates' : usingFallback ? 'Safe polling' : 'Connecting'}
             </span>
           </div>
@@ -205,7 +233,9 @@ export function RunCockpitPage() {
             activeId={guide.id}
             selectedId={selectedStageId}
             failed={status === 'FAILED'}
-            onSelect={setSelectedStageId}
+            portfolio={portfolio}
+            runData={runData}
+            onSelect={handleStageSelect}
           />
         </div>
         <PlaybackControls
@@ -216,7 +246,7 @@ export function RunCockpitPage() {
       </section>
 
       <div className="max-w-[1440px] mx-auto px-5 sm:px-8 py-6 lg:py-8">
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+        <div>
           <main className="min-w-0 rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
             <div className="px-5 sm:px-7 py-5 border-b border-border-dim flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div>
@@ -278,26 +308,19 @@ export function RunCockpitPage() {
                   </p>
                 </div>
               )}
-              <DecisionTrustPanel
+              <CausalEvidenceMap
                 phaseId={briefingGuide.id}
-                confidence={runData?.confidence_report ?? null}
-                risk={runData?.autonomy_risk_report ?? null}
+                events={briefingEvents}
+                portfolio={portfolio}
+                runData={runData}
               />
-              <CausalEvidenceMap phaseId={briefingGuide.id} events={briefingEvents} />
-              {briefingGuide.id === 'executing' ? (
+              {!isReviewingStage && briefingGuide.id === 'executing' ? (
                 <ExecutionRelay
                   events={reviewedEvents}
                   runData={runData}
                   status={presentationStatus}
                 />
-              ) : isReviewingStage ? (
-                <EventTimeline
-                  events={reviewedEvents}
-                  status={null}
-                  connected={connected}
-                  usingFallback={usingFallback}
-                />
-              ) : isApproval ? (
+              ) : !isReviewingStage && isApproval ? (
                 <PlanWorkspace
                   runId={runId}
                   plans={runData?.candidate_plans ?? []}
@@ -305,9 +328,9 @@ export function RunCockpitPage() {
                   candidatePlanSummary={runData?.candidate_plan_summary ?? []}
                   onApproved={refetch}
                 />
-              ) : isClarification ? (
+              ) : !isReviewingStage && isClarification ? (
                 <ClarifyPanel runId={runId} runData={runData} onSubmitted={refetch} />
-              ) : isTerminal ? (
+              ) : !isReviewingStage && isTerminal ? (
                 <div className="space-y-8">
                   {hasExecutionHistory && (
                     <ExecutionRelay
@@ -318,25 +341,10 @@ export function RunCockpitPage() {
                   )}
                   {!terminalSagaFailed && <SummaryPanel runData={runData} events={events} />}
                 </div>
-              ) : (
-                <EventTimeline
-                  events={playback.visibleEvents}
-                  status={presentationStatus}
-                  connected={connected}
-                  usingFallback={usingFallback}
-                />
-              )}
+              ) : null}
             </div>
           </main>
 
-          <aside className="lg:sticky lg:top-[9.5rem] lg:max-h-[calc(100vh-10.5rem)] lg:overflow-y-auto rounded-[1.5rem] border border-border-dim bg-abyss shadow-card overflow-hidden">
-            <MissionGuide
-              status={isReviewingStage ? null : presentationStatus}
-              currentNode={briefingNode}
-              events={briefingEvents}
-              isReviewing={isReviewingStage}
-            />
-          </aside>
         </div>
       </div>
     </div>

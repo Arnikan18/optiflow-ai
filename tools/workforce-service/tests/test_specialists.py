@@ -41,17 +41,24 @@ def test_list_specialists_default_pagination_and_legacy_route(client, auth_heade
     data = assert_success(client.get("/workforce/api/v1/specialists", headers=auth_headers))
     assert data["page"] == 1
     assert data["page_size"] == 20
-    assert data["total_items"] == 5
+    assert data["total_items"] == 8
     assert [item["specialist_id"] for item in data["specialists"]] == [
         "SPEC-DANIEL",
         "SPEC-KAI",
+        "SPEC-LEILA",
         "SPEC-MAYA",
         "SPEC-NIMAL",
+        "SPEC-OMAR",
         "SPEC-PRIYA",
+        "SPEC-SOFIA",
     ]
 
     page_two = assert_success(client.get("/workforce/api/v1/specialists?page=2&page_size=3", headers=auth_headers))
-    assert [item["specialist_id"] for item in page_two["specialists"]] == ["SPEC-NIMAL", "SPEC-PRIYA"]
+    assert [item["specialist_id"] for item in page_two["specialists"]] == [
+        "SPEC-MAYA",
+        "SPEC-NIMAL",
+        "SPEC-OMAR",
+    ]
 
     beyond = assert_success(client.get("/workforce/api/v1/specialists?page=99", headers=auth_headers))
     assert beyond["specialists"] == []
@@ -64,15 +71,21 @@ def test_list_specialists_default_pagination_and_legacy_route(client, auth_heade
         "SPEC-NIMAL",
         "SPEC-PRIYA",
         "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+        "SPEC-SOFIA",
     }
 
 
 def test_specialist_filters_and_search(client, auth_headers):
     active = assert_success(client.get("/workforce/api/v1/specialists?active=true", headers=auth_headers))
-    assert active["total_items"] == 4
+    assert active["total_items"] == 7
 
     unavailable = assert_success(client.get("/workforce/api/v1/specialists?availability=false", headers=auth_headers))
-    assert [item["specialist_id"] for item in unavailable["specialists"]] == ["SPEC-PRIYA"]
+    assert [item["specialist_id"] for item in unavailable["specialists"]] == [
+        "SPEC-PRIYA",
+        "SPEC-SOFIA",
+    ]
 
     billing = assert_success(client.get("/workforce/api/v1/specialists?skill= Billing ", headers=auth_headers))
     assert [item["specialist_id"] for item in billing["specialists"]] == ["SPEC-MAYA", "SPEC-PRIYA"]
@@ -80,7 +93,13 @@ def test_specialist_filters_and_search(client, auth_headers):
     min_capacity = assert_success(
         client.get("/workforce/api/v1/specialists?min_available_capacity=2", headers=auth_headers)
     )
-    assert {item["specialist_id"] for item in min_capacity["specialists"]} == {"SPEC-KAI", "SPEC-PRIYA"}
+    assert {item["specialist_id"] for item in min_capacity["specialists"]} == {
+        "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+        "SPEC-PRIYA",
+        "SPEC-SOFIA",
+    }
 
     by_id = assert_success(client.get("/workforce/api/v1/specialists?search=daniel", headers=auth_headers))
     assert [item["specialist_id"] for item in by_id["specialists"]] == ["SPEC-DANIEL"]
@@ -91,17 +110,29 @@ def test_specialist_filters_and_search(client, auth_headers):
 
 def test_available_specialists_filters_capacity_and_pending_counts(client, auth_headers):
     available = assert_success(client.get("/workforce/api/v1/specialists/available", headers=auth_headers))
-    assert [item["specialist_id"] for item in available["specialists"]] == ["SPEC-DANIEL", "SPEC-MAYA"]
+    assert [item["specialist_id"] for item in available["specialists"]] == [
+        "SPEC-DANIEL",
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    ]
 
     technical = assert_success(
         client.get("/workforce/api/v1/specialists/available?skill=technical", headers=auth_headers)
     )
-    assert [item["specialist_id"] for item in technical["specialists"]] == ["SPEC-DANIEL", "SPEC-MAYA"]
+    assert [item["specialist_id"] for item in technical["specialists"]] == [
+        "SPEC-DANIEL",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    ]
 
     required_two = assert_success(
         client.get("/workforce/api/v1/specialists/available?required_capacity=2", headers=auth_headers)
     )
-    assert required_two["specialists"] == []
+    assert [item["specialist_id"] for item in required_two["specialists"]] == [
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+    ]
 
     maya = assert_success(client.get("/workforce/api/v1/specialists/SPEC-MAYA", headers=auth_headers))
     assert maya["current_workload"] == 0
@@ -113,7 +144,7 @@ def test_available_specialists_filters_capacity_and_pending_counts(client, auth_
 def test_list_workloads_exposes_reservation_counts(client, auth_headers):
     data = assert_success(client.get("/workforce/api/v1/workloads", headers=auth_headers))
     assert data["page"] == 1
-    assert data["total_items"] == 5
+    assert data["total_items"] == 8
 
     workloads = {item["specialist_id"]: item for item in data["workloads"]}
     assert workloads["SPEC-MAYA"]["assigned_count"] == 0
@@ -124,6 +155,10 @@ def test_list_workloads_exposes_reservation_counts(client, auth_headers):
 
     assert workloads["SPEC-DANIEL"]["assigned_count"] == 1
     assert workloads["SPEC-DANIEL"]["confirmed_reservation_count"] == 1
+    assert workloads["SPEC-LEILA"]["assigned_count"] == 1
+    assert workloads["SPEC-LEILA"]["available_capacity"] == 2
+    assert workloads["SPEC-OMAR"]["tentative_reservation_count"] == 1
+    assert workloads["SPEC-OMAR"]["available_capacity"] == 2
 
 
 def test_get_specialist_existing_missing_inactive_and_full_capacity(client, auth_headers):
@@ -157,7 +192,12 @@ def test_invalid_specialist_queries_use_standard_422(client, auth_headers):
 def test_legacy_availability_and_workload(client, auth_headers):
     availability = client.get("/availability", headers=auth_headers)
     assert availability.status_code == 200
-    assert {item["specialistId"] for item in availability.json()["specialists"]} == {"SPEC-DANIEL", "SPEC-MAYA"}
+    assert {item["specialistId"] for item in availability.json()["specialists"]} == {
+        "SPEC-DANIEL",
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    }
 
     workload = client.get("/workload", headers=auth_headers)
     assert workload.status_code == 200
@@ -167,6 +207,9 @@ def test_legacy_availability_and_workload(client, auth_headers):
         "SPEC-NIMAL",
         "SPEC-PRIYA",
         "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+        "SPEC-SOFIA",
     }
 
 

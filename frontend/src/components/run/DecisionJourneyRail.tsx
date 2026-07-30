@@ -1,10 +1,23 @@
 import { PHASE_TIMELINE } from '../../data/guideContent';
+import type { DemoPortfolio, RunSummary } from '../../types/api';
 
 interface DecisionJourneyRailProps {
   activeId: string;
   selectedId: string | null;
   failed: boolean;
+  portfolio: DemoPortfolio | null;
+  runData: RunSummary | null;
   onSelect: (stageId: string | null) => void;
+}
+
+type JourneyState = 'complete' | 'active' | 'waiting' | 'failed';
+
+interface MapNode {
+  id: string;
+  label: string;
+  shortLabel: string;
+  x: number;
+  y: number;
 }
 
 const STAGE_ALIASES: Record<string, string> = {
@@ -12,16 +25,160 @@ const STAGE_ALIASES: Record<string, string> = {
   failed: 'complete',
 };
 
-const STAGE_SUMMARY: Record<string, string> = {
-  receive: 'Open an auditable route',
-  interpret: 'Structure priority and limits',
-  validate: 'Guard policy and ambiguity',
-  evidence: 'Join live operational facts',
-  optimize: 'Compare measurable tradeoffs',
-  approval: 'Pause for your decision',
-  executing: 'Apply each approved change',
-  complete: 'Verify outcome and receipts',
-};
+const MAP_NODES: MapNode[] = [
+  { id: 'receive', label: 'Goal received', shortLabel: 'Goal', x: 65, y: 168 },
+  { id: 'interpret', label: 'Interpret intent', shortLabel: 'Interpret', x: 210, y: 168 },
+  { id: 'validate', label: 'Guard policies', shortLabel: 'Guard', x: 355, y: 168 },
+  { id: 'evidence', label: 'Pull evidence', shortLabel: 'Evidence', x: 505, y: 168 },
+  { id: 'optimize', label: 'Compare plans', shortLabel: 'Plans', x: 655, y: 168 },
+  { id: 'approval', label: 'Human decision', shortLabel: 'Choose', x: 820, y: 168 },
+  { id: 'executing', label: 'Execute safely', shortLabel: 'Execute', x: 985, y: 168 },
+  { id: 'complete', label: 'Verify outcome', shortLabel: 'Verify', x: 1130, y: 168 },
+];
+
+const BRANCHES = [
+  {
+    id: 'clarify',
+    label: 'Clarify',
+    detail: 'Human answer',
+    x: 355,
+    y: 48,
+    tone: 'orange',
+    parent: 'validate',
+  },
+  {
+    id: 'safe-stop',
+    label: 'Safe stop',
+    detail: 'No unsafe guess',
+    x: 355,
+    y: 302,
+    tone: 'rose',
+    parent: 'validate',
+  },
+  {
+    id: 'modify',
+    label: 'Modify',
+    detail: 'Replan loop',
+    x: 820,
+    y: 48,
+    tone: 'violet',
+    parent: 'approval',
+  },
+  {
+    id: 'reject',
+    label: 'Reject',
+    detail: 'Close safely',
+    x: 820,
+    y: 302,
+    tone: 'rose',
+    parent: 'approval',
+  },
+] as const;
+
+const TONE_CLASSES = {
+  cyan: 'border-ops-cyan/40 bg-ops-cyan/10 text-ops-cyan',
+  emerald: 'border-ops-emerald/40 bg-ops-emerald/10 text-ops-emerald',
+  orange: 'border-ops-orange/40 bg-ops-orange/10 text-ops-orange',
+  rose: 'border-ops-rose/40 bg-ops-rose/10 text-ops-rose',
+  violet: 'border-ops-violet/40 bg-ops-violet/10 text-ops-violet',
+} as const;
+
+type MapTone = keyof typeof TONE_CLASSES;
+
+const PLAN_TONES: MapTone[] = ['rose', 'violet', 'cyan', 'emerald'];
+
+function compactProfileName(profile: string): string {
+  return profile
+    .replace(/-first/gi, '')
+    .replace(/revenue/gi, 'ARR')
+    .replace(/fairness/gi, 'Fair')
+    .slice(0, 5)
+    .toUpperCase();
+}
+
+function stateForNode(
+  index: number,
+  activeIndex: number,
+  journeyComplete: boolean,
+  failed: boolean,
+): JourneyState {
+  if (failed && index === activeIndex) return 'failed';
+  if (journeyComplete || index < activeIndex) return 'complete';
+  if (index === activeIndex) return 'active';
+  return 'waiting';
+}
+
+function NodeGlyph({ state, index }: { state: JourneyState; index: number }) {
+  if (state === 'complete') {
+    return (
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="m5 12 4 4L19 6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (state === 'failed') {
+    return <span className="text-lg leading-none">×</span>;
+  }
+  return <span>{String(index + 1).padStart(2, '0')}</span>;
+}
+
+function MapNodeButton({
+  node,
+  index,
+  state,
+  selected,
+  onSelect,
+}: {
+  node: MapNode;
+  index: number;
+  state: JourneyState;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const circleStyle = state === 'complete'
+    ? 'border-ops-cyan bg-ops-cyan text-white'
+    : state === 'active'
+      ? 'border-ops-amber bg-ops-amber text-white shadow-amber-glow'
+      : state === 'failed'
+        ? 'border-ops-rose bg-ops-rose text-white'
+        : 'border-border-base bg-deep text-ink-muted';
+  const labelStyle = state === 'active'
+    ? 'text-ops-amber'
+    : state === 'failed'
+      ? 'text-ops-rose'
+      : state === 'complete'
+        ? 'text-ops-cyan'
+        : 'text-ink-muted';
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={`${node.label}, ${state}`}
+      className="absolute z-20 w-[108px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center focus-ring rounded-xl"
+      style={{ left: node.x, top: node.y }}
+    >
+      <span className="relative w-16 h-16">
+        {state === 'active' && (
+          <span className="absolute -inset-1.5 rounded-full border border-dashed border-ops-amber animate-spin-slow" />
+        )}
+        {selected && (
+          <span className="absolute -inset-2.5 rounded-full border-2 border-ops-amber/30" />
+        )}
+        <span className={`absolute inset-0 rounded-full border-2 flex items-center justify-center text-xs font-mono font-bold transition-all ${circleStyle}`}>
+          <NodeGlyph state={state} index={index} />
+        </span>
+      </span>
+      <span className={`text-xs font-bold leading-tight mt-2.5 ${labelStyle}`}>
+        {node.shortLabel}
+      </span>
+      <span className="text-[9px] font-mono text-ink-muted mt-1">
+        {state === 'active' ? 'NOW' : state === 'complete' ? 'DONE' : state === 'failed' ? 'STOP' : 'WAIT'}
+      </span>
+    </button>
+  );
+}
 
 export function normalizeJourneyStage(stageId: string): string {
   return STAGE_ALIASES[stageId] ?? stageId;
@@ -31,128 +188,228 @@ export function DecisionJourneyRail({
   activeId,
   selectedId,
   failed,
+  portfolio,
+  runData,
   onSelect,
 }: DecisionJourneyRailProps) {
   const normalizedActiveId = normalizeJourneyStage(activeId);
   const activeIndex = Math.max(
-    PHASE_TIMELINE.findIndex((phase) => phase.id === normalizedActiveId),
+    MAP_NODES.findIndex((node) => node.id === normalizedActiveId),
     0,
   );
   const journeyComplete = normalizedActiveId === 'complete' && !failed;
-  const placedCount = journeyComplete ? PHASE_TIMELINE.length : activeIndex + 1;
+  const placedCount = journeyComplete ? MAP_NODES.length : activeIndex + 1;
+  const activeNode = MAP_NODES[activeIndex];
+  const activeX = activeNode?.x ?? MAP_NODES[0].x;
+  const clarificationActive = activeId === 'clarify';
+  const portfolioSummary = portfolio?.portfolio_summary;
+  const urgentIncidentCount = portfolio?.incidents.filter((incident) => (
+    !['CLOSED', 'RESOLVED', 'CANCELLED'].includes(incident.status?.toUpperCase() ?? '')
+    && ['CRITICAL', 'HIGH'].includes(incident.severity?.toUpperCase() ?? '')
+  )).length ?? 0;
+  const communicationsSelected = runData?.selected_tools.some((tool) => (
+    tool.selected && tool.toolName.toLowerCase().includes('communication')
+  )) ?? false;
+  const sourceChips: Array<{
+    label: string;
+    value: string;
+    x: number;
+    tone: MapTone;
+  }> = [
+    {
+      label: 'CRM',
+      value: portfolioSummary?.total_customers == null
+        ? 'waiting'
+        : `${portfolioSummary.total_customers} clients`,
+      x: 390,
+      tone: 'violet',
+    },
+    {
+      label: 'RISKS',
+      value: portfolio ? `${urgentIncidentCount} urgent` : 'waiting',
+      x: 465,
+      tone: 'rose',
+    },
+    {
+      label: 'TEAM',
+      value: portfolioSummary?.total_specialists == null
+        ? 'waiting'
+        : `${portfolioSummary.available_specialists ?? 0}/${portfolioSummary.total_specialists} ready`,
+      x: 545,
+      tone: 'cyan',
+    },
+    {
+      label: 'COMMS',
+      value: communicationsSelected ? 'selected' : 'standby',
+      x: 620,
+      tone: 'orange',
+    },
+  ];
+  const planChips = (runData?.candidate_plans ?? []).slice(0, 4).map((plan, index) => ({
+    label: compactProfileName(plan.profile),
+    value: `${plan.metrics.assigned_count} placed`,
+    tone: PLAN_TONES[index] ?? 'emerald',
+  }));
 
   return (
-    <nav aria-label="Decision journey" className="mt-2">
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+    <nav aria-label="Decision map" className="mt-1">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-[9px] font-mono font-semibold uppercase tracking-[0.18em] text-ink-muted">
-              Living journey
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.18em] text-ink-secondary">
+              Live decision map
             </p>
-            <span className="rounded-full bg-ops-cyan/10 px-2 py-1 text-[8px] font-mono font-semibold text-ops-cyan">
-              {placedCount}/{PHASE_TIMELINE.length} cards placed
+            <span className="rounded-full bg-ops-cyan/10 px-2.5 py-1 text-[10px] font-mono font-semibold text-ops-cyan">
+              {placedCount}/{PHASE_TIMELINE.length}
             </span>
           </div>
-          <p className="text-[10px] text-ink-muted mt-1.5">
-            Each card arrives at a readable pace and remains available without interrupting the live route.
+          <p className="text-xs text-ink-muted mt-1.5">
+            Select any step to see its data and reason.
           </p>
         </div>
         {selectedId && selectedId !== normalizedActiveId && (
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="text-[10px] font-semibold text-ops-amber hover:underline focus-ring rounded"
+            className="text-xs font-semibold text-ops-amber hover:underline focus-ring rounded"
           >
-            Return to the live card →
+            Return to live node →
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto pb-2 -mx-1 px-1">
-        <div className="relative min-w-[1080px] grid grid-cols-8 gap-2.5">
-          <div className="absolute left-[6.25%] right-[6.25%] top-7 h-0.5 bg-border-dim" />
-          <div
-            className="absolute left-[6.25%] top-7 h-0.5 bg-ops-cyan transition-[width] duration-700"
-            style={{
-              width: `${activeIndex === 0 ? 0 : (activeIndex / 7) * 87.5}%`,
-            }}
-          />
+      <div className="overflow-x-auto -mx-2 px-2 pb-2">
+        <div className="relative min-w-[1195px] h-[350px] rounded-[1.4rem] border border-border-dim bg-deep/40 overflow-hidden">
+          <div className="absolute inset-0 bg-grid-ops opacity-50" />
+          <svg
+            viewBox="0 0 1195 350"
+            preserveAspectRatio="none"
+            className="absolute inset-0 w-full h-full"
+            aria-hidden="true"
+          >
+            <line x1="65" y1="168" x2="1130" y2="168" className="stroke-border-base" strokeWidth="2" />
+            <line
+              x1="65"
+              y1="168"
+              x2={activeX}
+              y2="168"
+              className="stroke-ops-cyan transition-all duration-700"
+              strokeWidth="3"
+            />
+            {!journeyComplete && !failed && (
+              <line
+                x1={Math.max(65, activeX - 70)}
+                y1="168"
+                x2={activeX}
+                y2="168"
+                className="decision-map-flow stroke-ops-amber"
+                strokeWidth="3"
+              />
+            )}
 
-          {PHASE_TIMELINE.map((phase, index) => {
-            const placed = index <= activeIndex || journeyComplete;
-            const done = index < activeIndex || journeyComplete;
-            const current = index === activeIndex && !journeyComplete;
-            const selected = selectedId === phase.id
-              || (!selectedId && phase.id === normalizedActiveId);
-            const failedCurrent = failed && current;
+            <path d="M355 139 C355 105 355 90 355 75 H505 V139" fill="none" className="stroke-border-base" strokeWidth="1.5" strokeDasharray="5 6" />
+            <path d="M355 197 V274" fill="none" className="stroke-ops-rose/35" strokeWidth="1.5" strokeDasharray="5 6" />
+            <path d="M820 139 V75 H655 V139" fill="none" className="stroke-ops-violet/45" strokeWidth="1.5" strokeDasharray="5 6" />
+            <path d="M820 197 V274" fill="none" className="stroke-ops-rose/35" strokeWidth="1.5" strokeDasharray="5 6" />
 
-            if (!placed) {
-              return (
-                <div
-                  key={phase.id}
-                  className="relative z-10 min-h-[138px] rounded-xl border border-dashed border-border-dim bg-deep/50 px-3 pt-3.5"
-                  aria-label={`${phase.label}, waiting to be placed`}
-                >
-                  <div className="w-7 h-7 rounded-full border-2 border-border-base bg-abyss flex items-center justify-center text-[9px] font-mono text-ink-ghost">
-                    {String(index + 1).padStart(2, '0')}
-                  </div>
-                  <p className="text-[9px] leading-tight font-bold text-ink-ghost mt-4">
-                    {phase.label}
-                  </p>
-                  <p className="text-[8px] leading-relaxed text-ink-ghost mt-2">
-                    Waiting for the previous card
-                  </p>
-                </div>
-              );
-            }
+            {clarificationActive && (
+              <path d="M355 139 C355 105 355 90 355 75 H505 V139" fill="none" className="decision-map-flow stroke-ops-orange" strokeWidth="3" />
+            )}
 
+            {sourceChips.map((source) => (
+              <path
+                key={source.label}
+                d={`M${source.x} 262 C${source.x} 225 505 225 505 198`}
+                fill="none"
+                className={activeIndex === 3 ? 'decision-map-flow stroke-ops-cyan' : 'stroke-border-dim'}
+                strokeWidth={activeIndex === 3 ? 2 : 1}
+                strokeDasharray="4 6"
+              />
+            ))}
+
+            <path d="M655 197 V240" fill="none" className="stroke-border-base" strokeWidth="1.5" />
+            <path d="M610 240 H700" fill="none" className="stroke-border-base" strokeWidth="1.5" />
+          </svg>
+
+          {MAP_NODES.map((node, index) => {
+            const state = stateForNode(index, activeIndex, journeyComplete, failed);
+            const selected = selectedId === node.id
+              || (!selectedId && node.id === normalizedActiveId);
+            return (
+              <MapNodeButton
+                key={node.id}
+                node={node}
+                index={index}
+                state={state}
+                selected={selected}
+                onSelect={() => onSelect(node.id === normalizedActiveId ? null : node.id)}
+              />
+            );
+          })}
+
+          {BRANCHES.map((branch) => {
+            const branchActive = branch.id === 'clarify' && clarificationActive;
             return (
               <button
-                key={phase.id}
+                key={branch.id}
                 type="button"
-                onClick={() => onSelect(phase.id === normalizedActiveId ? null : phase.id)}
-                aria-pressed={selected}
-                aria-label={`${phase.label}, ${failedCurrent ? 'stopped' : current ? 'current' : 'recorded'}`}
-                className={`animate-fade-up relative z-10 min-h-[138px] rounded-xl border px-3 pt-3.5 pb-3 text-left transition-all focus-ring ${
-                  selected
-                    ? 'border-ops-amber bg-abyss shadow-card -translate-y-0.5'
-                    : done
-                      ? 'border-ops-cyan/30 bg-abyss hover:border-ops-cyan/50'
-                      : 'border-ops-amber/40 bg-ops-amber/[0.045]'
+                onClick={() => onSelect(branch.parent)}
+                className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl border px-3 py-2 text-left focus-ring transition-all ${
+                  branchActive
+                    ? `${TONE_CLASSES[branch.tone]} shadow-card route-pulse`
+                    : 'border-border-dim bg-abyss/90 text-ink-muted hover:border-border-base'
                 }`}
-                style={{ opacity: 0 }}
+                style={{ left: branch.x, top: branch.y }}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-[9px] font-mono font-bold ${
-                    failedCurrent
-                      ? 'border-ops-rose bg-ops-rose text-white'
-                      : current
-                        ? 'border-ops-amber bg-ops-amber text-white route-pulse'
-                        : 'border-ops-cyan bg-ops-cyan text-white'
-                  }`}>
-                    {done ? '✓' : String(index + 1).padStart(2, '0')}
-                  </span>
-                  <span className={`text-[8px] font-mono font-semibold uppercase tracking-wider ${
-                    failedCurrent
-                      ? 'text-ops-rose'
-                      : current
-                        ? 'text-ops-amber'
-                        : 'text-ops-cyan'
-                  }`}>
-                    {failedCurrent ? 'stopped' : current ? 'now' : 'recorded'}
-                  </span>
-                </div>
-                <p className={`text-[10px] leading-tight font-bold mt-3 ${
-                  selected ? 'text-ink-primary' : 'text-ink-secondary'
-                }`}>
-                  {phase.label}
-                </p>
-                <p className="text-[8px] leading-relaxed text-ink-muted mt-2">
-                  {STAGE_SUMMARY[phase.id]}
-                </p>
+                <span className="block text-[11px] font-mono font-bold uppercase tracking-[0.1em]">
+                  {branch.label}
+                </span>
+                <span className="block text-[9px] mt-1 opacity-75">{branch.detail}</span>
               </button>
             );
           })}
+
+          <div className="absolute z-10 left-[505px] top-[272px] -translate-x-1/2 flex gap-1.5">
+            {sourceChips.map((source) => (
+              <span
+                key={source.label}
+                className={`min-w-[66px] rounded-xl border px-2.5 py-1.5 text-center font-mono ${TONE_CLASSES[source.tone]}`}
+              >
+                <span className="block text-[9px] font-bold">{source.label}</span>
+                <span className="block text-[8px] opacity-75 mt-0.5">{source.value}</span>
+              </span>
+            ))}
+          </div>
+
+          <div className="absolute z-10 left-[655px] top-[249px] -translate-x-1/2 grid grid-cols-2 gap-1.5">
+            {planChips.length > 0 ? planChips.map((plan) => (
+              <button
+                key={plan.label}
+                type="button"
+                onClick={() => onSelect('optimize')}
+                className={`rounded-xl border px-2.5 py-1 text-[9px] font-mono font-bold focus-ring ${TONE_CLASSES[plan.tone]}`}
+                aria-label={`Inspect ${plan.label} plan branch`}
+              >
+                {plan.label} · {plan.value}
+              </button>
+            )) : (
+              <span className="col-span-2 rounded-full border border-border-dim bg-deep px-3 py-1 text-[9px] font-mono text-ink-muted">
+                Plans appear here
+              </span>
+            )}
+          </div>
+
+          <div className="absolute left-[20px] bottom-3 flex items-center gap-3 text-[9px] font-mono uppercase text-ink-muted">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-ops-cyan" /> recorded
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-ops-amber" /> active
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-ops-rose" /> alternate stop
+            </span>
+          </div>
         </div>
       </div>
     </nav>
