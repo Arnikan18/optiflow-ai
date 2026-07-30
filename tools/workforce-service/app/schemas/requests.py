@@ -221,6 +221,11 @@ class SpecialistSimulationSeedRequest(BaseModel):
     current_workload: int = Field(default=0, ge=0, le=100)
     availability: bool = True
     active: bool = True
+    completed_assignments_30d: int = Field(default=0, ge=0)
+    sla_success_rate_30d: float | None = Field(default=None, ge=0, le=100)
+    average_resolution_minutes_30d: int | None = Field(default=None, ge=1)
+    assignment_acceptance_rate_30d: float | None = Field(default=None, ge=0, le=100)
+    capacity_reliability_rate_30d: float | None = Field(default=None, ge=0, le=100)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

@@ -20,6 +20,11 @@ class SpecialistResponse(BaseModel):
     current_workload: int
     availability: bool
     active: bool
+    completed_assignments_30d: int
+    sla_success_rate_30d: float | None
+    average_resolution_minutes_30d: int | None
+    assignment_acceptance_rate_30d: float | None
+    capacity_reliability_rate_30d: float | None
     effective_workload: int
     available_capacity: int
     operationally_available: bool

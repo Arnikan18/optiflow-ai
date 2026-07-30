@@ -139,6 +139,11 @@ def test_available_specialists_filters_capacity_and_pending_counts(client, auth_
     assert maya["effective_workload"] == 1
     assert maya["available_capacity"] == 1
     assert maya["operationally_available"] is True
+    assert maya["completed_assignments_30d"] == 38
+    assert maya["sla_success_rate_30d"] == 96.0
+    assert maya["average_resolution_minutes_30d"] == 72
+    assert maya["assignment_acceptance_rate_30d"] == 94.0
+    assert maya["capacity_reliability_rate_30d"] == 97.0
 
 
 def test_list_workloads_exposes_reservation_counts(client, auth_headers):
@@ -243,6 +248,11 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
                 "current_workload": 1,
                 "availability": True,
                 "active": True,
+                "completed_assignments_30d": 14,
+                "sla_success_rate_30d": 92.5,
+                "average_resolution_minutes_30d": 86,
+                "assignment_acceptance_rate_30d": 90.0,
+                "capacity_reliability_rate_30d": 96.0,
                 "created_at": "2026-07-22T09:00:00Z",
                 "updated_at": "2026-07-22T09:00:00Z",
             }
@@ -266,6 +276,13 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     loaded = client.post("/admin/simulation/load-state", json=load_payload, headers=admin_headers)
     assert loaded.status_code == 200
     assert assert_success(loaded)["specialist_count"] == 1
+
+    persisted = assert_success(
+        client.get("/workforce/api/v1/specialists/SPEC-SIM-001", headers=auth_headers)
+    )
+    assert persisted["completed_assignments_30d"] == 14
+    assert persisted["sla_success_rate_30d"] == 92.5
+    assert persisted["average_resolution_minutes_30d"] == 86
 
     unavailable = assert_success(
         client.patch(
