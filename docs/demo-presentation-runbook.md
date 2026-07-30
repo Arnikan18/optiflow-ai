@@ -26,7 +26,8 @@ The launcher:
 1. builds and starts PostgreSQL, Core, CRM, Incident, Workforce, and
    Communication in Docker;
 2. restores deterministic enterprise demo data;
-3. seeds 18 preference decisions, including 14 SLA-First choices;
+3. seeds enough decisions to reach the configured mature-learning threshold,
+   with 80% choosing SLA-First;
 4. installs frontend dependencies; and
 5. starts the frontend locally at `http://localhost:3000`.
 
@@ -163,7 +164,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\reset-demo.ps1
 Restore the mature SLA preference:
 
 ```powershell
-docker compose exec -T core-api python -m scripts.seed_preference_demo --profile SLA_FIRST --decisions 18 --preferred-count 14 --apply
+docker compose exec -T core-api python -m scripts.seed_preference_demo --profile SLA_FIRST --apply
 ```
 
 Check every backend:

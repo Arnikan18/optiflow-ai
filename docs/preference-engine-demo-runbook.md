@@ -39,8 +39,9 @@ After reviewing the plan, apply it:
 docker compose exec -T core-api python -m scripts.seed_preference_demo --apply
 ```
 
-The default seed creates 18 decisions, with 14 favoring `SLA_FIRST`. Before
-changing the singleton manager memory, it writes the previous value to:
+The default seed creates enough decisions to reach `MATURE_LEARNING_RUNS`,
+with 80% favoring `SLA_FIRST`. Before changing the singleton manager memory,
+it writes the previous value to:
 
 ```text
 /tmp/optiflow-preference-memory-backup.json
@@ -55,7 +56,7 @@ docker cp optiflow-core:/tmp/optiflow-preference-memory-backup.json ./preference
 Custom example:
 
 ```powershell
-docker compose exec -T core-api python -m scripts.seed_preference_demo --profile REVENUE_FIRST --decisions 18 --preferred-count 14 --apply
+docker compose exec -T core-api python -m scripts.seed_preference_demo --profile REVENUE_FIRST --apply
 ```
 
 Only audit runs beginning with `RUN-PREF-DEMO-` are replaced. Ordinary run
