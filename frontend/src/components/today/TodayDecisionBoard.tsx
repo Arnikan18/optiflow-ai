@@ -385,17 +385,9 @@ export function TodayDecisionBoard() {
     () => portfolio ? deriveTeamReadiness(portfolio) : [],
     [portfolio],
   );
-  const selectedProblems = useMemo(() => problems.slice(0, 3), [problems]);
-  const suggestedGoal = useMemo(
-    () => buildGoalFromProblems(selectedProblems),
-    [selectedProblems],
-  );
   const selectedWorker = workers.find(
     (worker) => worker.specialist.specialist_id === openWorkerId,
   ) ?? null;
-  const suggestionKey = selectedProblems
-    .map((problem) => problem.incident.incident_id)
-    .join('|') || 'portfolio';
 
   if (loading && !portfolio) return <LoadingBoard />;
 
@@ -466,26 +458,6 @@ export function TodayDecisionBoard() {
           </button>
         </div>
       </header>
-
-      <section className="rounded-2xl border border-border-base bg-abyss p-5 shadow-card sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-ops-amber">Today&apos;s goal</p>
-            <h2 className="mt-1 text-2xl font-extrabold text-ink-primary">
-              What must the team protect?
-            </h2>
-          </div>
-          <span className="rounded-full border border-ops-emerald/30 bg-ops-emerald/5 px-3 py-2 text-sm font-bold text-ops-emerald">
-            Human approval required
-          </span>
-        </div>
-        <GoalInput
-          compact
-          suggestedGoal={suggestedGoal}
-          suggestionKey={suggestionKey}
-          selectedProblemCount={selectedProblems.length}
-        />
-      </section>
 
       <section aria-labelledby="today-team-heading">
         <div className="flex items-end justify-between gap-4">
