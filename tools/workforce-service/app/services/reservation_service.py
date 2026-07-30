@@ -10,6 +10,8 @@ from app.database.seed import build_seed_reservations, build_seed_specialists, e
 from app.schemas.requests import (
     ReservationCreateRequest,
     ReservationVerificationRequest,
+    WorkforceSimulationLoadStateRequest,
+    WorkforceSimulationReleaseRequest,
     normalize_incident_id,
     normalize_reservation_id,
     normalize_specialist_id,
@@ -371,6 +373,94 @@ async def reset_workforce(session: AsyncSession) -> dict[str, int]:
         await ensure_failure_mode(session)
         await session.commit()
         return {"specialist_count": len(specialists), "reservation_count": len(reservations)}
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def load_simulation_workforce(
+    session: AsyncSession,
+    payload: WorkforceSimulationLoadStateRequest,
+) -> dict[str, int | str]:
+    try:
+        await session.execute(delete(Reservation))
+        await session.execute(delete(SpecialistSkill))
+        await session.execute(delete(Specialist))
+
+        specialists: list[Specialist] = []
+        for item in payload.specialists:
+            data = item.model_dump(exclude={"skills"}, exclude_none=True)
+            specialist = Specialist(**data)
+            specialist.skills = [
+                SpecialistSkill(specialist_id=item.specialist_id, skill=skill)
+                for skill in item.skills
+            ]
+            specialists.append(specialist)
+
+        reservations = [
+            Reservation(**item.model_dump(exclude_none=True))
+            for item in payload.reservations
+        ]
+        session.add_all(specialists)
+        await session.flush()
+        session.add_all(reservations)
+        await ensure_failure_mode(session)
+        await session.commit()
+        return {
+            "scenario_id": payload.scenario_id,
+            "specialist_count": len(specialists),
+            "reservation_count": len(reservations),
+        }
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def release_incident_workload_for_simulation(
+    session: AsyncSession,
+    incident_id: str,
+    payload: WorkforceSimulationReleaseRequest,
+) -> dict[str, object]:
+    now_utc = datetime.now(timezone.utc)
+    try:
+        normalized_incident_id = normalize_incident_id(incident_id)
+        result = await session.execute(
+            select(Reservation).where(
+                Reservation.incident_id == normalized_incident_id,
+                Reservation.status.in_(ACTIVE_RESERVATION_STATUSES),
+            )
+        )
+        reservations = list(result.scalars().all())
+        released: list[str] = []
+        affected_specialists: set[str] = set()
+        for reservation in reservations:
+            if reservation.status == "CONFIRMED":
+                specialist = await _get_specialist_for_update(session, reservation.specialist_id)
+                specialist.current_workload = max(specialist.current_workload - 1, 0)
+                specialist.updated_at = now_utc
+                session.add(specialist)
+                affected_specialists.add(specialist.specialist_id)
+
+            reservation.status = "CANCELLED"
+            reservation.cancelled_at = now_utc
+            reservation.cancellation_reason = payload.reason or "Released by simulation event"
+            reservation.updated_at = now_utc
+            session.add(reservation)
+            released.append(reservation.reservation_id)
+
+        await session.commit()
+        return {
+            "incident_id": normalized_incident_id,
+            "released_reservations": len(released),
+            "reservation_ids": released,
+            "affected_specialist_ids": sorted(affected_specialists),
+        }
+    except ValueError as exc:
+        await session.rollback()
+        raise WorkforceError(422, "WORKFORCE_422", str(exc)) from exc
+    except WorkforceError:
+        await session.rollback()
+        raise
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc

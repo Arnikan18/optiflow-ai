@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -68,6 +69,12 @@ def normalize_email(value: str | None) -> str | None:
     if len(normalized) > 254 or "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
         raise ValueError("email must be a valid email address")
     return normalized
+
+
+def normalize_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("datetime values must include timezone information")
+    return value.astimezone(timezone.utc)
 
 
 class ReservationCreateRequest(BaseModel):
@@ -203,3 +210,186 @@ class AdminWorkloadRequest(BaseModel):
     )
 
     model_config = ConfigDict(extra="ignore")
+
+
+class SpecialistSimulationSeedRequest(BaseModel):
+    specialist_id: SpecialistId
+    name: str = Field(min_length=1, max_length=200)
+    email: str | None = None
+    skills: list[Skill]
+    capacity: int = Field(ge=1, le=100)
+    current_workload: int = Field(default=0, ge=0, le=100)
+    availability: bool = True
+    active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name cannot be empty")
+        return normalized
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return normalize_email(value)
+
+    @field_validator("skills")
+    @classmethod
+    def validate_skills(cls, values: list[str]) -> list[str]:
+        return normalize_skills(values)
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def validate_datetime_fields(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value)
+
+
+class ReservationSimulationSeedRequest(BaseModel):
+    reservation_id: ReservationId
+    run_id: RunId | None = None
+    specialist_id: SpecialistId
+    incident_id: IncidentId
+    status: str = "TENTATIVE"
+    idempotency_key: IdempotencyKey | None = None
+    created_at: datetime
+    expires_at: datetime
+    confirmed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    cancellation_reason: CancellationReason | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("reservation_id")
+    @classmethod
+    def validate_reservation_id(cls, value: str) -> str:
+        return normalize_reservation_id(value)
+
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
+
+    @field_validator("specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if normalized not in {"TENTATIVE", "CONFIRMED", "CANCELLED", "EXPIRED"}:
+            raise ValueError("status must be one of: TENTATIVE, CONFIRMED, CANCELLED, EXPIRED")
+        return normalized
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("idempotency_key cannot be empty")
+        return normalized
+
+    @field_validator("created_at", "expires_at", "confirmed_at", "cancelled_at", "updated_at")
+    @classmethod
+    def validate_datetime_fields(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value)
+
+
+class WorkforceSimulationLoadStateRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=100)
+    specialists: list[SpecialistSimulationSeedRequest]
+    reservations: list[ReservationSimulationSeedRequest] = Field(default_factory=list)
+    workloads: list[dict] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("scenario_id")
+    @classmethod
+    def validate_scenario_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("scenario_id cannot be empty")
+        return normalized
+
+    @field_validator("specialists")
+    @classmethod
+    def validate_unique_specialists(
+        cls,
+        values: list[SpecialistSimulationSeedRequest],
+    ) -> list[SpecialistSimulationSeedRequest]:
+        seen: set[str] = set()
+        for specialist in values:
+            if specialist.specialist_id in seen:
+                raise ValueError("specialists cannot contain duplicate specialist_id values")
+            if specialist.current_workload > specialist.capacity:
+                raise ValueError("current_workload cannot exceed capacity")
+            seen.add(specialist.specialist_id)
+        return values
+
+    @field_validator("reservations")
+    @classmethod
+    def validate_unique_reservations(
+        cls,
+        values: list[ReservationSimulationSeedRequest],
+    ) -> list[ReservationSimulationSeedRequest]:
+        seen: set[str] = set()
+        for reservation in values:
+            if reservation.reservation_id in seen:
+                raise ValueError("reservations cannot contain duplicate reservation_id values")
+            seen.add(reservation.reservation_id)
+        return values
+
+
+class WorkforceSimulationAvailabilityRequest(BaseModel):
+    availability: bool
+    reason: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class WorkforceSimulationReleaseRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None

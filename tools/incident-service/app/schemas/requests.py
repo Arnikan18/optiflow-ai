@@ -93,6 +93,7 @@ class IncidentCreateRequest(BaseModel):
     priority: str
     sla_deadline: datetime
     status: str = "OPEN"
+    estimated_effort_minutes: int | None = Field(default=None, ge=1, le=10080)
     assigned_specialist_id: SpecialistId | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
@@ -211,3 +212,167 @@ class IncidentAssignmentVerificationRequest(BaseModel):
     @classmethod
     def validate_expected_specialist_id(cls, value: str) -> str:
         return normalize_specialist_id(value)
+
+
+class IncidentSimulationSeedRequest(BaseModel):
+    incident_id: IncidentId
+    customer_id: CustomerId
+    title: IncidentTitle
+    description: IncidentDescription
+    priority: str
+    status: str = "OPEN"
+    sla_deadline: datetime
+    estimated_effort_minutes: int | None = Field(default=None, ge=1, le=10080)
+    assigned_specialist_id: SpecialistId | None = None
+    assignment_run_id: RunId | None = None
+    assignment_idempotency_key: IdempotencyKey | None = None
+    assigned_at: datetime | None = None
+    resolved_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("customer_id")
+    @classmethod
+    def validate_customer_id(cls, value: str) -> str:
+        return normalize_customer_id(value)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("title cannot be empty")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("description cannot be empty")
+        return normalized
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str) -> str:
+        return normalize_priority(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        return normalize_status(value)
+
+    @field_validator("sla_deadline", "assigned_at", "resolved_at", "created_at", "updated_at")
+    @classmethod
+    def validate_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value)
+
+    @field_validator("assigned_specialist_id")
+    @classmethod
+    def validate_assigned_specialist_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_specialist_id(value)
+
+    @field_validator("assignment_run_id")
+    @classmethod
+    def validate_assignment_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
+
+    @field_validator("assignment_idempotency_key")
+    @classmethod
+    def validate_assignment_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("assignment_idempotency_key cannot be empty")
+        return normalized
+
+
+class IncidentSimulationLoadStateRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=100)
+    incidents: list[IncidentSimulationSeedRequest]
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("scenario_id")
+    @classmethod
+    def validate_scenario_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("scenario_id cannot be empty")
+        return normalized
+
+    @field_validator("incidents")
+    @classmethod
+    def validate_unique_incidents(cls, values: list[IncidentSimulationSeedRequest]) -> list[IncidentSimulationSeedRequest]:
+        seen: set[str] = set()
+        for incident in values:
+            if incident.incident_id in seen:
+                raise ValueError("incidents cannot contain duplicate incident_id values")
+            seen.add(incident.incident_id)
+        return values
+
+
+class IncidentSimulationFieldUpdateRequest(BaseModel):
+    priority: str | None = None
+    sla_deadline: datetime | None = None
+    estimated_effort_minutes: int | None = Field(default=None, ge=1, le=10080)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_priority(value)
+
+    @field_validator("sla_deadline")
+    @classmethod
+    def validate_sla_deadline(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value)
+
+
+class IncidentSimulationResolveRequest(BaseModel):
+    incident_id: IncidentId | None = None
+    resolved_at: datetime | None = None
+    resolution_note: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_incident_id(value)
+
+    @field_validator("resolved_at")
+    @classmethod
+    def validate_resolved_at(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value)
+
+    @field_validator("resolution_note")
+    @classmethod
+    def validate_resolution_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None

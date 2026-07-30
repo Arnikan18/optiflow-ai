@@ -22,10 +22,12 @@ class Incident(Base):
     priority: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True, default="OPEN")
     sla_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    estimated_effort_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     assigned_specialist_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     assignment_run_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     assignment_idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -42,6 +44,10 @@ class Incident(Base):
         CheckConstraint(
             "status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')",
             name="ck_incidents_status",
+        ),
+        CheckConstraint(
+            "estimated_effort_minutes IS NULL OR estimated_effort_minutes > 0",
+            name="ck_incidents_estimated_effort_positive",
         ),
         Index("ix_incidents_sla_status", "sla_deadline", "status"),
         Index("ix_incidents_assignment_run", "incident_id", "assignment_run_id"),

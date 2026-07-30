@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     demo_portfolio_timeout_seconds: float = 3.0
     demo_health_timeout_seconds: float = 2.0
     demo_allow_failure_injection: bool = True
+    simulation_default_scenario: str | None = None
+    simulation_auto_advance: bool = False
+    simulation_timezone: str = "UTC"
+    simulation_event_callback_url: str | None = None
+    simulation_event_timeout_seconds: float = 3.0
+    simulation_max_event_retries: int = 2
+    simulation_scenario_root: str = "scenarios"
     
     model_config = SettingsConfigDict(
         env_file=".env",

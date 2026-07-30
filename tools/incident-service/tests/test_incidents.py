@@ -408,3 +408,72 @@ def test_past_sla_deadline_is_allowed(client, auth_headers):
         201,
     )
     assert datetime.fromisoformat(created["sla_deadline"].replace("Z", "+00:00")) < datetime.now(timezone.utc)
+
+
+def test_simulation_load_state_update_and_resolve(client, auth_headers, admin_headers):
+    load_payload = {
+        "scenario_id": "scenario-test",
+        "incidents": [
+            {
+                "incident_id": "inc-sim-001",
+                "customer_id": "cus-alpha",
+                "title": "Simulation incident",
+                "description": "Simulation incident payload.",
+                "priority": "medium",
+                "status": "IN_PROGRESS",
+                "sla_deadline": "2099-07-22T10:00:00Z",
+                "estimated_effort_minutes": 60,
+                "assigned_specialist_id": "spec-maya",
+                "assigned_at": "2026-07-22T09:10:00Z",
+                "created_at": "2026-07-22T09:00:00Z",
+                "updated_at": "2026-07-22T09:10:00Z",
+            }
+        ],
+    }
+    loaded = client.post("/admin/simulation/load-state", json=load_payload, headers=admin_headers)
+    assert loaded.status_code == 200
+    assert assert_success(loaded)["incident_count"] == 1
+
+    updated = assert_success(
+        client.patch(
+            "/incident/api/v1/incidents/INC-SIM-001/simulation-fields",
+            json={
+                "priority": "critical",
+                "sla_deadline": "2099-07-22T09:30:00Z",
+                "estimated_effort_minutes": 90,
+            },
+            headers=auth_headers,
+        )
+    )
+    assert updated["priority"] == "CRITICAL"
+    assert updated["estimated_effort_minutes"] == 90
+
+    resolved = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/INC-SIM-001/simulation-resolve",
+            json={"resolved_at": "2026-07-22T10:00:00Z", "resolution_note": "Done"},
+            headers=auth_headers,
+        )
+    )
+    assert resolved["status"] == "RESOLVED"
+    assert resolved["assigned_specialist_id"] is None
+    assert resolved["resolved_at"] == "2026-07-22T10:00:00Z"
+
+    repeated = assert_success(
+        client.post(
+            "/incident/api/v1/incidents/INC-SIM-001/simulation-resolve",
+            json={"resolved_at": "2026-07-22T10:00:00Z"},
+            headers=auth_headers,
+        )
+    )
+    assert repeated["status"] == "RESOLVED"
+
+    assert_error(
+        client.patch(
+            "/incident/api/v1/incidents/INC-SIM-001/simulation-fields",
+            json={"priority": "HIGH"},
+            headers=auth_headers,
+        ),
+        409,
+        "INCIDENT_409",
+    )

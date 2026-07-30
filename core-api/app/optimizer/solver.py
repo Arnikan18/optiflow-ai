@@ -3,6 +3,17 @@ from typing import Dict, Any, List
 
 logger = logging.getLogger("core-api.optimizer.solver")
 
+
+def _is_enabled(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"false", "0", "no", "inactive", "unavailable"}
+    return bool(value)
+
+
 def score_incident_priority(incident: Dict[str, Any], customers_map: Dict[str, Dict[str, Any]]) -> float:
     """Calculates SLA and customer value scores to rank critical incidents."""
     priority = incident.get("priority", "LOW").upper()
@@ -43,7 +54,7 @@ def resolve_required_skills(incident: Dict[str, Any]) -> List[str]:
         required.append("integration")
     if "security" in text or "auth" in text or "login" in text or "token" in text:
         required.append("security")
-    if "database" in text or "sql" in text or "query" in text or "timeout" in text:
+    if "database" in text or "db" in text or "sql" in text or "query" in text or "timeout" in text:
         required.append("database")
     if "billing" in text or "subscription" in text or "invoice" in text or "payment" in text:
         required.append("billing")
@@ -64,7 +75,7 @@ def generate_optimization_plans(
     # Filter only active and available specialists for planning
     specialists = [
         s for s in specialists
-        if s.get("active") is True and s.get("availability") is True
+        if _is_enabled(s.get("active")) and _is_enabled(s.get("availability"))
     ]
     
     excluded_pairs = excluded_pairs or []

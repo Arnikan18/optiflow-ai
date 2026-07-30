@@ -246,3 +246,58 @@ def test_get_notification_existing_missing_and_legacy_routes(client, auth_header
     legacy_list = client.get("/notifications", headers=auth_headers)
     assert legacy_list.status_code == 200
     assert any(item["notificationId"] == notification_id for item in legacy_list.json())
+
+
+def test_simulation_load_state_replaces_assignments_and_notifications(client, auth_headers, admin_headers):
+    payload = {
+        "scenario_id": "scenario-test",
+        "assignment_requests": [
+            {
+                "request_id": "ar-sim-001",
+                "run_id": "run-sim",
+                "incident_id": "inc-sim-001",
+                "specialist_id": "spec-maya",
+                "reservation_id": "res-sim-001",
+                "message": "Simulation assignment request.",
+                "status": "ACCEPTED",
+                "idempotency_key": "ar-sim-001",
+                "created_at": "2026-07-22T09:00:00Z",
+                "expires_at": "2026-07-22T10:00:00Z",
+                "responded_at": "2026-07-22T09:05:00Z",
+                "response_note": "Accepted.",
+                "response_reason": "Accepted.",
+                "updated_at": "2026-07-22T09:05:00Z",
+            }
+        ],
+        "notifications": [
+            {
+                "notification_id": "not-sim-001",
+                "recipient": "maya.sen@example.test",
+                "channel": "EMAIL",
+                "subject": "Simulation notification",
+                "message": "Simulation notification delivered.",
+                "status": "DELIVERED",
+                "idempotency_key": "not-sim-001",
+                "related_request_id": "ar-sim-001",
+                "created_at": "2026-07-22T09:06:00Z",
+                "attempted_at": "2026-07-22T09:06:00Z",
+                "delivered_at": "2026-07-22T09:06:00Z",
+                "attempt_count": 1,
+                "updated_at": "2026-07-22T09:06:00Z",
+            }
+        ],
+    }
+
+    loaded = client.post("/admin/simulation/load-state", json=payload, headers=admin_headers)
+    assert loaded.status_code == 200
+    data = assert_success(loaded)
+    assert data["assignment_request_count"] == 1
+    assert data["notification_count"] == 1
+
+    assignment = assert_success(
+        client.get("/communication/api/v1/assignment-requests/AR-SIM-001", headers=auth_headers)
+    )
+    assert assignment["status"] == "ACCEPTED"
+
+    notification = assert_success(client.get("/communication/api/v1/notifications/NOT-SIM-001", headers=auth_headers))
+    assert notification["related_request_id"] == "AR-SIM-001"
