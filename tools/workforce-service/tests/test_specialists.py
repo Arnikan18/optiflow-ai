@@ -185,3 +185,64 @@ def test_legacy_admin_workload_accepts_camel_case(client, auth_headers):
 def test_response_timestamps_are_utc(client, auth_headers):
     data = assert_success(client.get("/workforce/api/v1/specialists/SPEC-DANIEL", headers=auth_headers))
     assert datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")).tzinfo == timezone.utc
+
+
+def test_simulation_load_availability_and_release_workload(client, auth_headers, admin_headers):
+    load_payload = {
+        "scenario_id": "scenario-test",
+        "specialists": [
+            {
+                "specialist_id": "spec-sim-001",
+                "name": "Simulation Specialist",
+                "email": "simulation.specialist@example.test",
+                "skills": ["technical"],
+                "capacity": 2,
+                "current_workload": 1,
+                "availability": True,
+                "active": True,
+                "created_at": "2026-07-22T09:00:00Z",
+                "updated_at": "2026-07-22T09:00:00Z",
+            }
+        ],
+        "reservations": [
+            {
+                "reservation_id": "res-sim-001",
+                "run_id": "run-sim",
+                "specialist_id": "spec-sim-001",
+                "incident_id": "inc-sim-001",
+                "status": "CONFIRMED",
+                "idempotency_key": "res-sim-001",
+                "created_at": "2026-07-22T09:00:00Z",
+                "expires_at": "2026-07-22T09:30:00Z",
+                "confirmed_at": "2026-07-22T09:01:00Z",
+                "updated_at": "2026-07-22T09:01:00Z",
+            }
+        ],
+    }
+
+    loaded = client.post("/admin/simulation/load-state", json=load_payload, headers=admin_headers)
+    assert loaded.status_code == 200
+    assert assert_success(loaded)["specialist_count"] == 1
+
+    unavailable = assert_success(
+        client.patch(
+            "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-availability",
+            json={"availability": False, "reason": "leave"},
+            headers=auth_headers,
+        )
+    )
+    assert unavailable["availability"] is False
+    assert unavailable["operationally_available"] is False
+
+    released = assert_success(
+        client.post(
+            "/workforce/api/v1/incidents/INC-SIM-001/release-workload",
+            json={"reason": "resolved"},
+            headers=auth_headers,
+        )
+    )
+    assert released["released_reservations"] == 1
+    assert released["reservation_ids"] == ["RES-SIM-001"]
+
+    specialist = assert_success(client.get("/workforce/api/v1/specialists/SPEC-SIM-001", headers=auth_headers))
+    assert specialist["current_workload"] == 0

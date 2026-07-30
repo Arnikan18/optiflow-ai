@@ -1,0 +1,109 @@
+[
+  {
+    "event_id": "EVT-PRD-001",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T09:30:00Z",
+    "stage": "launch-window",
+    "event_type": "NEW_TICKET",
+    "payload": {
+      "incident_id": "INC-MEDI-RELEASE-001",
+      "customer_id": "CUS-MEDI",
+      "title": "Release validation blocking clinical analytics",
+      "description": "Clinical analytics validation is blocked by a regression in release candidate exports.",
+      "priority": "HIGH",
+      "sla_deadline": "2026-07-22T14:30:00Z",
+      "estimated_effort_minutes": 75,
+      "required_skills": ["technical", "integration"]
+    },
+    "description": "MediCore opens a release-blocking validation incident.",
+    "sequence": 1,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-002",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T10:15:00Z",
+    "stage": "customer-escalation",
+    "event_type": "ESCALATE_PRIORITY",
+    "payload": {
+      "incident_id": "INC-GREEN-001",
+      "new_priority": "HIGH"
+    },
+    "description": "GreenLogistics escalates the reporting export defect after executive review.",
+    "sequence": 2,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-003",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T11:00:00Z",
+    "stage": "workforce-disruption",
+    "event_type": "ENGINEER_ON_LEAVE",
+    "payload": {
+      "specialist_id": "SPEC-NIMAL",
+      "reason": "Emergency leave during release support rotation",
+      "effective_at": "2026-07-22T11:00:00Z"
+    },
+    "description": "Nimal becomes unavailable during the release window.",
+    "sequence": 3,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-004",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T11:45:00Z",
+    "stage": "customer-escalation",
+    "event_type": "CHANGE_SLA",
+    "payload": {
+      "incident_id": "INC-ALPHA-001",
+      "sla_deadline": "2026-07-22T11:30:00Z"
+    },
+    "description": "Alpha Bank shortens the payment API recovery target after revenue impact expands.",
+    "sequence": 4,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-005",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T12:30:00Z",
+    "stage": "recovery",
+    "event_type": "CHANGE_ESTIMATED_EFFORT",
+    "payload": {
+      "incident_id": "INC-NOVA-001",
+      "estimated_effort_minutes": 180
+    },
+    "description": "Nova onboarding requires a larger remediation window after deeper SAML review.",
+    "sequence": 5,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-006",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T14:00:00Z",
+    "stage": "recovery",
+    "event_type": "ENGINEER_RETURNED",
+    "payload": {
+      "specialist_id": "SPEC-NIMAL",
+      "reason": "Emergency leave cleared",
+      "effective_at": "2026-07-22T14:00:00Z"
+    },
+    "description": "Nimal returns to the support rotation.",
+    "sequence": 6,
+    "enabled": true
+  },
+  {
+    "event_id": "EVT-PRD-007",
+    "scenario_id": "product_release_day",
+    "scheduled_time": "2026-07-22T16:15:00Z",
+    "stage": "wrap-up",
+    "event_type": "RESOLVE_TICKET",
+    "payload": {
+      "incident_id": "INC-NOVA-001",
+      "resolved_at": "2026-07-22T16:15:00Z",
+      "resolution_note": "SAML configuration validated and launch unblocked."
+    },
+    "description": "Nova onboarding incident is resolved after release recovery.",
+    "sequence": 7,
+    "enabled": true
+  }
+]

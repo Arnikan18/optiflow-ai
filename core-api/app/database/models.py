@@ -1,10 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     pass
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 class BusinessGoal(Base):
     __tablename__ = "business_goals"
@@ -116,4 +120,69 @@ class ManagerPreference(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class SimulationRun(Base):
+    __tablename__ = "simulation_runs"
+
+    simulation_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    scenario_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    scenario_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    current_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_stage: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    current_timeline_position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processed_events: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    pending_events: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    last_event: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    enterprise_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notification_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_REQUIRED")
+    auto_advance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class SimulationEventHistory(Base):
+    __tablename__ = "simulation_event_history"
+
+    event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    simulation_id: Mapped[Optional[str]] = mapped_column(String(100), index=True, nullable=True)
+    scenario_id: Mapped[Optional[str]] = mapped_column(String(100), index=True, nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    processing_status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    enterprise_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    payload: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    changed_entities: Mapped[list[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    error_details: Mapped[list[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    notification_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    notification_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_REQUIRED")
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, unique=True, index=True)
+    request_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class SimulationNotification(Base):
+    __tablename__ = "simulation_notifications"
+
+    notification_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    simulation_id: Mapped[Optional[str]] = mapped_column(String(100), index=True, nullable=True)
+    scenario_id: Mapped[Optional[str]] = mapped_column(String(100), index=True, nullable=True)
+    event_id: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    payload: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    request_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 

@@ -1,0 +1,169 @@
+{
+  "scenario_id": "product_release_day",
+  "customers": [
+    {
+      "customer_id": "CUS-ALPHA",
+      "name": "Alpha Bank",
+      "tier": "Enterprise",
+      "arr": "600000.00",
+      "renewal_date": "2026-09-22",
+      "active": true
+    },
+    {
+      "customer_id": "CUS-NOVA",
+      "name": "Nova Retail",
+      "tier": "Enterprise",
+      "arr": "1200000.00",
+      "renewal_date": "2026-11-20",
+      "active": true
+    },
+    {
+      "customer_id": "CUS-GREEN",
+      "name": "GreenLogistics",
+      "tier": "Standard",
+      "arr": "180000.00",
+      "renewal_date": "2026-07-27",
+      "active": true
+    },
+    {
+      "customer_id": "CUS-MEDI",
+      "name": "MediCore",
+      "tier": "Premium",
+      "arr": "400000.00",
+      "renewal_date": "2027-02-15",
+      "active": true
+    }
+  ],
+  "specialists": [
+    {
+      "specialist_id": "SPEC-MAYA",
+      "name": "Maya Sen",
+      "email": "maya.sen@example.test",
+      "skills": ["billing", "technical", "integration"],
+      "capacity": 2,
+      "current_workload": 0,
+      "availability": true,
+      "active": true,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    },
+    {
+      "specialist_id": "SPEC-DANIEL",
+      "name": "Daniel Ruiz",
+      "email": "daniel.ruiz@example.test",
+      "skills": ["technical", "enterprise-support", "data-reporting"],
+      "capacity": 2,
+      "current_workload": 0,
+      "availability": true,
+      "active": true,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    },
+    {
+      "specialist_id": "SPEC-NIMAL",
+      "name": "Nimal Perera",
+      "email": "nimal.perera@example.test",
+      "skills": ["security", "integration", "enterprise-onboarding"],
+      "capacity": 1,
+      "current_workload": 1,
+      "availability": true,
+      "active": true,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    },
+    {
+      "specialist_id": "SPEC-PRIYA",
+      "name": "Priya Raman",
+      "email": "priya.raman@example.test",
+      "skills": ["account-management", "billing"],
+      "capacity": 3,
+      "current_workload": 0,
+      "availability": true,
+      "active": true,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    }
+  ],
+  "incidents": [
+    {
+      "incident_id": "INC-ALPHA-001",
+      "customer_id": "CUS-ALPHA",
+      "title": "Payment API intermittently failing",
+      "description": "Checkout requests intermittently return gateway errors for payment confirmations.",
+      "priority": "CRITICAL",
+      "status": "OPEN",
+      "sla_deadline": "2026-07-22T12:00:00Z",
+      "estimated_effort_minutes": 90,
+      "assigned_specialist_id": null,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    },
+    {
+      "incident_id": "INC-NOVA-001",
+      "customer_id": "CUS-NOVA",
+      "title": "Enterprise onboarding blocked",
+      "description": "SAML configuration issue is blocking a scheduled production launch.",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "sla_deadline": "2026-07-22T16:00:00Z",
+      "estimated_effort_minutes": 120,
+      "assigned_specialist_id": "SPEC-NIMAL",
+      "assigned_at": "2026-07-22T09:15:00Z",
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:15:00Z"
+    },
+    {
+      "incident_id": "INC-GREEN-001",
+      "customer_id": "CUS-GREEN",
+      "title": "Reporting export defect",
+      "description": "Large report exports fail for logistics analytics users.",
+      "priority": "MEDIUM",
+      "status": "OPEN",
+      "sla_deadline": "2026-07-23T09:00:00Z",
+      "estimated_effort_minutes": 120,
+      "assigned_specialist_id": null,
+      "created_at": "2026-07-22T09:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z"
+    }
+  ],
+  "reservations": [
+    {
+      "reservation_id": "RES-NIMAL-NOVA",
+      "run_id": "SIM-SEED",
+      "specialist_id": "SPEC-NIMAL",
+      "incident_id": "INC-NOVA-001",
+      "status": "CONFIRMED",
+      "idempotency_key": "seed-res-nimal-nova",
+      "created_at": "2026-07-22T09:10:00Z",
+      "expires_at": "2026-07-22T09:40:00Z",
+      "confirmed_at": "2026-07-22T09:15:00Z",
+      "updated_at": "2026-07-22T09:15:00Z"
+    }
+  ],
+  "assignments": [],
+  "notifications": [],
+  "workloads": [
+    {
+      "specialist_id": "SPEC-NIMAL",
+      "assigned_count": 1
+    }
+  ],
+  "sla_data": [
+    {
+      "incident_id": "INC-ALPHA-001",
+      "target": "2026-07-22T12:00:00Z"
+    },
+    {
+      "incident_id": "INC-NOVA-001",
+      "target": "2026-07-22T16:00:00Z"
+    },
+    {
+      "incident_id": "INC-GREEN-001",
+      "target": "2026-07-23T09:00:00Z"
+    }
+  ],
+  "supporting_data": {
+    "release_train": "2026.07.enterprise",
+    "business_context": "Release-day support coverage with approval-controlled timeline advancement."
+  }
+}

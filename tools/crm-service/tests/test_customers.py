@@ -207,3 +207,36 @@ def test_admin_reset_requires_key_and_restores_seed(client, auth_headers, admin_
     disabled = client.post("/admin/reset", headers=admin_headers)
     assert disabled.status_code == 503
     assert disabled.json()["errorCode"] == "CRM_503"
+
+
+def test_admin_simulation_load_state_replaces_customers(client, auth_headers, admin_headers):
+    payload = {
+        "scenario_id": "scenario-test",
+        "customers": [
+            {
+                "customer_id": "cus-sim-001",
+                "name": "Simulation Customer",
+                "tier": "premium",
+                "arr": "12345.00",
+                "renewal_date": "2099-01-01",
+                "active": True,
+            }
+        ],
+    }
+
+    loaded = client.post("/admin/simulation/load-state", json=payload, headers=admin_headers)
+    assert loaded.status_code == 200
+    data = assert_success(loaded)
+    assert data == {"scenario_id": "scenario-test", "customer_count": 1}
+
+    customers = assert_success(client.get("/crm/api/v1/customers", headers=auth_headers))
+    assert customers["total_items"] == 1
+    assert customers["customers"][0]["customer_id"] == "CUS-SIM-001"
+
+    duplicate = client.post(
+        "/admin/simulation/load-state",
+        json={"scenario_id": "scenario-test", "customers": payload["customers"] * 2},
+        headers=admin_headers,
+    )
+    assert duplicate.status_code == 422
+    assert duplicate.json()["errorCode"] == "CRM_422"

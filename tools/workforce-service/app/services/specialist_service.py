@@ -8,7 +8,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Reservation, Specialist, SpecialistSkill
-from app.schemas.requests import normalize_skill, normalize_specialist_id
+from app.schemas.requests import (
+    WorkforceSimulationAvailabilityRequest,
+    normalize_skill,
+    normalize_specialist_id,
+)
 
 
 class WorkforceError(Exception):
@@ -352,3 +356,25 @@ def workload_view_to_dict(view: WorkloadView) -> dict:
         "utilisation_percentage": view.utilisation_percentage,
         "updated_at": view.specialist.updated_at,
     }
+
+
+async def set_specialist_availability_for_simulation(
+    session: AsyncSession,
+    specialist_id: str,
+    payload: WorkforceSimulationAvailabilityRequest,
+) -> SpecialistView:
+    view = await get_specialist(session, specialist_id)
+    specialist = view.specialist
+    if specialist.availability == payload.availability:
+        return view
+
+    specialist.availability = payload.availability
+    specialist.updated_at = datetime.now(timezone.utc)
+    try:
+        session.add(specialist)
+        await session.commit()
+        await session.refresh(specialist)
+        return await get_specialist(session, specialist.specialist_id)
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc

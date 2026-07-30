@@ -455,3 +455,193 @@ class AdminFailureModeRequest(BaseModel):
         if normalized and len(normalized) > 300:
             raise ValueError("message must be at most 300 characters")
         return normalized
+
+
+class AssignmentRequestSimulationSeedRequest(BaseModel):
+    request_id: RequestId
+    run_id: RunId | None = None
+    incident_id: IncidentId
+    specialist_id: SpecialistId
+    reservation_id: ReservationId | None = None
+    message: Message
+    status: str = "PENDING"
+    idempotency_key: IdempotencyKey | None = None
+    created_at: datetime
+    expires_at: datetime
+    responded_at: datetime | None = None
+    response_note: ResponseNote | None = None
+    response_reason: ResponseNote | None = None
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        return normalize_request_id(value)
+
+    @field_validator("run_id")
+    @classmethod
+    def validate_run_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_run_id(value)
+
+    @field_validator("incident_id")
+    @classmethod
+    def validate_incident_id(cls, value: str) -> str:
+        return normalize_incident_id(value)
+
+    @field_validator("specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_specialist_id(value)
+
+    @field_validator("reservation_id")
+    @classmethod
+    def validate_reservation_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_reservation_id(value)
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        return normalize_message(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        return normalize_assignment_status(value)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("idempotency_key cannot be empty")
+        return normalized
+
+    @field_validator("created_at", "expires_at", "responded_at", "updated_at")
+    @classmethod
+    def validate_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value, "datetime")
+
+    @field_validator("response_note", "response_reason")
+    @classmethod
+    def validate_response_text(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class NotificationSimulationSeedRequest(BaseModel):
+    notification_id: NotificationId
+    recipient: Recipient
+    channel: str
+    subject: Subject | None = None
+    message: Message
+    status: str = "DELIVERED"
+    idempotency_key: IdempotencyKey | None = None
+    related_request_id: RequestId | None = None
+    created_at: datetime
+    attempted_at: datetime | None = None
+    delivered_at: datetime | None = None
+    failure_reason: str | None = Field(default=None, max_length=300)
+    attempt_count: int = Field(default=1, ge=0)
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
+
+    @field_validator("notification_id")
+    @classmethod
+    def validate_notification_id(cls, value: str) -> str:
+        return normalize_notification_id(value)
+
+    @field_validator("channel")
+    @classmethod
+    def validate_channel(cls, value: str) -> str:
+        return normalize_channel(value)
+
+    @field_validator("subject", "failure_reason")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        return normalize_message(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        return normalize_notification_status(value)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("idempotency_key cannot be empty")
+        return normalized
+
+    @field_validator("related_request_id")
+    @classmethod
+    def validate_related_request_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_request_id(value)
+
+    @field_validator("created_at", "attempted_at", "delivered_at", "updated_at")
+    @classmethod
+    def validate_datetimes(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return normalize_datetime(value, "datetime")
+
+
+class CommunicationSimulationLoadStateRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=100)
+    assignment_requests: list[AssignmentRequestSimulationSeedRequest] = Field(default_factory=list)
+    notifications: list[NotificationSimulationSeedRequest] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("scenario_id")
+    @classmethod
+    def validate_scenario_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("scenario_id cannot be empty")
+        return normalized
+
+    @field_validator("assignment_requests")
+    @classmethod
+    def validate_unique_assignments(
+        cls,
+        values: list[AssignmentRequestSimulationSeedRequest],
+    ) -> list[AssignmentRequestSimulationSeedRequest]:
+        seen: set[str] = set()
+        for assignment in values:
+            if assignment.request_id in seen:
+                raise ValueError("assignment_requests cannot contain duplicate request_id values")
+            seen.add(assignment.request_id)
+        return values
+
+    @field_validator("notifications")
+    @classmethod
+    def validate_unique_notifications(
+        cls,
+        values: list[NotificationSimulationSeedRequest],
+    ) -> list[NotificationSimulationSeedRequest]:
+        seen: set[str] = set()
+        for notification in values:
+            if notification.notification_id in seen:
+                raise ValueError("notifications cannot contain duplicate notification_id values")
+            seen.add(notification.notification_id)
+        return values

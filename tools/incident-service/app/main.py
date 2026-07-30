@@ -42,6 +42,10 @@ async def initialize_database() -> None:
                 await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assignment_idempotency_key VARCHAR(128)")
             if "assigned_at" not in existing_columns:
                 await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN assigned_at DATETIME")
+            if "estimated_effort_minutes" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN estimated_effort_minutes INTEGER")
+            if "resolved_at" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE incidents ADD COLUMN resolved_at DATETIME")
             await conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_incidents_assignment_run ON incidents (incident_id, assignment_run_id)"
             )
