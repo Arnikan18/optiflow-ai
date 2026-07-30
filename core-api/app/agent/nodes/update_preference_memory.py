@@ -75,5 +75,9 @@ async def update_preference_memory(state: AgentState) -> dict:
     # Note: we do not change the state's status/node here because route_after_preference_update
     # will handle routing to subsequent nodes.
     return {
-        "current_node": "update_preference_memory"
+        "current_node": "update_preference_memory",
+        # A modification is recorded before replanning, then converted back to
+        # PENDING so the revised recommendation stops at the approval gate.
+        "approval_status": "PENDING" if approval_status == "MODIFY" else approval_status,
+        "modification_requested": approval_status == "MODIFY",
     }

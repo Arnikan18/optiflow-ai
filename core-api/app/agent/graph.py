@@ -59,11 +59,11 @@ def route_after_approval(state: AgentState) -> str:
 
 def route_after_preference_update(state: AgentState) -> str:
     """Routes the workflow after updating the preference memory based on approval status."""
+    if state.get("modification_requested"):
+        return "interpret_goal"
     app_status = state.get("approval_status")
     if app_status == "APPROVED":
         return "execute_saga"
-    elif app_status == "MODIFY":
-        return "interpret_goal"
     return "complete_run"
 
 
