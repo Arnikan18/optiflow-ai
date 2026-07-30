@@ -646,7 +646,8 @@ Install:
 - Python 3.12
 - Node.js 22 LTS
 
-Docker Compose is the recommended method for running the complete system.
+Docker Compose runs the backend and enterprise services. The React frontend
+runs separately with Vite so UI changes are available immediately.
 
 ---
 
@@ -693,7 +694,7 @@ The project uses one root `.env` file as the local source of configuration.
 
 ---
 
-## 3. Start the complete system
+## 3. Start the backend
 
 ### Windows PowerShell
 
@@ -721,7 +722,22 @@ docker compose --profile full-stack up --build -d
 
 ---
 
-## 4. Open the application
+## 4. Start the frontend
+
+Open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+`npm install` is only required on a fresh clone or after dependencies change.
+The UI runs at `http://localhost:3000`; it is not a Docker service.
+
+---
+
+## 5. Open the application
 
 | Service | Address |
 |---|---|
@@ -736,7 +752,7 @@ docker compose --profile full-stack up --build -d
 
 ---
 
-## 5. Check container status
+## 6. Check container status
 
 ### Windows PowerShell
 
@@ -752,7 +768,7 @@ docker compose --profile full-stack ps
 
 ---
 
-## 6. Health check
+## 7. Health check
 
 ### Windows PowerShell
 
@@ -770,7 +786,7 @@ The health scripts check PostgreSQL, Core API, CRM, Incident, Workforce and Comm
 
 ---
 
-## 7. Reset demo data
+## 8. Reset demo data
 
 Normal deterministic reset:
 
@@ -796,7 +812,7 @@ The destructive path asks for confirmation unless `-Force` or `--force` is suppl
 
 ---
 
-## 8. Run backend tests
+## 9. Run backend tests
 
 ### Windows PowerShell
 
@@ -818,7 +834,7 @@ The scripts continue through all selected suites, print a summary, and return no
 
 ---
 
-## 9. View logs
+## 10. View logs
 
 All services:
 
@@ -840,13 +856,15 @@ docker compose --profile full-stack logs -f crm-service
 
 ---
 
-## 10. Stop the system
+## 11. Stop the system
 
 ### Windows PowerShell
 
 ```powershell
 docker compose --profile full-stack down
 ```
+
+Stop the local frontend with `Ctrl+C` in its Vite terminal.
 
 ### Linux / Git Bash
 
@@ -864,7 +882,7 @@ Use `-v` only when all stored local database data should be removed.
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 - If `docker compose --profile full-stack ps` shows no services, start with `docker compose --profile full-stack up --build -d`.
 - If ports are busy, change the host-side `*_PORT` values in `.env`; scripts derive host URLs from those values.

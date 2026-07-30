@@ -195,6 +195,7 @@ services:
     volumes:
       - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
       - ./core-api/app:/app/app
+      - ./core-api/scripts:/app/scripts:ro
       - ./scenarios:/app/scenarios:ro
     depends_on:
       postgres:
@@ -207,20 +208,6 @@ services:
         condition: service_healthy
       communication-service:
         condition: service_healthy
-
-  frontend:
-    profiles: ["full-stack"]
-    build:
-      context: ./frontend
-    container_name: optiflow-frontend
-    environment:
-      VITE_CORE_API_URL: ${VITE_CORE_API_URL}
-      ADMIN_API_KEY: ${ADMIN_API_KEY}
-      NGINX_ENVSUBST_FILTER: ^ADMIN_API_KEY$
-    ports:
-      - "${FRONTEND_PORT}:${FRONTEND_CONTAINER_PORT}"
-    depends_on:
-      - core-api
 
 volumes:
   postgres_data:
