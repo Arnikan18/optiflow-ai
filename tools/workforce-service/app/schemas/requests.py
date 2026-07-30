@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 ReservationId = Annotated[str, Field(min_length=1, max_length=64)]
@@ -384,6 +384,34 @@ class WorkforceSimulationAvailabilityRequest(BaseModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+
+class WorkforceSimulationCapacityRequest(BaseModel):
+    capacity: int | None = Field(default=None, ge=1, le=100)
+    current_workload: int | None = Field(default=None, ge=0, le=100)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_change(self) -> "WorkforceSimulationCapacityRequest":
+        if self.capacity is None and self.current_workload is None:
+            raise ValueError("capacity or current_workload is required")
+        if (
+            self.capacity is not None
+            and self.current_workload is not None
+            and self.current_workload > self.capacity
+        ):
+            raise ValueError("current_workload cannot exceed capacity")
+        return self
 
 
 class WorkforceSimulationReleaseRequest(BaseModel):
