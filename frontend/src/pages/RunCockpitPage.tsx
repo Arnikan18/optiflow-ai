@@ -99,13 +99,12 @@ export function RunCockpitPage() {
 
   const isApproval = presentationCaughtUp && status === 'WAITING_FOR_APPROVAL';
   const isClarification = presentationCaughtUp && status === 'WAITING_FOR_CLARIFICATION';
-  const isTerminal = presentationCaughtUp
-    && (
-      status === 'COMPLETED'
-      || status === 'FAILED'
-      || status === 'FAILED_SAGA'
-      || status === 'CANCELLED'
-    );
+  const isTerminal = (
+    status === 'COMPLETED'
+    || status === 'FAILED'
+    || status === 'FAILED_SAGA'
+    || status === 'CANCELLED'
+  );
   const hasExecutionHistory = events.some((event) => event.source === 'execute_saga');
   const latestSagaOutcome = [...events].reverse().find((event) =>
     event.event_type === 'SAGA_COMPLETED' || event.event_type === 'SAGA_FAILED',
