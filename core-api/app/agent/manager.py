@@ -48,7 +48,9 @@ async def resume_run_from_checkpoint(
     run_id: str, 
     approval_status: str, 
     recommended_plan: Optional[Dict[str, Any]] = None,
-    clarification_reply: Optional[str] = None
+    clarification_reply: Optional[str] = None,
+    decision_reason: Optional[str] = None,
+    decision_source: Optional[str] = None,
 ) -> bool:
     """Restores the last checkpoint state, injects decision flags, and resumes execution."""
     checkpoint_state = await load_last_checkpoint(run_id)
@@ -60,6 +62,10 @@ async def resume_run_from_checkpoint(
     checkpoint_state["approval_status"] = approval_status
     if recommended_plan:
         checkpoint_state["recommended_plan"] = recommended_plan
+    if decision_reason:
+        checkpoint_state["decision_reason"] = decision_reason
+    if decision_source:
+        checkpoint_state["decision_source"] = decision_source
     if clarification_reply:
         # Append clarification context to the original goal text
         orig_goal = checkpoint_state.get("goal_text", "")
