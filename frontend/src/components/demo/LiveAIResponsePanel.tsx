@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PlanWorkspace } from '../approval/PlanWorkspace';
 import { useRunStatus } from '../../hooks/useRunStatus';
@@ -7,6 +8,7 @@ import type { RunStatus } from '../../types/api';
 interface LiveAIResponsePanelProps {
   runId: string;
   onClose: () => void;
+  onPreferenceUpdated?: () => void;
 }
 
 const STATUS_LABEL: Record<RunStatus, string> = {
@@ -64,9 +66,16 @@ function readableSummary(value: string | Record<string, unknown> | null | undefi
   return null;
 }
 
-export function LiveAIResponsePanel({ runId, onClose }: LiveAIResponsePanelProps) {
+export function LiveAIResponsePanel({
+  runId,
+  onClose,
+  onPreferenceUpdated,
+}: LiveAIResponsePanelProps) {
   const { data, error, loading, refetch } = useRunStatus(runId);
   const { events, connected, usingFallback } = useRunStream(runId);
+  const preferenceUpdateCount = events.filter(
+    (event) => event.event_type === 'PREFERENCE_MEM_UPDATED',
+  ).length;
   const activeIndex = routeIndex(data?.status, data?.current_node);
   const latestEvent = events.at(-1);
   const outcome = readableSummary(data?.change_summary)
@@ -74,6 +83,12 @@ export function LiveAIResponsePanel({ runId, onClose }: LiveAIResponsePanelProps
   const isTerminal = data
     ? ['COMPLETED', 'FAILED', 'CANCELLED', 'FAILED_SAGA'].includes(data.status)
     : false;
+
+  useEffect(() => {
+    if (preferenceUpdateCount > 0) {
+      onPreferenceUpdated?.();
+    }
+  }, [onPreferenceUpdated, preferenceUpdateCount]);
 
   return (
     <section

@@ -464,6 +464,7 @@ export function LiveDemoPage() {
             key={activeRunId}
             runId={activeRunId}
             onClose={() => setActiveRunId(null)}
+            onPreferenceUpdated={preferenceMemory.refresh}
           />
         )}
 
