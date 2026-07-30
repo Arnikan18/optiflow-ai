@@ -8,6 +8,7 @@ import type {
 
 type EditorView = 'PROBLEM' | 'WORKER';
 type ProblemChange = 'PRIORITY' | 'SLA' | 'EFFORT' | 'RESOLVE';
+type WorkerChange = 'AVAILABILITY' | 'CAPACITY';
 
 export interface EnterpriseChange {
   eventType: EnterpriseEventType;
@@ -53,8 +54,11 @@ export function LiveEnterpriseEditor({
   const [problemId, setProblemId] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [problemChange, setProblemChange] = useState<ProblemChange>('PRIORITY');
+  const [workerChange, setWorkerChange] = useState<WorkerChange>('AVAILABILITY');
   const [slaMinutes, setSlaMinutes] = useState(45);
   const [effortMinutes, setEffortMinutes] = useState(120);
+  const [workerCapacity, setWorkerCapacity] = useState(1);
+  const [workerWorkload, setWorkerWorkload] = useState(0);
 
   useEffect(() => {
     if (!problems.some((problem) => problem.incident_id === problemId)) {
@@ -76,6 +80,12 @@ export function LiveEnterpriseEditor({
       setEffortMinutes(problem.estimated_effort_minutes);
     }
   }, [problem?.estimated_effort_minutes, problem?.incident_id]);
+
+  useEffect(() => {
+    if (!worker) return;
+    setWorkerCapacity(worker.capacity ?? 1);
+    setWorkerWorkload(worker.current_workload ?? 0);
+  }, [worker?.capacity, worker?.current_workload, worker?.specialist_id]);
 
   const applyProblemChange = async () => {
     if (!problem) return;
@@ -130,6 +140,21 @@ export function LiveEnterpriseEditor({
 
   const applyWorkerChange = async () => {
     if (!worker) return;
+    if (workerChange === 'CAPACITY') {
+      await onApply({
+        eventType: 'CHANGE_WORKER_CAPACITY',
+        label: `${worker.specialist_name} capacity changed`,
+        description: `Set ${worker.specialist_name} to ${workerWorkload} active assignments with capacity ${workerCapacity}.`,
+        payload: {
+          specialist_id: worker.specialist_id,
+          capacity: workerCapacity,
+          current_workload: workerWorkload,
+          reason: 'Judge changed worker capacity in the live demo.',
+        },
+      });
+      return;
+    }
+
     const returning = worker.availability === false;
     await onApply({
       eventType: returning ? 'ENGINEER_RETURNED' : 'ENGINEER_ON_LEAVE',
@@ -146,10 +171,11 @@ export function LiveEnterpriseEditor({
   };
 
   const problemPriorityDisabled = problem?.severity?.toUpperCase() === 'CRITICAL';
+  const workerCapacityInvalid = workerCapacity < 1 || workerWorkload > workerCapacity;
   const actionDisabled = disabled || busy || (
     view === 'PROBLEM'
       ? !problem || (problemChange === 'PRIORITY' && problemPriorityDisabled)
-      : !worker
+      : !worker || (workerChange === 'CAPACITY' && workerCapacityInvalid)
   );
 
   return (
@@ -310,14 +336,68 @@ export function LiveEnterpriseEditor({
           )}
 
           {worker && (
-            <div className="rounded-xl border border-border-dim bg-deep px-4 py-3">
-              <p className="text-sm font-bold text-ink-primary">
-                {worker.availability ? 'Make unavailable' : 'Return to team'}
-              </p>
-              <p className="text-sm text-ink-muted mt-1">
-                {worker.skills.length ? worker.skills.join(' · ') : 'No skills recorded'}
-              </p>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['AVAILABILITY', worker.availability ? 'Make unavailable' : 'Return to team'],
+                  ['CAPACITY', 'Change load'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setWorkerChange(value)}
+                    className={`rounded-xl border px-3 py-3 text-sm font-bold focus-ring ${
+                      workerChange === value
+                        ? 'border-ops-violet bg-ops-violet/[0.08] text-ops-violet'
+                        : 'border-border-dim bg-deep text-ink-secondary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {workerChange === 'AVAILABILITY' ? (
+                <div className="rounded-xl border border-border-dim bg-deep px-4 py-3">
+                  <p className="text-sm font-bold text-ink-primary">
+                    {worker.availability ? 'Remove from today’s team' : 'Restore to today’s team'}
+                  </p>
+                  <p className="text-sm text-ink-muted mt-1">
+                    {worker.skills.length ? worker.skills.join(' · ') : 'No skills recorded'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-sm font-bold text-ink-secondary">Capacity</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={workerCapacity}
+                      onChange={(event) => setWorkerCapacity(Number(event.target.value))}
+                      className="mt-2 w-full rounded-xl border border-border-base bg-deep px-4 py-3 text-base font-bold text-ink-primary focus-ring"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-sm font-bold text-ink-secondary">Active work</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={workerWorkload}
+                      onChange={(event) => setWorkerWorkload(Number(event.target.value))}
+                      className="mt-2 w-full rounded-xl border border-border-base bg-deep px-4 py-3 text-base font-bold text-ink-primary focus-ring"
+                    />
+                  </label>
+                  {workerCapacityInvalid && (
+                    <p className="sm:col-span-2 text-sm text-ops-orange">
+                      Active work cannot be greater than capacity.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

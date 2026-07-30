@@ -432,6 +432,7 @@ export type EnterpriseEventType =
   | 'ESCALATE_PRIORITY'
   | 'CHANGE_SLA'
   | 'CHANGE_ESTIMATED_EFFORT'
+  | 'CHANGE_WORKER_CAPACITY'
   | 'ENGINEER_ON_LEAVE'
   | 'ENGINEER_RETURNED';
 export type EnterpriseEventProcessingStatus =
