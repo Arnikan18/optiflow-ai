@@ -636,6 +636,9 @@ optiflow-ai/
 
 # Getting Started
 
+For the competition walkthrough and the one-command fresh-laptop setup, use
+[`docs/demo-presentation-runbook.md`](docs/demo-presentation-runbook.md).
+
 ## Prerequisites
 
 Install:
