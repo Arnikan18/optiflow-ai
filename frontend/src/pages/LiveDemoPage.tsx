@@ -7,6 +7,7 @@ import {
   type EnterpriseChange,
 } from '../components/demo/LiveEnterpriseEditor';
 import { PreferenceEngineCard } from '../components/demo/PreferenceEngineCard';
+import { JudgeWorkerResponseControl } from '../components/demo/JudgeWorkerResponseControl';
 import { useEnterpriseSimulation } from '../hooks/useEnterpriseSimulation';
 import { usePreferenceMemory } from '../hooks/usePreferenceMemory';
 import type {
@@ -72,7 +73,7 @@ function scenarioProgress(
 export function LiveDemoPage() {
   const simulation = useEnterpriseSimulation();
   const preferenceMemory = usePreferenceMemory();
-  const [mode, setMode] = useState<EnterpriseSimulationMode>('INTERACTIVE');
+  const [mode, setMode] = useState<EnterpriseSimulationMode>('TIMELINE');
   const [scenarioId, setScenarioId] = useState('');
   const [launchingAI, setLaunchingAI] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -256,7 +257,11 @@ export function LiveDemoPage() {
                 onClick={() => void simulation.start(scenarioId, mode)}
                 className="rounded-xl bg-ink-primary px-4 py-3 text-sm font-bold text-white hover:bg-ops-amber disabled:opacity-40 focus-ring"
               >
-                {simulation.busyAction === 'start' ? 'Loading…' : 'Load baseline'}
+                {simulation.busyAction === 'start'
+                  ? 'Starting…'
+                  : simulationStatus === 'RUNNING'
+                    ? 'Restart live demo'
+                    : 'Start live demo'}
               </button>
               {mode === 'TIMELINE' && canPause && (
                 <button
@@ -337,6 +342,8 @@ export function LiveDemoPage() {
           changeDetected={Boolean(simulation.portfolioDelta)}
           analysisStarted={Boolean(activeRunId) || launchingAI}
         />
+
+        <JudgeWorkerResponseControl portfolio={portfolio} />
 
         {aiError && (
           <div className="rounded-2xl border border-ops-rose/30 bg-ops-rose/[0.06] px-5 py-4 flex items-center justify-between gap-4" role="alert">
