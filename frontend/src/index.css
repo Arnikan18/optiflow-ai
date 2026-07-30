@@ -219,6 +219,58 @@ body {
   color: rgb(var(--amber-bright));
 }
 
+.report-markdown {
+  color: rgb(var(--text-secondary));
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.report-markdown > :first-child { margin-top: 0; }
+.report-markdown > :last-child { margin-bottom: 0; }
+
+.report-markdown h1,
+.report-markdown h2,
+.report-markdown h3 {
+  color: rgb(var(--text-primary));
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  margin: 1.5rem 0 0.65rem;
+}
+
+.report-markdown h1 { font-size: 1.5rem; }
+.report-markdown h2 { font-size: 1.25rem; }
+.report-markdown h3 { font-size: 1.05rem; }
+.report-markdown p { margin: 0 0 0.9rem; }
+.report-markdown strong { color: rgb(var(--text-primary)); font-weight: 750; }
+
+.report-markdown ul,
+.report-markdown ol {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.35rem;
+}
+
+.report-markdown ul { list-style: disc; }
+.report-markdown ol { list-style: decimal; }
+.report-markdown li { margin: 0.35rem 0; padding-left: 0.2rem; }
+
+.report-markdown blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid rgb(var(--cyan));
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: rgb(var(--cyan) / 0.06);
+  padding: 0.8rem 1rem;
+  color: rgb(var(--text-primary));
+}
+
+.report-markdown blockquote p { margin: 0; }
+.report-markdown hr {
+  margin: 1.25rem 0;
+  border: 0;
+  border-top: 1px solid rgb(var(--border-dim));
+}
+
 /* ── Timeline connector ───────────────────────────────────────── */
 .timeline-line {
   position: absolute;

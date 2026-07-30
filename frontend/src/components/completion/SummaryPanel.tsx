@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import Markdown from 'react-markdown';
 import type { DemoPortfolio, RunEvent, RunSummary } from '../../types/api';
 
 interface SummaryPanelProps {
@@ -49,6 +50,38 @@ function displaySummary(value: RunSummary['business_summary']): string | null {
   } catch {
     return null;
   }
+}
+
+function downloadDecisionReport(
+  runData: RunSummary | null,
+  businessSummary: string | null,
+  changeSummary: string | null,
+) {
+  const runId = runData?.run_id ?? 'unknown-run';
+  const report = [
+    '# OptiFlow Decision Report',
+    '',
+    `**Run:** ${runId}`,
+    `**Final status:** ${runData?.status?.replace(/_/g, ' ') ?? 'Unknown'}`,
+    '',
+    '## Business Summary',
+    '',
+    businessSummary ?? 'No business summary was recorded.',
+    '',
+    '## Change Summary',
+    '',
+    changeSummary ?? 'No change summary was recorded.',
+    '',
+  ].join('\n');
+  const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `optiflow-decision-${runId}.md`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function ReceiptCard({
@@ -232,20 +265,51 @@ export function SummaryPanel({ runData, events, portfolio }: SummaryPanelProps) 
       )}
 
       {(businessSummary || changeSummary) && (
-        <div className="grid md:grid-cols-2 gap-3">
-          {businessSummary && (
-            <div className="rounded-2xl border border-border-dim bg-deep/55 p-5">
-              <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ops-cyan">Business summary</p>
-              <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-ink-secondary">{businessSummary}</pre>
+        <section className="overflow-hidden rounded-[1.5rem] border border-border-dim bg-abyss">
+          <div className="flex flex-col gap-4 border-b border-border-dim px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div>
+              <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-cyan">
+                Decision report
+              </p>
+              <h3 className="mt-1 text-xl font-extrabold text-ink-primary">
+                Why this decision was made
+              </h3>
             </div>
-          )}
-          {changeSummary && (
-            <div className="rounded-2xl border border-border-dim bg-deep/55 p-5">
-              <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.14em] text-ops-violet">Change summary</p>
-              <pre className="mt-3 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-ink-secondary">{changeSummary}</pre>
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => downloadDecisionReport(runData, businessSummary, changeSummary)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border-base bg-deep px-4 py-3 text-sm font-bold text-ink-primary hover:border-ops-cyan hover:text-ops-cyan focus-ring"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Download report (.md)
+            </button>
+          </div>
+
+          <div className="grid lg:grid-cols-2">
+            {businessSummary && (
+              <article className="p-5 sm:p-6 lg:border-r lg:border-border-dim">
+                <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-cyan">
+                  Business summary
+                </p>
+                <div className="report-markdown mt-4">
+                  <Markdown>{businessSummary}</Markdown>
+                </div>
+              </article>
+            )}
+            {changeSummary && (
+              <article className="border-t border-border-dim p-5 sm:p-6 lg:border-t-0">
+                <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-violet">
+                  Change summary
+                </p>
+                <div className="report-markdown mt-4">
+                  <Markdown>{changeSummary}</Markdown>
+                </div>
+              </article>
+            )}
+          </div>
+        </section>
       )}
 
       <div className="rounded-2xl border border-border-dim bg-abyss p-5">
