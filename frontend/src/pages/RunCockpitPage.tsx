@@ -174,17 +174,17 @@ export function RunCockpitPage() {
         <div className="max-w-[1440px] mx-auto px-5 sm:px-8 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-[8px] font-mono font-semibold uppercase tracking-[0.18em] text-ops-amber">
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.18em] text-ops-amber">
                 Today’s goal
               </span>
-              <span className="text-[9px] font-mono text-ink-muted">#{runId.slice(0, 12)}</span>
+              <span className="text-[11px] font-mono text-ink-muted">#{runId.slice(0, 12)}</span>
               {badge && (
-                <span className={`text-[8px] font-mono px-2 py-1 rounded-full uppercase tracking-[0.1em] font-semibold ${badge.cls}`}>
+                <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full uppercase tracking-[0.1em] font-semibold ${badge.cls}`}>
                   {badge.label}
                 </span>
               )}
             </div>
-            <h1 className="text-sm sm:text-base font-extrabold tracking-[-0.025em] text-ink-primary mt-1.5 truncate">
+            <h1 className="text-base sm:text-lg font-extrabold leading-snug tracking-[-0.025em] text-ink-primary mt-2">
               {goalText}
             </h1>
           </div>
@@ -192,7 +192,7 @@ export function RunCockpitPage() {
             <span className={`relative w-2 h-2 rounded-full ${connected ? 'bg-ops-cyan' : 'bg-ops-orange'}`}>
               <span className="absolute inset-0 rounded-full bg-current animate-ping opacity-30" />
             </span>
-            <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-ink-muted">
+            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-ink-muted">
               {connected ? 'Live updates' : usingFallback ? 'Safe polling' : 'Connecting'}
             </span>
           </div>

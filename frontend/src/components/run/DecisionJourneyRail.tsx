@@ -154,24 +154,24 @@ function MapNodeButton({
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={`${node.label}, ${state}`}
-      className="absolute z-20 w-[92px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center focus-ring rounded-xl"
+      className="absolute z-20 w-[108px] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center focus-ring rounded-xl"
       style={{ left: node.x, top: node.y }}
     >
-      <span className="relative w-[58px] h-[58px]">
+      <span className="relative w-16 h-16">
         {state === 'active' && (
           <span className="absolute -inset-1.5 rounded-full border border-dashed border-ops-amber animate-spin-slow" />
         )}
         {selected && (
           <span className="absolute -inset-2.5 rounded-full border-2 border-ops-amber/30" />
         )}
-        <span className={`absolute inset-0 rounded-full border-2 flex items-center justify-center text-[10px] font-mono font-bold transition-all ${circleStyle}`}>
+        <span className={`absolute inset-0 rounded-full border-2 flex items-center justify-center text-xs font-mono font-bold transition-all ${circleStyle}`}>
           <NodeGlyph state={state} index={index} />
         </span>
       </span>
-      <span className={`text-[9px] font-bold leading-tight mt-2 ${labelStyle}`}>
+      <span className={`text-xs font-bold leading-tight mt-2.5 ${labelStyle}`}>
         {node.shortLabel}
       </span>
-      <span className="text-[7px] font-mono text-ink-ghost mt-0.5">
+      <span className="text-[9px] font-mono text-ink-muted mt-1">
         {state === 'active' ? 'NOW' : state === 'complete' ? 'DONE' : state === 'failed' ? 'STOP' : 'WAIT'}
       </span>
     </button>
@@ -204,22 +204,22 @@ export function DecisionJourneyRail({
       <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.18em] text-ink-muted">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.18em] text-ink-secondary">
               Live decision map
             </p>
-            <span className="rounded-full bg-ops-cyan/10 px-2 py-1 text-[7px] font-mono font-semibold text-ops-cyan">
+            <span className="rounded-full bg-ops-cyan/10 px-2.5 py-1 text-[10px] font-mono font-semibold text-ops-cyan">
               {placedCount}/{PHASE_TIMELINE.length}
             </span>
           </div>
-          <p className="text-[9px] text-ink-muted mt-1">
-            Select a node to inspect its evidence. Alternate routes stay visible.
+          <p className="text-xs text-ink-muted mt-1.5">
+            Select any step to see its data and reason.
           </p>
         </div>
         {selectedId && selectedId !== normalizedActiveId && (
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="text-[9px] font-semibold text-ops-amber hover:underline focus-ring rounded"
+            className="text-xs font-semibold text-ops-amber hover:underline focus-ring rounded"
           >
             Return to live node →
           </button>
@@ -309,10 +309,10 @@ export function DecisionJourneyRail({
                 }`}
                 style={{ left: branch.x, top: branch.y }}
               >
-                <span className="block text-[8px] font-mono font-bold uppercase tracking-[0.1em]">
+                <span className="block text-[11px] font-mono font-bold uppercase tracking-[0.1em]">
                   {branch.label}
                 </span>
-                <span className="block text-[7px] mt-0.5 opacity-70">{branch.detail}</span>
+                <span className="block text-[9px] mt-1 opacity-75">{branch.detail}</span>
               </button>
             );
           })}
@@ -321,7 +321,7 @@ export function DecisionJourneyRail({
             {SOURCE_CHIPS.map((source) => (
               <span
                 key={source.label}
-                className={`rounded-full border px-2 py-1 text-[7px] font-mono font-bold ${TONE_CLASSES[source.tone]}`}
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-mono font-bold ${TONE_CLASSES[source.tone]}`}
               >
                 {source.label}
               </span>
@@ -334,7 +334,7 @@ export function DecisionJourneyRail({
                 key={plan.label}
                 type="button"
                 onClick={() => onSelect('optimize')}
-                className={`rounded-full border px-2.5 py-1 text-[7px] font-mono font-bold focus-ring ${TONE_CLASSES[plan.tone]}`}
+                className={`rounded-full border px-2.5 py-1 text-[9px] font-mono font-bold focus-ring ${TONE_CLASSES[plan.tone]}`}
                 aria-label={`Inspect ${plan.label} plan branch`}
               >
                 {plan.label}
@@ -342,7 +342,7 @@ export function DecisionJourneyRail({
             ))}
           </div>
 
-          <div className="absolute left-[20px] bottom-3 flex items-center gap-3 text-[7px] font-mono uppercase text-ink-ghost">
+          <div className="absolute left-[20px] bottom-3 flex items-center gap-3 text-[9px] font-mono uppercase text-ink-muted">
             <span className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-ops-cyan" /> recorded
             </span>
