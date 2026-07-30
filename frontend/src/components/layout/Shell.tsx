@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useEnterpriseSimulation } from '../../hooks/useEnterpriseSimulation';
 
 type NavIcon = 'today' | 'live' | 'history' | 'settings';
 
@@ -87,8 +88,10 @@ function isItemActive(pathname: string, item: NavigationItem): boolean {
 
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const simulation = useEnterpriseSimulation();
   const isRunPage = pathname.startsWith('/run/');
   const isJudgePage = pathname.startsWith('/judge');
+  const liveSimulation = simulation.status?.status === 'RUNNING';
 
   return (
     <div className="min-h-screen bg-void flex flex-col overflow-x-hidden">
@@ -112,7 +115,18 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
 
           <div className="flex items-center gap-3">
-            {isJudgePage && (
+            {liveSimulation ? (
+              <Link
+                to="/judge"
+                className="hidden sm:inline-flex min-h-11 items-center gap-2 rounded-full border border-ops-emerald/30 bg-ops-emerald/10 px-3 py-2 text-sm font-bold text-ops-emerald focus-ring"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-ops-emerald opacity-40" />
+                  <span className="relative h-2 w-2 rounded-full bg-ops-emerald" />
+                </span>
+                Live demo · {simulation.status?.current_stage ?? 'monitoring'}
+              </Link>
+            ) : isJudgePage && (
               <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-ops-violet/30 bg-ops-violet/10 px-3 py-2 text-sm font-bold text-ops-violet">
                 <span className="w-1.5 h-1.5 rounded-full bg-ops-violet animate-pulse" />
                 Judge Mode
