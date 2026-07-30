@@ -44,237 +44,53 @@ function normaliseStatus(value: string | null): string {
   return value?.trim().toUpperCase() ?? '';
 }
 
-function clampPercentage(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function deadlineSignal(
-  incident: DemoIncident,
-  now: Date,
-): { signal: PressureSignal | null; label: string; remainingMs: number | null } {
-  if (!incident.sla_deadline) {
-    return {
-      signal: incident.sla_risk
-        ? {
-            id: 'sla-risk',
-            label: 'SLA pressure',
-            detail: 'The source reports SLA risk without a usable deadline.',
-            weight: 20,
-          }
-        : null,
-      label: 'No deadline',
-      remainingMs: null,
-    };
-  }
-
-  const deadline = new Date(incident.sla_deadline);
-  const remainingMs = deadline.getTime() - now.getTime();
-  if (Number.isNaN(remainingMs)) {
-    return { signal: null, label: 'Invalid deadline', remainingMs: null };
-  }
-
-  const absoluteMinutes = Math.max(1, Math.round(Math.abs(remainingMs) / 60_000));
-  const duration = absoluteMinutes < 60
-    ? `${absoluteMinutes}m`
-    : absoluteMinutes < 1_440
-      ? `${Math.round(absoluteMinutes / 60)}h`
-      : `${Math.round(absoluteMinutes / 1_440)}d`;
-
-  if (remainingMs <= 0) {
-    return {
-      signal: {
-        id: 'sla-overdue',
-        label: 'SLA overdue',
-        detail: `The recorded SLA deadline passed ${duration} ago.`,
-        weight: 45,
-      },
-      label: `${duration} overdue`,
-      remainingMs,
-    };
-  }
-
-  if (remainingMs <= 60 * 60_000) {
-    return {
-      signal: {
-        id: 'sla-one-hour',
-        label: 'SLA within one hour',
-        detail: `Only ${duration} remains before the recorded SLA deadline.`,
-        weight: 40,
-      },
-      label: `${duration} to SLA`,
-      remainingMs,
-    };
-  }
-
-  if (remainingMs <= 4 * 60 * 60_000) {
-    return {
-      signal: {
-        id: 'sla-four-hours',
-        label: 'SLA within four hours',
-        detail: `${duration} remains before the recorded SLA deadline.`,
-        weight: 30,
-      },
-      label: `${duration} to SLA`,
-      remainingMs,
-    };
-  }
-
-  if (remainingMs <= 24 * 60 * 60_000 || incident.sla_risk) {
-    return {
-      signal: {
-        id: 'sla-today',
-        label: 'SLA pressure today',
-        detail: `${duration} remains before the recorded SLA deadline.`,
-        weight: 20,
-      },
-      label: `${duration} to SLA`,
-      remainingMs,
-    };
-  }
-
-  return { signal: null, label: `${duration} to SLA`, remainingMs };
-}
-
-function severitySignal(severity: string | null): PressureSignal | null {
-  const value = normaliseStatus(severity);
-  const weights: Record<string, number> = {
-    CRITICAL: 35,
-    HIGH: 25,
-    MEDIUM: 15,
-    LOW: 5,
-  };
-  const weight = weights[value];
-  if (!weight) return null;
-
-  return {
-    id: `severity-${value.toLowerCase()}`,
-    label: `${value.toLowerCase()} severity`,
-    detail: `The incident source records ${value.toLowerCase()} severity.`,
-    weight,
-  };
-}
-
-function commercialSignal(customer: DemoCustomer | null): PressureSignal | null {
-  const value = customer?.business_value ?? customer?.arr ?? 0;
-  if (value >= 1_000_000) {
-    return {
-      id: 'commercial-1m',
-      label: 'Very high commercial exposure',
-      detail: 'At least $1m in represented customer value is connected to this incident.',
-      weight: 12,
-    };
-  }
-  if (value >= 500_000) {
-    return {
-      id: 'commercial-500k',
-      label: 'High commercial exposure',
-      detail: 'At least $500k in represented customer value is connected to this incident.',
-      weight: 9,
-    };
-  }
-  if (value >= 250_000) {
-    return {
-      id: 'commercial-250k',
-      label: 'Material commercial exposure',
-      detail: 'At least $250k in represented customer value is connected to this incident.',
-      weight: 6,
-    };
-  }
-  if (value >= 100_000) {
-    return {
-      id: 'commercial-100k',
-      label: 'Commercial exposure',
-      detail: 'At least $100k in represented customer value is connected to this incident.',
-      weight: 3,
-    };
-  }
-  return null;
-}
-
 function pressureBand(score: number): PressureBand {
-  if (score >= 90) return 'critical';
+  if (score >= 85) return 'critical';
   if (score >= 65) return 'urgent';
   if (score >= 40) return 'watch';
   return 'routine';
 }
 
-export function deriveTodayProblems(
-  portfolio: DemoPortfolio,
-  now = new Date(),
-): TodayProblem[] {
+function deadlineLabel(minutes: number | null): string {
+  if (minutes === null) return 'No SLA time';
+  const absolute = Math.abs(minutes);
+  const duration = absolute < 60
+    ? `${absolute}m`
+    : absolute < 1_440
+      ? `${Math.round(absolute / 60)}h`
+      : `${Math.round(absolute / 1_440)}d`;
+  return minutes <= 0 ? `${duration} overdue` : `${duration} to SLA`;
+}
+
+export function deriveTodayProblems(portfolio: DemoPortfolio): TodayProblem[] {
   const customers = new Map(
     portfolio.customers.map((customer) => [customer.customer_id, customer]),
   );
 
-  const problems = portfolio.incidents
+  return portfolio.incidents
     .filter((incident) => !CLOSED_STATUSES.has(normaliseStatus(incident.status)))
-    .map((incident) => {
-      const customer = customers.get(incident.customer_id) ?? null;
-      const deadline = deadlineSignal(incident, now);
-      const signals: PressureSignal[] = [];
-
-      if (deadline.signal) signals.push(deadline.signal);
-
-      const severity = severitySignal(incident.severity);
-      if (severity) signals.push(severity);
-
-      if (!incident.current_specialist_id) {
-        signals.push({
-          id: 'unassigned',
-          label: 'No confirmed owner',
-          detail: 'The incident has no current specialist assignment.',
-          weight: 20,
-        });
-      }
-
-      if (customer?.renewal_risk) {
-        signals.push({
-          id: 'renewal-risk',
-          label: 'Renewal risk',
-          detail: 'CRM reports that this customer currently carries renewal risk.',
-          weight: 12,
-        });
-      }
-
-      const commercial = commercialSignal(customer);
-      if (commercial) signals.push(commercial);
-
-      if ((incident.age_hours ?? 0) >= 48) {
-        signals.push({
-          id: 'long-running',
-          label: 'Long-running incident',
-          detail: 'The incident has remained open for at least 48 hours.',
-          weight: 5,
-        });
-      }
-
-      signals.sort((left, right) => right.weight - left.weight);
-      const score = signals.reduce((total, signal) => total + signal.weight, 0);
+    .map((incident, index) => {
+      const score = incident.priority_score ?? 0;
+      const signals = incident.priority_signals.map((signal) => ({
+        id: signal.key,
+        label: signal.label,
+        detail: `${signal.points} priority points from live operational data.`,
+        weight: signal.points,
+      }));
 
       return {
-        rank: 0,
+        rank: incident.priority_rank ?? index + 1,
         score,
         band: pressureBand(score),
         incident,
-        customer,
+        customer: customers.get(incident.customer_id) ?? null,
         signals,
         topReasons: signals.slice(0, 2).map((signal) => signal.label),
-        deadlineLabel: deadline.label,
-        commercialExposure: customer?.business_value ?? customer?.arr ?? null,
-        remainingMs: deadline.remainingMs,
+        deadlineLabel: deadlineLabel(incident.minutes_to_sla),
+        commercialExposure: incident.arr_exposure,
       };
     })
-    .sort((left, right) => (
-      right.score - left.score
-      || (left.remainingMs ?? Number.POSITIVE_INFINITY)
-        - (right.remainingMs ?? Number.POSITIVE_INFINITY)
-      || left.incident.incident_id.localeCompare(right.incident.incident_id)
-    ));
-
-  return problems.map(({ remainingMs: _remainingMs, ...problem }, index) => ({
-    ...problem,
-    rank: index + 1,
-  }));
+    .sort((left, right) => left.rank - right.rank);
 }
 
 export function deriveWorkerReadiness(specialist: DemoSpecialist): WorkerReadiness {
@@ -282,41 +98,45 @@ export function deriveWorkerReadiness(specialist: DemoSpecialist): WorkerReadine
   const current = Math.max(0, specialist.current_workload ?? 0);
   const reserved = Math.max(0, specialist.reserved_workload ?? 0);
   const usedCapacity = current + reserved;
-  const remainingCapacity = Math.max(0, capacity - usedCapacity);
-  const utilisation = clampPercentage(
-    specialist.utilisation_percentage
-      ?? (capacity > 0 ? (usedCapacity / capacity) * 100 : 100),
+  const remainingCapacity = Math.max(
+    0,
+    specialist.available_capacity ?? capacity - usedCapacity,
   );
-  const available = specialist.availability === true;
-  const reasons: string[] = [];
-
-  if (!available) reasons.push('Not available for new work');
-  if (remainingCapacity === 0) reasons.push('No remaining capacity');
-  if (reserved > 0) reasons.push(`${reserved} slot${reserved === 1 ? '' : 's'} tentatively reserved`);
-  if (remainingCapacity > 0) reasons.push(`${remainingCapacity} slot${remainingCapacity === 1 ? '' : 's'} free`);
-  if (specialist.skills.length > 0) reasons.push(`${specialist.skills.length} recorded skills`);
+  const utilisation = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        specialist.utilisation_percentage
+          ?? (capacity > 0 ? (usedCapacity / capacity) * 100 : 100),
+      ),
+    ),
+  );
+  const operational = specialist.operationally_available
+    ?? (specialist.availability === true && remainingCapacity > 0);
 
   let state: ReadinessState;
-  if (!available) {
+  if (!specialist.availability) {
     state = 'unavailable';
-  } else if (remainingCapacity === 0) {
+  } else if (!operational || remainingCapacity === 0) {
     state = 'saturated';
-  } else if (utilisation >= 75 || reserved > 0) {
+  } else if (reserved > 0 || utilisation >= 75) {
     state = 'limited';
   } else {
     state = 'ready';
   }
 
-  const capacityScore = capacity > 0 ? (remainingCapacity / capacity) * 35 : 0;
-  const headroomScore = Math.max(0, 100 - utilisation) * 0.2;
-  const skillVisibilityScore = specialist.skills.length > 0 ? 10 : 0;
-  const score = available
-    ? clampPercentage(35 + capacityScore + headroomScore + skillVisibilityScore)
-    : 0;
+  const reasons = [
+    `${remainingCapacity}/${capacity} capacity free`,
+    specialist.sla_success_rate_30d === null
+      ? 'SLA history unavailable'
+      : `${specialist.sla_success_rate_30d}% SLA success`,
+    `${specialist.completed_assignments_30d} completed in 30 days`,
+  ];
 
   return {
     specialist,
-    score,
+    score: Math.round(specialist.effectiveness_score ?? 0),
     state,
     remainingCapacity,
     usedCapacity,
@@ -330,7 +150,9 @@ export function deriveTeamReadiness(portfolio: DemoPortfolio): WorkerReadiness[]
   return portfolio.specialists
     .map(deriveWorkerReadiness)
     .sort((left, right) => (
-      right.score - left.score
+      Number(right.specialist.operationally_available === true)
+        - Number(left.specialist.operationally_available === true)
+      || right.score - left.score
       || left.specialist.specialist_name.localeCompare(right.specialist.specialist_name)
     ));
 }
@@ -340,15 +162,12 @@ export function buildGoalFromProblems(problems: TodayProblem[]): string {
     return 'Review today\'s portfolio pressure and protect service outcomes without exceeding safe team capacity.';
   }
 
-  const selected = problems.slice(0, 3);
   const customers = Array.from(new Set(
-    selected
+    problems
+      .slice(0, 3)
       .map((problem) => problem.customer?.customer_name)
       .filter((name): name is string => Boolean(name)),
   ));
-  const customerPhrase = customers.length > 0
-    ? customers.join(', ')
-    : 'the highest-pressure customers';
 
-  return `Protect ${customerPhrase} from today\'s highest service risks while keeping every specialist within available capacity.`;
+  return `Protect ${customers.join(', ') || 'the highest-pressure customers'} from today\'s highest service risks while keeping every specialist within available capacity.`;
 }

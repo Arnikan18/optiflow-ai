@@ -271,16 +271,30 @@ export interface DemoCustomer {
   current_incident_count: number;
 }
 
+export interface PrioritySignal {
+  key: string;
+  label: string;
+  points: number;
+}
+
 export interface DemoIncident {
   incident_id: string;
   customer_id: string;
+  customer_name: string | null;
   title: string | null;
   summary: string | null;
   severity: string | null;
   status: string | null;
   sla_deadline: string | null;
   sla_risk: boolean | null;
+  minutes_to_sla: number | null;
+  estimated_effort_minutes: number | null;
   required_skills: string[];
+  arr_exposure: number | null;
+  strategic_priority: string | null;
+  priority_rank: number | null;
+  priority_score: number | null;
+  priority_signals: PrioritySignal[];
   current_specialist_id: string | null;
   assignment_status: string | null;
   age_hours: number | null;
@@ -297,6 +311,14 @@ export interface DemoSpecialist {
   reserved_workload: number | null;
   utilisation_percentage: number | null;
   active_assignments: number | null;
+  available_capacity: number | null;
+  operationally_available: boolean | null;
+  completed_assignments_30d: number;
+  sla_success_rate_30d: number | null;
+  average_resolution_minutes_30d: number | null;
+  assignment_acceptance_rate_30d: number | null;
+  capacity_reliability_rate_30d: number | null;
+  effectiveness_score: number | null;
 }
 
 export interface DemoWorkload {
