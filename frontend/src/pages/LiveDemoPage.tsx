@@ -1,34 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { LiveAIResponsePanel } from '../components/demo/LiveAIResponsePanel';
+import {
+  LiveEnterpriseEditor,
+  type EnterpriseChange,
+} from '../components/demo/LiveEnterpriseEditor';
 import { PreferenceEngineCard } from '../components/demo/PreferenceEngineCard';
 import { useEnterpriseSimulation } from '../hooks/useEnterpriseSimulation';
 import { usePreferenceMemory } from '../hooks/usePreferenceMemory';
 import type {
-  EnterpriseEventType,
   EnterpriseScenario,
   EnterpriseSimulationMode,
   JudgeEnterpriseEventPayload,
   RecentRun,
 } from '../types/api';
-
-type ChallengeId =
-  | 'new-ticket'
-  | 'escalate'
-  | 'tighten-sla'
-  | 'resolve'
-  | 'leave'
-  | 'return';
-
-interface Challenge {
-  id: ChallengeId;
-  label: string;
-  description: string;
-  target: string;
-  eventType: EnterpriseEventType;
-  tone: string;
-  payload: Record<string, unknown>;
-}
 
 const STATUS_STYLE = {
   IDLE: 'border-border-base bg-deep text-ink-secondary',
@@ -88,7 +73,6 @@ export function LiveDemoPage() {
   const preferenceMemory = usePreferenceMemory();
   const [mode, setMode] = useState<EnterpriseSimulationMode>('TIMELINE');
   const [scenarioId, setScenarioId] = useState('');
-  const [selectedChallengeId, setSelectedChallengeId] = useState<ChallengeId>('new-ticket');
   const [launchingAI, setLaunchingAI] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
@@ -119,124 +103,6 @@ export function LiveDemoPage() {
     ?? null;
   const stageIndex = scenarioProgress(scenario, simulation.status?.current_stage);
   const portfolio = simulation.portfolio;
-  const activeIncidents = portfolio?.incidents.filter((incident) => (
-    !['CLOSED', 'RESOLVED', 'CANCELLED'].includes(incident.status?.toUpperCase() ?? '')
-  )) ?? [];
-  const availableSpecialists = portfolio?.specialists.filter(
-    (specialist) => specialist.availability,
-  ) ?? [];
-  const unavailableSpecialists = portfolio?.specialists.filter(
-    (specialist) => specialist.availability === false,
-  ) ?? [];
-  const firstCustomer = portfolio?.customers[0] ?? null;
-  const firstIncident = activeIncidents[0] ?? null;
-  const escalatableIncident = activeIncidents.find(
-    (incident) => incident.severity?.toUpperCase() !== 'CRITICAL',
-  ) ?? firstIncident;
-  const firstAvailableSpecialist = availableSpecialists[0] ?? null;
-  const firstUnavailableSpecialist = unavailableSpecialists[0] ?? null;
-
-  const challenges = useMemo<Challenge[]>(() => {
-    const deadlineSoon = new Date(Date.now() + 45 * 60_000).toISOString();
-    const newIncidentId = makeEventIdentity('INC-JUDGE');
-
-    return [
-      {
-        id: 'new-ticket',
-        label: 'Create critical ticket',
-        description: 'Add new SLA pressure for the selected customer.',
-        target: firstCustomer?.customer_name ?? 'No customer available',
-        eventType: 'NEW_TICKET',
-        tone: 'text-ops-rose border-ops-rose/30 bg-ops-rose/[0.06]',
-        payload: {
-          incident_id: newIncidentId,
-          customer_id: firstCustomer?.customer_id ?? '',
-          title: 'Judge-injected production incident',
-          description: 'Critical incident introduced during the interactive demonstration.',
-          priority: 'CRITICAL',
-          sla_deadline: deadlineSoon,
-          estimated_effort_minutes: 120,
-          required_skills: ['api'],
-        },
-      },
-      {
-        id: 'escalate',
-        label: 'Escalate priority',
-        description: 'Raise an active incident to critical severity.',
-        target: escalatableIncident?.incident_id ?? 'No active incident',
-        eventType: 'ESCALATE_PRIORITY',
-        tone: 'text-ops-orange border-ops-orange/30 bg-ops-orange/[0.06]',
-        payload: {
-          incident_id: escalatableIncident?.incident_id ?? '',
-          new_priority: 'CRITICAL',
-        },
-      },
-      {
-        id: 'tighten-sla',
-        label: 'Tighten SLA',
-        description: 'Move an active deadline to the next 45 minutes.',
-        target: firstIncident?.incident_id ?? 'No active incident',
-        eventType: 'CHANGE_SLA',
-        tone: 'text-ops-violet border-ops-violet/30 bg-ops-violet/[0.06]',
-        payload: {
-          incident_id: firstIncident?.incident_id ?? '',
-          sla_deadline: deadlineSoon,
-        },
-      },
-      {
-        id: 'resolve',
-        label: 'Resolve ticket',
-        description: 'Remove one active item from portfolio pressure.',
-        target: firstIncident?.incident_id ?? 'No active incident',
-        eventType: 'RESOLVE_TICKET',
-        tone: 'text-ops-emerald border-ops-emerald/30 bg-ops-emerald/[0.06]',
-        payload: {
-          incident_id: firstIncident?.incident_id ?? '',
-          resolved_at: new Date().toISOString(),
-          resolution_note: 'Resolved through the judge interactive challenge.',
-        },
-      },
-      {
-        id: 'leave',
-        label: 'Engineer on leave',
-        description: 'Remove an available specialist from the live team.',
-        target: firstAvailableSpecialist?.specialist_name ?? 'No available specialist',
-        eventType: 'ENGINEER_ON_LEAVE',
-        tone: 'text-ops-rose border-ops-rose/30 bg-ops-rose/[0.06]',
-        payload: {
-          specialist_id: firstAvailableSpecialist?.specialist_id ?? '',
-          reason: 'Judge-triggered emergency leave',
-          effective_at: new Date().toISOString(),
-        },
-      },
-      {
-        id: 'return',
-        label: 'Engineer returned',
-        description: 'Restore a currently unavailable specialist.',
-        target: firstUnavailableSpecialist?.specialist_name ?? 'No unavailable specialist',
-        eventType: 'ENGINEER_RETURNED',
-        tone: 'text-ops-cyan border-ops-cyan/30 bg-ops-cyan/[0.06]',
-        payload: {
-          specialist_id: firstUnavailableSpecialist?.specialist_id ?? '',
-          reason: 'Judge returned the specialist to service',
-          effective_at: new Date().toISOString(),
-        },
-      },
-    ];
-  }, [
-    escalatableIncident?.incident_id,
-    firstAvailableSpecialist?.specialist_id,
-    firstAvailableSpecialist?.specialist_name,
-    firstCustomer?.customer_id,
-    firstCustomer?.customer_name,
-    firstIncident?.incident_id,
-    firstUnavailableSpecialist?.specialist_id,
-    firstUnavailableSpecialist?.specialist_name,
-  ]);
-
-  const selectedChallenge = challenges.find(
-    (challenge) => challenge.id === selectedChallengeId,
-  ) ?? challenges[0];
   const simulationStatus = simulation.status?.status ?? 'IDLE';
   const canStart = Boolean(scenarioId);
   const canPause = simulationStatus === 'RUNNING';
@@ -281,22 +147,19 @@ export function LiveDemoPage() {
     }
   };
 
-  const applyChallenge = async () => {
-    if (!selectedChallenge || Object.values(selectedChallenge.payload).some((value) => value === '')) {
-      return;
-    }
+  const applyEnterpriseChange = async (change: EnterpriseChange) => {
     const identity = makeEventIdentity('JUDGE');
     const payload: JudgeEnterpriseEventPayload = {
-      event_type: selectedChallenge.eventType,
+      event_type: change.eventType,
       event_id: identity,
       idempotency_key: identity.toLowerCase(),
       scenario_id: simulation.status?.scenario_id ?? scenarioId,
-      description: selectedChallenge.description,
-      payload: selectedChallenge.payload,
+      description: change.description,
+      payload: change.payload,
     };
     const changed = await simulation.inject(payload);
     if (changed && autoAnalyze) {
-      await startAIAnalysis(selectedChallenge.label.toLowerCase());
+      await startAIAnalysis(change.label.toLowerCase());
     }
   };
 
@@ -524,55 +387,12 @@ export function LiveDemoPage() {
             </section>
 
             {mode === 'INTERACTIVE' && (
-              <section className="rounded-[1.5rem] border border-ops-violet/30 bg-abyss shadow-card p-5 sm:p-6">
-                <div>
-                  <p className="text-xs font-mono font-bold uppercase tracking-[0.14em] text-ops-violet">
-                    Judge challenge
-                  </p>
-                  <h2 className="text-2xl font-extrabold tracking-[-0.035em] text-ink-primary mt-1">
-                    Change the live enterprise
-                  </h2>
-                  <p className="text-sm text-ink-muted mt-2">
-                    Choose a real event, inspect its target, then apply it through the shared Event Engine.
-                  </p>
-                </div>
-
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-5">
-                  {challenges.map((challenge) => (
-                    <button
-                      key={challenge.id}
-                      type="button"
-                      onClick={() => setSelectedChallengeId(challenge.id)}
-                      className={`rounded-xl border p-3.5 text-left focus-ring transition-all ${
-                        selectedChallengeId === challenge.id
-                          ? challenge.tone
-                          : 'border-border-dim bg-deep text-ink-secondary hover:border-border-base'
-                      }`}
-                    >
-                      <p className="text-sm font-extrabold">{challenge.label}</p>
-                      <p className="text-xs leading-relaxed opacity-70 mt-1">{challenge.description}</p>
-                    </button>
-                  ))}
-                </div>
-
-                {selectedChallenge && (
-                  <div className="rounded-2xl border border-border-dim bg-deep p-4 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-mono uppercase tracking-[0.12em] text-ink-muted">Target</p>
-                      <p className="text-lg font-extrabold text-ink-primary mt-1">{selectedChallenge.target}</p>
-                      <p className="text-xs text-ink-muted mt-1">{selectedChallenge.eventType}</p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={simulationStatus !== 'RUNNING' || simulation.busyAction !== null}
-                      onClick={() => void applyChallenge()}
-                      className="rounded-xl bg-ops-violet px-5 py-3 text-sm font-bold text-white disabled:opacity-35 focus-ring"
-                    >
-                      {simulation.busyAction === 'inject' ? 'Applying...' : 'Apply enterprise event'}
-                    </button>
-                  </div>
-                )}
-              </section>
+              <LiveEnterpriseEditor
+                portfolio={portfolio}
+                disabled={simulationStatus !== 'RUNNING'}
+                busy={simulation.busyAction === 'inject'}
+                onApply={applyEnterpriseChange}
+              />
             )}
 
             <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5 sm:p-6">
