@@ -16,6 +16,7 @@ from app.schemas.requests import (
     ReservationCreateRequest,
     ReservationVerificationRequest,
     WorkforceSimulationAvailabilityRequest,
+    WorkforceSimulationCapacityRequest,
     WorkforceSimulationLoadStateRequest,
     WorkforceSimulationReleaseRequest,
 )
@@ -46,6 +47,7 @@ from app.services.specialist_service import (
     list_specialists,
     list_workloads,
     set_specialist_availability_for_simulation,
+    set_specialist_capacity_for_simulation,
     specialist_view_to_dict,
     specialist_view_to_legacy_dict,
     workload_view_to_dict,
@@ -195,6 +197,19 @@ async def update_specialist_simulation_availability(
 ):
     view = await set_specialist_availability_for_simulation(db, specialist_id, payload)
     return success_response(_specialist_response(view).model_dump(mode="json"), message="Specialist availability updated")
+
+
+@router.patch("/specialists/{specialist_id}/simulation-capacity")
+async def update_specialist_simulation_capacity(
+    specialist_id: str,
+    payload: WorkforceSimulationCapacityRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    view = await set_specialist_capacity_for_simulation(db, specialist_id, payload)
+    return success_response(
+        _specialist_response(view).model_dump(mode="json"),
+        message="Specialist capacity updated",
+    )
 
 
 @router.post("/incidents/{incident_id}/release-workload")

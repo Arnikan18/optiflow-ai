@@ -294,6 +294,25 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     assert unavailable["availability"] is False
     assert unavailable["operationally_available"] is False
 
+    capacity = assert_success(
+        client.patch(
+            "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-capacity",
+            json={"capacity": 3, "current_workload": 2, "reason": "live demo"},
+            headers=auth_headers,
+        )
+    )
+    assert capacity["capacity"] == 3
+    assert capacity["current_workload"] == 2
+    assert capacity["available_capacity"] == 1
+
+    conflict = client.patch(
+        "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-capacity",
+        json={"capacity": 1},
+        headers=auth_headers,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["errorCode"] == "WORKFORCE_CAPACITY_CONFLICT"
+
     released = assert_success(
         client.post(
             "/workforce/api/v1/incidents/INC-SIM-001/release-workload",
@@ -305,4 +324,4 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     assert released["reservation_ids"] == ["RES-SIM-001"]
 
     specialist = assert_success(client.get("/workforce/api/v1/specialists/SPEC-SIM-001", headers=auth_headers))
-    assert specialist["current_workload"] == 0
+    assert specialist["current_workload"] == 1
