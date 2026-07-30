@@ -610,7 +610,7 @@ export function TodayDecisionBoard() {
   const summary = portfolio.portfolio_summary;
 
   return (
-    <div className="max-w-7xl mx-auto px-5 sm:px-8 py-7 lg:py-9 space-y-7">
+    <div className="max-w-7xl min-w-0 overflow-hidden mx-auto px-5 sm:px-8 py-7 lg:py-9 space-y-7">
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
         <div>
           <div className="flex items-center gap-2">
@@ -628,7 +628,7 @@ export function TodayDecisionBoard() {
             )}
           </div>
           <h1 className="text-[clamp(2rem,5vw,4.6rem)] font-extrabold leading-[0.95] tracking-[-0.065em] mt-3">
-            See today. <span className="text-ops-amber">Choose the move.</span>
+            See today. <span className="block sm:inline text-ops-amber">Choose the move.</span>
           </h1>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -672,7 +672,7 @@ export function TodayDecisionBoard() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-[8px] font-mono uppercase text-ink-muted">
+          <div className="hidden sm:flex items-center gap-3 text-[8px] font-mono uppercase text-ink-muted">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-ops-emerald" /> capacity
             </span>
@@ -715,13 +715,13 @@ export function TodayDecisionBoard() {
               </h2>
             </div>
           </div>
-          <p className="text-[9px] text-ink-muted">
+          <p className="hidden sm:block text-[9px] text-ink-muted">
             Select cards to shape the objective · open Why for evidence
           </p>
         </div>
 
         {problems.length > 0 ? (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4">
             {problems.map((problem) => (
               <ProblemCard
                 key={problem.incident.incident_id}
@@ -751,7 +751,7 @@ export function TodayDecisionBoard() {
         )}
       </section>
 
-      <section className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-4 items-start">
+      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] gap-4 items-start">
         <article className="rounded-[1.5rem] border border-border-base bg-abyss shadow-card overflow-hidden">
           <div className="h-1 bg-ops-amber" />
           <div className="p-5 sm:p-6">
