@@ -228,18 +228,15 @@ function WorkerDetail({ worker }: { worker: WorkerReadiness }) {
 function ProblemRow({
   problem,
   open,
-  selected,
   onOpen,
-  onSelect,
 }: {
   problem: TodayProblem;
   open: boolean;
-  selected: boolean;
   onOpen: () => void;
-  onSelect: () => void;
 }) {
   const style = BAND_STYLE[problem.band];
   const title = problem.incident.title ?? problem.incident.summary ?? problem.incident.incident_id;
+  const suggestedGoal = buildGoalFromProblems([problem]);
 
   return (
     <article className={`overflow-hidden rounded-2xl border ${style.border} ${style.wash}`}>
@@ -248,51 +245,36 @@ function ProblemRow({
           type="button"
           onClick={onOpen}
           aria-expanded={open}
-          className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left focus-ring sm:grid-cols-[auto_minmax(0,1fr)_120px_90px_auto]"
+          className="grid min-h-20 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left focus-ring sm:grid-cols-[auto_minmax(0,1fr)_120px_90px_auto]"
         >
           <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${style.border} bg-abyss text-base font-extrabold ${style.text}`}>
             {problem.rank}
           </span>
 
           <span className="min-w-0">
-            <span className={`flex items-center gap-2 text-xs font-bold ${style.text}`}>
+            <span className={`flex items-center gap-2 text-sm font-bold ${style.text}`}>
               <span className={`h-2 w-2 rounded-full ${style.dot}`} />
               {style.label}
             </span>
-            <span className="mt-1 block truncate text-sm font-extrabold text-ink-primary">{title}</span>
-            <span className="mt-1 block truncate text-xs text-ink-muted">
+            <span className="mt-1 block truncate text-base font-extrabold text-ink-primary">{title}</span>
+            <span className="mt-1 block truncate text-sm text-ink-muted">
               {problem.incident.customer_name ?? problem.customer?.customer_name ?? problem.incident.customer_id}
             </span>
           </span>
 
           <span className="hidden sm:block">
-            <span className={`block text-sm font-extrabold ${style.text}`}>{problem.deadlineLabel}</span>
-            <span className="mt-1 block text-xs text-ink-muted">SLA clock</span>
+            <span className={`block text-base font-extrabold ${style.text}`}>{problem.deadlineLabel}</span>
+            <span className="mt-1 block text-sm text-ink-muted">SLA clock</span>
           </span>
 
           <span className="hidden sm:block">
-            <span className="block text-sm font-extrabold text-ink-primary">{problem.score}</span>
-            <span className="mt-1 block text-xs text-ink-muted">priority</span>
+            <span className="block text-base font-extrabold text-ink-primary">{problem.score}</span>
+            <span className="mt-1 block text-sm text-ink-muted">priority</span>
           </span>
 
           <Chevron open={open} />
         </button>
 
-        <div className="flex items-center border-l border-border-dim px-3">
-          <button
-            type="button"
-            onClick={onSelect}
-            aria-pressed={selected}
-            aria-label={`${selected ? 'Remove' : 'Add'} ${title} ${selected ? 'from' : 'to'} today’s goal`}
-            className={`flex h-9 w-9 items-center justify-center rounded-full border text-lg font-bold transition-colors focus-ring ${
-              selected
-                ? 'border-ops-cyan bg-ops-cyan text-white'
-                : 'border-border-base bg-abyss text-ink-muted hover:text-ops-cyan'
-            }`}
-          >
-            {selected ? '✓' : '+'}
-          </button>
-        </div>
       </div>
 
       {open && (
@@ -323,14 +305,29 @@ function ProblemRow({
 
           {problem.incident.required_skills.length > 0 && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-ink-muted">Skills needed:</span>
+              <span className="text-sm text-ink-muted">Skills needed:</span>
               {problem.incident.required_skills.map((skill) => (
-                <span key={skill} className="rounded-full bg-deep px-2.5 py-1 text-xs font-semibold text-ink-secondary">
+                <span key={skill} className="rounded-full bg-deep px-3 py-1 text-sm font-semibold text-ink-secondary">
                   {skill}
                 </span>
               ))}
             </div>
           )}
+
+          <div className="mt-5 border-t border-border-dim pt-5">
+            <div className="mb-4">
+              <p className="text-sm font-bold text-ops-amber">Ask OptiFlow about this problem</p>
+              <p className="mt-1 text-sm text-ink-muted">
+                Customer, SLA, effort, and required skills are already included.
+              </p>
+            </div>
+            <GoalInput
+              compact
+              suggestedGoal={suggestedGoal}
+              suggestionKey={problem.incident.incident_id}
+              selectedProblemCount={1}
+            />
+          </div>
         </div>
       )}
     </article>
@@ -361,7 +358,6 @@ export function TodayDecisionBoard() {
   const [error, setError] = useState<string | null>(null);
   const [openWorkerId, setOpenWorkerId] = useState<string | null>(null);
   const [openProblemId, setOpenProblemId] = useState<string | null>(null);
-  const [selectedProblemIds, setSelectedProblemIds] = useState<string[]>([]);
 
   const loadPortfolio = useCallback(async () => {
     setLoading(true);
@@ -389,12 +385,7 @@ export function TodayDecisionBoard() {
     () => portfolio ? deriveTeamReadiness(portfolio) : [],
     [portfolio],
   );
-  const selectedProblems = useMemo(() => {
-    const explicit = problems.filter((problem) => (
-      selectedProblemIds.includes(problem.incident.incident_id)
-    ));
-    return explicit.length > 0 ? explicit : problems.slice(0, 3);
-  }, [problems, selectedProblemIds]);
+  const selectedProblems = useMemo(() => problems.slice(0, 3), [problems]);
   const suggestedGoal = useMemo(
     () => buildGoalFromProblems(selectedProblems),
     [selectedProblems],
@@ -476,6 +467,26 @@ export function TodayDecisionBoard() {
         </div>
       </header>
 
+      <section className="rounded-2xl border border-border-base bg-abyss p-5 shadow-card sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-ops-amber">Today&apos;s goal</p>
+            <h2 className="mt-1 text-2xl font-extrabold text-ink-primary">
+              What must the team protect?
+            </h2>
+          </div>
+          <span className="rounded-full border border-ops-emerald/30 bg-ops-emerald/5 px-3 py-2 text-sm font-bold text-ops-emerald">
+            Human approval required
+          </span>
+        </div>
+        <GoalInput
+          compact
+          suggestedGoal={suggestedGoal}
+          suggestionKey={suggestionKey}
+          selectedProblemCount={selectedProblems.length}
+        />
+      </section>
+
       <section aria-labelledby="today-team-heading">
         <div className="flex items-end justify-between gap-4">
           <div>
@@ -513,7 +524,7 @@ export function TodayDecisionBoard() {
               Today&apos;s problems
             </h2>
           </div>
-          <p className="hidden text-sm text-ink-muted sm:block">Open a row for evidence · + adds it to the goal</p>
+          <p className="hidden text-sm text-ink-muted sm:block">Open a problem to inspect or analyze it</p>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -522,37 +533,14 @@ export function TodayDecisionBoard() {
               key={problem.incident.incident_id}
               problem={problem}
               open={openProblemId === problem.incident.incident_id}
-              selected={selectedProblemIds.includes(problem.incident.incident_id)}
               onOpen={() => setOpenProblemId((current) => (
                 current === problem.incident.incident_id ? null : problem.incident.incident_id
-              ))}
-              onSelect={() => setSelectedProblemIds((current) => (
-                current.includes(problem.incident.incident_id)
-                  ? current.filter((id) => id !== problem.incident.incident_id)
-                  : [...current, problem.incident.incident_id]
               ))}
             />
           ))}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border-base bg-abyss p-5 shadow-card sm:p-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-ops-amber">Human direction</p>
-            <h2 className="mt-1 text-xl font-extrabold text-ink-primary">Set today&apos;s goal</h2>
-          </div>
-          <span className="rounded-full border border-ops-emerald/30 bg-ops-emerald/5 px-3 py-1 text-xs font-bold text-ops-emerald">
-            Approval stays with you
-          </span>
-        </div>
-        <GoalInput
-          compact
-          suggestedGoal={suggestedGoal}
-          suggestionKey={suggestionKey}
-          selectedProblemCount={selectedProblems.length}
-        />
-      </section>
     </div>
   );
 }
