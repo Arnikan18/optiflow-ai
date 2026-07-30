@@ -27,6 +27,9 @@ def test_resolve_required_skills():
     # 2. Text keyword matching
     inc2 = {"title": "Database connection timeout", "description": "Need DBA help"}
     assert "database" in resolve_required_skills(inc2)
+
+    inc2b = {"title": "DB connection breach"}
+    assert "database" in resolve_required_skills(inc2b)
     
     inc3 = {"title": "OAuth security login failure"}
     assert "security" in resolve_required_skills(inc3)

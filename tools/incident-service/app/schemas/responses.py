@@ -19,16 +19,18 @@ class IncidentResponse(BaseModel):
     priority: str
     status: str
     sla_deadline: datetime
+    estimated_effort_minutes: int | None = None
     assigned_specialist_id: str | None
     assignment_run_id: str | None = None
     assignment_idempotency_key: str | None = None
     assigned_at: datetime | None = None
+    resolved_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
-    @field_serializer("sla_deadline", "assigned_at", "created_at", "updated_at")
+    @field_serializer("sla_deadline", "assigned_at", "resolved_at", "created_at", "updated_at")
     def serialize_datetime(self, value: datetime | None) -> str | None:
         return serialize_datetime_value(value)
 

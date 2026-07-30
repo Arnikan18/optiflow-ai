@@ -90,3 +90,28 @@ class CustomerUpdateRequest(BaseModel):
     @classmethod
     def validate_tier(cls, value: str) -> str:
         return normalize_tier(value)
+
+
+class SimulationCustomerLoadRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=100)
+    customers: list[CustomerCreateRequest]
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("scenario_id")
+    @classmethod
+    def validate_scenario_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("scenario_id cannot be empty")
+        return normalized
+
+    @field_validator("customers")
+    @classmethod
+    def validate_unique_customers(cls, values: list[CustomerCreateRequest]) -> list[CustomerCreateRequest]:
+        seen: set[str] = set()
+        for customer in values:
+            if customer.customer_id in seen:
+                raise ValueError("customers cannot contain duplicate customer_id values")
+            seen.add(customer.customer_id)
+        return values

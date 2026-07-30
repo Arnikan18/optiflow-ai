@@ -11,6 +11,7 @@ from app.database.seed import build_seed_customers
 from app.schemas.requests import (
     CustomerCreateRequest,
     CustomerUpdateRequest,
+    SimulationCustomerLoadRequest,
     normalize_customer_id,
     normalize_search,
     normalize_tier,
@@ -159,6 +160,18 @@ def reset_customers(db: Session) -> int:
         db.add_all(customers)
         db.commit()
         return len(customers)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise _database_error() from exc
+
+
+def load_simulation_customers(db: Session, payload: SimulationCustomerLoadRequest) -> dict[str, int | str]:
+    try:
+        db.query(Customer).delete()
+        customers = [Customer(**customer.model_dump()) for customer in payload.customers]
+        db.add_all(customers)
+        db.commit()
+        return {"scenario_id": payload.scenario_id, "customer_count": len(customers)}
     except SQLAlchemyError as exc:
         db.rollback()
         raise _database_error() from exc

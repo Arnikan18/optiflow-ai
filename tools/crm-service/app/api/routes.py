@@ -4,12 +4,13 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database.session import get_db
 from app.middleware.authentication import verify_tool_token
-from app.schemas.requests import CustomerCreateRequest, CustomerUpdateRequest
+from app.schemas.requests import CustomerCreateRequest, CustomerUpdateRequest, SimulationCustomerLoadRequest
 from app.schemas.responses import CustomerListData, CustomerResponse, ResetResponseData, success_response
 from app.services.customer_service import (
     CRMError,
     create_customer,
     get_customer,
+    load_simulation_customers,
     list_customers,
     reset_customers,
     update_customer,
@@ -90,3 +91,9 @@ def reset_crm_database(db: Session = Depends(get_db)):
     seeded_records = reset_customers(db)
     data = ResetResponseData(seeded_records=seeded_records)
     return success_response(data.model_dump(mode="json"), message="CRM database reset successfully")
+
+
+@admin_router.post("/admin/simulation/load-state", dependencies=[Depends(verify_admin_key)])
+def load_crm_simulation_state(payload: SimulationCustomerLoadRequest, db: Session = Depends(get_db)):
+    data = load_simulation_customers(db, payload)
+    return success_response(data, message="CRM simulation state loaded")

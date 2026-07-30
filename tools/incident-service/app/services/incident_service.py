@@ -13,6 +13,9 @@ from app.schemas.requests import (
     IncidentAssignmentRequest,
     IncidentAssignmentVerificationRequest,
     IncidentCreateRequest,
+    IncidentSimulationFieldUpdateRequest,
+    IncidentSimulationLoadStateRequest,
+    IncidentSimulationResolveRequest,
     IncidentStatusUpdateRequest,
     normalize_customer_id,
     normalize_datetime,
@@ -176,6 +179,94 @@ async def create_incident(session: AsyncSession, payload: IncidentCreateRequest)
     except IntegrityError as exc:
         await session.rollback()
         raise IncidentError(409, "INCIDENT_409", "Incident identifier already exists") from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def load_simulation_incidents(
+    session: AsyncSession,
+    payload: IncidentSimulationLoadStateRequest,
+) -> dict[str, int | str]:
+    try:
+        await session.execute(delete(Incident))
+        incidents = []
+        for item in payload.incidents:
+            data = item.model_dump(exclude_none=True)
+            incidents.append(Incident(**data))
+        session.add_all(incidents)
+        await ensure_failure_mode(session)
+        await session.commit()
+        return {"scenario_id": payload.scenario_id, "incident_count": len(incidents)}
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def update_incident_simulation_fields(
+    session: AsyncSession,
+    incident_id: str,
+    payload: IncidentSimulationFieldUpdateRequest,
+) -> Incident:
+    incident = await get_incident(session, incident_id)
+    if incident.status in CLOSED_STATUSES:
+        raise IncidentError(409, "INCIDENT_409", "Resolved or closed incidents cannot be changed by simulation")
+
+    changed = False
+    if payload.priority is not None and incident.priority != payload.priority:
+        incident.priority = payload.priority
+        changed = True
+    if payload.sla_deadline is not None and incident.sla_deadline != payload.sla_deadline:
+        incident.sla_deadline = payload.sla_deadline
+        changed = True
+    if (
+        payload.estimated_effort_minutes is not None
+        and incident.estimated_effort_minutes != payload.estimated_effort_minutes
+    ):
+        incident.estimated_effort_minutes = payload.estimated_effort_minutes
+        changed = True
+
+    if not changed:
+        return incident
+
+    try:
+        incident.updated_at = datetime.now(timezone.utc)
+        session.add(incident)
+        await session.commit()
+        await session.refresh(incident)
+        return incident
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def resolve_incident_for_simulation(
+    session: AsyncSession,
+    incident_id: str,
+    payload: IncidentSimulationResolveRequest,
+) -> Incident:
+    if payload.incident_id is not None and payload.incident_id != normalize_incident_id(incident_id):
+        raise IncidentError(422, "INCIDENT_422", "payload incident_id must match path incident_id")
+
+    incident = await get_incident(session, incident_id)
+    if incident.status in CLOSED_STATUSES:
+        return incident
+    if incident.status not in ACTIVE_STATUSES:
+        raise IncidentError(409, "INCIDENT_409", "Incident cannot be resolved in its current status")
+
+    resolved_at = payload.resolved_at or datetime.now(timezone.utc)
+    incident.status = "RESOLVED"
+    incident.resolved_at = resolved_at
+    incident.updated_at = resolved_at
+    incident.assigned_specialist_id = None
+    incident.assignment_run_id = None
+    incident.assignment_idempotency_key = None
+    incident.assigned_at = None
+    try:
+        session.add(incident)
+        await session.commit()
+        await session.refresh(incident)
+        return incident
     except SQLAlchemyError as exc:
         await session.rollback()
         raise _database_error() from exc

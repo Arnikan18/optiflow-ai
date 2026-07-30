@@ -15,6 +15,9 @@ from app.schemas.requests import (
     LegacyTentativeReservationRequest,
     ReservationCreateRequest,
     ReservationVerificationRequest,
+    WorkforceSimulationAvailabilityRequest,
+    WorkforceSimulationLoadStateRequest,
+    WorkforceSimulationReleaseRequest,
 )
 from app.schemas.responses import (
     ReservationResponse,
@@ -32,6 +35,8 @@ from app.services.reservation_service import (
     create_legacy_tentative_reservation as create_legacy_tentative_reservation_record,
     create_reservation,
     get_reservation,
+    load_simulation_workforce,
+    release_incident_workload_for_simulation,
     reset_workforce,
     verify_reservation,
 )
@@ -40,6 +45,7 @@ from app.services.specialist_service import (
     get_specialist,
     list_specialists,
     list_workloads,
+    set_specialist_availability_for_simulation,
     specialist_view_to_dict,
     specialist_view_to_legacy_dict,
     workload_view_to_dict,
@@ -181,6 +187,26 @@ async def confirm_reservation_record(reservation_id: str, db: AsyncSession = Dep
     return success_response(_reservation_data(reservation), message="Reservation confirmed successfully")
 
 
+@router.patch("/specialists/{specialist_id}/simulation-availability")
+async def update_specialist_simulation_availability(
+    specialist_id: str,
+    payload: WorkforceSimulationAvailabilityRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    view = await set_specialist_availability_for_simulation(db, specialist_id, payload)
+    return success_response(_specialist_response(view).model_dump(mode="json"), message="Specialist availability updated")
+
+
+@router.post("/incidents/{incident_id}/release-workload")
+async def release_incident_workload_record(
+    incident_id: str,
+    payload: WorkforceSimulationReleaseRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await release_incident_workload_for_simulation(db, incident_id, payload)
+    return success_response(data, message="Incident workload released")
+
+
 @router.delete("/reservations/{reservation_id}")
 async def cancel_reservation_record(
     reservation_id: str,
@@ -205,6 +231,15 @@ async def reset_workforce_database(db: AsyncSession = Depends(get_db)):
     counts = await reset_workforce(db)
     data = ResetResponseData(**counts)
     return success_response(data.model_dump(mode="json"), message="Workforce database reset successfully")
+
+
+@admin_router.post("/admin/simulation/load-state", dependencies=[Depends(verify_admin_key)])
+async def load_workforce_simulation_state(
+    payload: WorkforceSimulationLoadStateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await load_simulation_workforce(db, payload)
+    return success_response(data, message="Workforce simulation state loaded")
 
 
 @legacy_router.get("/specialists", deprecated=True)

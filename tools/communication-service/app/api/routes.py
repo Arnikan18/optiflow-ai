@@ -12,6 +12,7 @@ from app.schemas.requests import (
     AssignmentRequestCreateRequest,
     AssignmentRequestVerificationRequest,
     AssignmentResponseRequest,
+    CommunicationSimulationLoadStateRequest,
     LegacyAssignmentCreateRequest,
     LegacyAssignmentResponseRequest,
     LegacyNotificationCreateRequest,
@@ -40,6 +41,7 @@ from app.services.assignment_service import (
     get_assignment_request,
     get_failure_mode,
     get_simulation_state,
+    load_simulation_communication,
     list_active_failure_modes,
     list_assignment_requests,
     reset_communication,
@@ -230,6 +232,15 @@ async def reset_communication_database(db: AsyncSession = Depends(get_db)):
     return success_response(data.model_dump(mode="json"), message="Communication database reset successfully")
 
 
+@admin_router.post("/admin/simulation/load-state", dependencies=[Depends(verify_admin_key)])
+async def load_communication_simulation_state(
+    payload: CommunicationSimulationLoadStateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await load_simulation_communication(db, payload)
+    return success_response(data, message="Communication simulation state loaded")
+
+
 @admin_router.post("/admin/next-response", dependencies=[Depends(verify_admin_key)])
 async def configure_next_response(payload: AdminConfiguredResponseRequest, db: AsyncSession = Depends(get_db)):
     delay_seconds = payload.response_delay_seconds
@@ -395,6 +406,3 @@ async def get_legacy_notifications(db: AsyncSession = Depends(get_db)):
 async def get_legacy_notification(notification_id: str, db: AsyncSession = Depends(get_db)):
     notification = await get_notification(db, notification_id)
     return notification_to_legacy_dict(notification)
-
-
-    get_failure_mode,

@@ -10,6 +10,9 @@ from app.schemas.requests import (
     IncidentAssignmentRequest,
     IncidentAssignmentVerificationRequest,
     IncidentCreateRequest,
+    IncidentSimulationFieldUpdateRequest,
+    IncidentSimulationLoadStateRequest,
+    IncidentSimulationResolveRequest,
     IncidentStatusUpdateRequest,
 )
 from app.schemas.responses import (
@@ -25,10 +28,13 @@ from app.services.incident_service import (
     create_incident,
     get_incident,
     get_legacy_escalation,
+    load_simulation_incidents,
     list_incidents,
     list_legacy_escalations,
+    resolve_incident_for_simulation,
     reset_incidents,
     update_incident_status,
+    update_incident_simulation_fields,
     verify_incident_assignment,
 )
 
@@ -129,6 +135,26 @@ async def verify_incident_assignment_record(
     return success_response(IncidentAssignmentVerificationResponse(**data).model_dump(mode="json"))
 
 
+@router.patch("/incidents/{incident_id}/simulation-fields")
+async def update_incident_simulation_fields_record(
+    incident_id: str,
+    payload: IncidentSimulationFieldUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    incident = await update_incident_simulation_fields(db, incident_id, payload)
+    return success_response(_incident_data(incident), message="Incident simulation fields updated successfully")
+
+
+@router.post("/incidents/{incident_id}/simulation-resolve")
+async def resolve_incident_simulation_record(
+    incident_id: str,
+    payload: IncidentSimulationResolveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    incident = await resolve_incident_for_simulation(db, incident_id, payload)
+    return success_response(_incident_data(incident), message="Incident resolved by simulation")
+
+
 def verify_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:
     settings = get_settings()
     if not settings.admin_api_key:
@@ -142,6 +168,15 @@ async def reset_incident_database(db: AsyncSession = Depends(get_db)):
     seeded_records = await reset_incidents(db)
     data = ResetResponseData(seeded_records=seeded_records)
     return success_response(data.model_dump(mode="json"), message="Incident database reset successfully")
+
+
+@admin_router.post("/admin/simulation/load-state", dependencies=[Depends(verify_admin_key)])
+async def load_incident_simulation_state(
+    payload: IncidentSimulationLoadStateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    data = await load_simulation_incidents(db, payload)
+    return success_response(data, message="Incident simulation state loaded")
 
 
 @legacy_router.get("/escalations", deprecated=True)
