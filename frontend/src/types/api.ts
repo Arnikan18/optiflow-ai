@@ -344,6 +344,126 @@ export interface SimulationState {
   generated_at: string;
 }
 
+// Dynamic enterprise simulation
+export type EnterpriseSimulationMode = 'TIMELINE' | 'INTERACTIVE';
+export type EnterpriseSimulationStatus =
+  | 'IDLE'
+  | 'RUNNING'
+  | 'PAUSED'
+  | 'STOPPED'
+  | 'COMPLETED'
+  | 'ERROR';
+export type EnterpriseEventType =
+  | 'NEW_TICKET'
+  | 'RESOLVE_TICKET'
+  | 'ESCALATE_PRIORITY'
+  | 'CHANGE_SLA'
+  | 'CHANGE_ESTIMATED_EFFORT'
+  | 'ENGINEER_ON_LEAVE'
+  | 'ENGINEER_RETURNED';
+export type EnterpriseEventProcessingStatus =
+  | 'RECEIVED'
+  | 'VALIDATED'
+  | 'APPLIED'
+  | 'NOTIFIED'
+  | 'FAILED'
+  | 'PARTIALLY_APPLIED';
+export type EnterpriseNotificationStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'ACKNOWLEDGED';
+
+export interface EnterpriseScenario {
+  scenario_id: string;
+  name: string;
+  description: string;
+  version: string;
+  mode: EnterpriseSimulationMode;
+  duration: string;
+  start_time: string;
+  end_time: string;
+  timezone: string;
+  stages: string[];
+  tags: string[];
+  schema_version: string;
+  created_at: string;
+}
+
+export interface EnterpriseScenarioList {
+  scenarios: EnterpriseScenario[];
+  default_scenario_id: string | null;
+}
+
+export interface EnterpriseSimulationStatusData {
+  simulation_id: string | null;
+  scenario_id: string | null;
+  scenario_name: string | null;
+  mode: EnterpriseSimulationMode | null;
+  status: EnterpriseSimulationStatus;
+  current_time: string | null;
+  current_stage: string | null;
+  current_timeline_position: number;
+  processed_events: string[];
+  pending_events: string[];
+  last_event: Record<string, unknown> | null;
+  enterprise_changed: boolean;
+  notification_status: EnterpriseNotificationStatus;
+  started_at: string | null;
+  paused_at: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StartEnterpriseSimulationPayload {
+  scenario_id?: string;
+  mode: EnterpriseSimulationMode;
+  reset_existing?: boolean;
+  auto_advance?: boolean;
+}
+
+export interface StartEnterpriseSimulationResult extends EnterpriseSimulationStatusData {
+  next_event: Record<string, unknown> | null;
+}
+
+export interface AdvanceEnterpriseSimulationResult extends EnterpriseSimulationStatusData {
+  processed_event: Record<string, unknown> | null;
+  next_event: Record<string, unknown> | null;
+  completed: boolean;
+}
+
+export interface JudgeEnterpriseEventPayload {
+  event_type: EnterpriseEventType;
+  payload: Record<string, unknown>;
+  event_id?: string;
+  scenario_id?: string;
+  description?: string;
+  effective_time?: string;
+  idempotency_key?: string;
+}
+
+export interface EnterpriseEventResult {
+  accepted: boolean;
+  event_id: string;
+  event_type: EnterpriseEventType;
+  processing_status: EnterpriseEventProcessingStatus;
+  enterprise_changed: boolean;
+  applied_at: string | null;
+  notification_status: EnterpriseNotificationStatus;
+  notification_id: string | null;
+  changed_entities: Array<Record<string, unknown>>;
+  errors: Array<Record<string, unknown>>;
+}
+
+export interface EnterpriseEventHistory {
+  events: Array<Record<string, unknown>>;
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+}
+
 export interface DemoResetResult {
   degraded: boolean;
   services: Record<string, unknown>;

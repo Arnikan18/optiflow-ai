@@ -9,8 +9,14 @@ import type {
   DemoResetResult,
   ExecutionVerification,
   ExecutionVerificationPayload,
+  AdvanceEnterpriseSimulationResult,
+  EnterpriseEventHistory,
+  EnterpriseEventResult,
+  EnterpriseScenarioList,
+  EnterpriseSimulationStatusData,
   FailureService,
   FailureSimulationPayload,
+  JudgeEnterpriseEventPayload,
   LLMConnectionResult,
   LLMModelCatalog,
   LLMProviderName,
@@ -18,6 +24,8 @@ import type {
   LLMSettingsStatus,
   RunSummary,
   SimulationState,
+  StartEnterpriseSimulationPayload,
+  StartEnterpriseSimulationResult,
   SpecialistResponseSimulationPayload,
 } from '../types/api';
 
@@ -187,6 +195,66 @@ export const api = {
 
   getSimulationState(): Promise<SimulationState> {
     return requestEnvelope('/demo/simulation/state');
+  },
+
+  getEnterpriseScenarios(reload = false): Promise<EnterpriseScenarioList> {
+    return requestEnvelope(`/simulation/scenarios${reload ? '?reload=true' : ''}`);
+  },
+
+  getEnterpriseSimulationStatus(): Promise<EnterpriseSimulationStatusData> {
+    return requestEnvelope('/simulation/status');
+  },
+
+  startEnterpriseSimulation(
+    payload: StartEnterpriseSimulationPayload,
+  ): Promise<StartEnterpriseSimulationResult> {
+    return requestEnvelope('/simulation/start', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  pauseEnterpriseSimulation(): Promise<EnterpriseSimulationStatusData> {
+    return requestEnvelope('/simulation/pause', { method: 'POST' });
+  },
+
+  resumeEnterpriseSimulation(): Promise<EnterpriseSimulationStatusData> {
+    return requestEnvelope('/simulation/resume', { method: 'POST' });
+  },
+
+  resetEnterpriseSimulation(
+    scenario_id?: string,
+  ): Promise<EnterpriseSimulationStatusData> {
+    return requestEnvelope('/simulation/reset', {
+      method: 'POST',
+      body: JSON.stringify(scenario_id ? { scenario_id } : {}),
+    });
+  },
+
+  advanceEnterpriseSimulation(): Promise<AdvanceEnterpriseSimulationResult> {
+    return requestEnvelope('/simulation/advance', { method: 'POST' });
+  },
+
+  injectEnterpriseEvent(
+    payload: JudgeEnterpriseEventPayload,
+  ): Promise<EnterpriseEventResult> {
+    return requestEnvelope('/simulation/event', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getEnterpriseEventHistory(
+    page = 1,
+    pageSize = 100,
+    simulationId?: string,
+  ): Promise<EnterpriseEventHistory> {
+    const query = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    });
+    if (simulationId) query.set('simulation_id', simulationId);
+    return requestEnvelope(`/simulation/events?${query.toString()}`);
   },
 
   queueSpecialistResponse(
