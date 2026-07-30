@@ -306,7 +306,7 @@ class EnterpriseEventEngine:
 
     async def _new_ticket(self, client: EnterpriseServiceClient, payload: NewTicketPayload) -> list[dict[str, Any]]:
         await client.get_customer(payload.customer_id)
-        body = payload.model_dump(exclude={"required_skills"}, exclude_none=True)
+        body = payload.model_dump(exclude_none=True)
         created = await client.create_incident(_payload_as_json(body))
         return [{"entity_type": "incident", "entity_id": created["incident_id"], "change": "created"}]
 

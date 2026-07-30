@@ -135,6 +135,7 @@ async def test_event_engine_new_ticket_idempotent_retry(session):
             "description": "New incident description",
             "priority": "HIGH",
             "sla_deadline": "2026-07-22T11:00:00Z",
+            "required_skills": ["security", "integration"],
         },
     )
 
@@ -159,6 +160,7 @@ async def test_event_engine_new_ticket_idempotent_retry(session):
     assert first.notification_status == NotificationStatus.PENDING
     assert second.event_id == first.event_id
     assert len(FakeClient.created_incidents) == 1
+    assert FakeClient.created_incidents[0]["required_skills"] == ["security", "integration"]
 
 
 @pytest.mark.asyncio
