@@ -115,7 +115,7 @@ function PlanMetrics({
       value: summary ? `${Math.round(summary.fairness_score)}` : percent(metricNumber(plan, 'fairness_score')),
     },
     {
-      label: 'Covered',
+      label: 'New work',
       value: count(metricNumber(plan, 'assigned_count')),
     },
   ];
@@ -147,6 +147,13 @@ function AssignmentPreview({
 }) {
   const allocations = planAllocations(plan);
   const visible = typeof limit === 'number' ? allocations.slice(0, limit) : allocations;
+  const existingAssignments = (portfolio?.incidents ?? []).filter((incident) => (
+    Boolean(incident.current_specialist_id)
+    && ['OPEN', 'IN_PROGRESS', 'ESCALATED'].includes(incident.status?.toUpperCase() ?? '')
+  ));
+  const visibleExisting = typeof limit === 'number'
+    ? existingAssignments.slice(0, limit)
+    : existingAssignments;
   const plannedAdds = allocations.reduce<Record<string, number>>((counts, allocation) => {
     const incident = portfolio?.incidents.find((item) => item.incident_id === allocation.incident_id);
     if (incident?.current_specialist_id !== allocation.specialist_id) {
@@ -156,7 +163,70 @@ function AssignmentPreview({
   }, {});
 
   if (allocations.length === 0) {
-    return <p className="text-sm text-ink-muted">This plan does not create a new assignment.</p>;
+    if (!portfolio) {
+      return <p className="text-sm text-ink-muted">Checking current worker assignments…</p>;
+    }
+    if (existingAssignments.length === 0) {
+      return (
+        <p className="text-sm text-ink-muted">
+          No new assignment is required for this decision.
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <div className="rounded-xl border border-ops-cyan/25 bg-ops-cyan/[0.05] px-4 py-3">
+          <p className="text-sm font-bold text-ops-cyan">
+            Keep {existingAssignments.length} current worker assignment{existingAssignments.length === 1 ? '' : 's'}
+          </p>
+          <p className="mt-1 text-sm text-ink-secondary">
+            The AI found no safer reassignment, so existing owners remain responsible.
+          </p>
+        </div>
+        {visibleExisting.map((incident) => {
+          const worker = portfolio.specialists.find(
+            (item) => item.specialist_id === incident.current_specialist_id,
+          );
+          const capacity = worker?.capacity;
+          const used = worker?.active_assignments ?? worker?.current_workload;
+          const free = worker?.available_capacity
+            ?? (capacity === null || capacity === undefined || used === null || used === undefined
+              ? null
+              : Math.max(capacity - used, 0));
+          return (
+            <div
+              key={incident.incident_id}
+              className="grid gap-2 rounded-xl border border-border-dim bg-deep px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-ink-primary">
+                  {incident.title ?? incident.incident_id}
+                </p>
+                <p className="truncate text-xs text-ink-muted">
+                  {incident.customer_name ?? incident.customer_id}
+                </p>
+              </div>
+              <span className="hidden text-ops-cyan sm:block" aria-hidden="true">→</span>
+              <div className="min-w-0 sm:text-right">
+                <p className="truncate text-sm font-extrabold text-ops-cyan">
+                  {worker?.specialist_name ?? incident.current_specialist_id}
+                </p>
+                <p className="text-xs text-ink-muted">
+                  {used === null || used === undefined || capacity === null || capacity === undefined
+                    ? 'Current owner'
+                    : `${used}/${capacity} active · ${free ?? 0} free`}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        {visibleExisting.length < existingAssignments.length && (
+          <p className="text-xs font-bold text-ink-muted">
+            +{existingAssignments.length - visibleExisting.length} more current assignment{existingAssignments.length - visibleExisting.length === 1 ? '' : 's'}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
