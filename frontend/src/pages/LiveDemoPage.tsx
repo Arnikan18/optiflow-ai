@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { LiveAIResponsePanel } from '../components/demo/LiveAIResponsePanel';
 import { useEnterpriseSimulation } from '../hooks/useEnterpriseSimulation';
 import type {
   EnterpriseEventType,
@@ -82,12 +82,14 @@ function scenarioProgress(
 }
 
 export function LiveDemoPage() {
-  const navigate = useNavigate();
   const simulation = useEnterpriseSimulation();
   const [mode, setMode] = useState<EnterpriseSimulationMode>('TIMELINE');
   const [scenarioId, setScenarioId] = useState('');
   const [selectedChallengeId, setSelectedChallengeId] = useState<ChallengeId>('new-ticket');
   const [launchingAI, setLaunchingAI] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [aiError, setAIError] = useState<string | null>(null);
 
   useEffect(() => {
     if (simulation.status?.mode) setMode(simulation.status.mode);
@@ -245,12 +247,15 @@ export function LiveDemoPage() {
         ? 'Monitoring'
         : 'Ready';
 
-  const startAIAnalysis = async () => {
+  const startAIAnalysis = async (changeLabel?: string) => {
+    if (launchingAI) return;
     setLaunchingAI(true);
+    setAIError(null);
     try {
-      const goal = `Protect the highest-pressure customers after the latest ${
-        simulation.status?.current_stage ?? 'enterprise'
-      } change, while keeping specialist workload within safe available capacity.`;
+      const change = changeLabel
+        ?? simulation.status?.current_stage
+        ?? 'enterprise';
+      const goal = `Protect the highest-pressure customers after the latest ${change} change, while keeping specialist workload within safe available capacity.`;
       const created = await api.createRun(goal);
       saveRecentRun({
         run_id: created.run_id,
@@ -258,9 +263,18 @@ export function LiveDemoPage() {
         status: created.status,
         created_at: new Date().toISOString(),
       });
-      navigate(`/run/${created.run_id}`);
+      setActiveRunId(created.run_id);
+    } catch (caught: unknown) {
+      setAIError(caught instanceof Error ? caught.message : 'The AI analysis could not start.');
     } finally {
       setLaunchingAI(false);
+    }
+  };
+
+  const advanceTimeline = async () => {
+    const changed = await simulation.advance();
+    if (changed && autoAnalyze) {
+      await startAIAnalysis('timeline event');
     }
   };
 
@@ -277,7 +291,10 @@ export function LiveDemoPage() {
       description: selectedChallenge.description,
       payload: selectedChallenge.payload,
     };
-    await simulation.inject(payload);
+    const changed = await simulation.inject(payload);
+    if (changed && autoAnalyze) {
+      await startAIAnalysis(selectedChallenge.label.toLowerCase());
+    }
   };
 
   return (
@@ -420,7 +437,7 @@ export function LiveDemoPage() {
                 <button
                   type="button"
                   disabled={!canAdvance || simulation.busyAction !== null}
-                  onClick={() => void simulation.advance()}
+                  onClick={() => void advanceTimeline()}
                   className="rounded-xl border border-ops-cyan/35 bg-ops-cyan/[0.07] px-4 py-3 text-sm font-bold text-ops-cyan disabled:opacity-35 focus-ring"
                 >
                   {simulation.busyAction === 'advance' ? 'Applying event...' : 'Advance one event'}
@@ -429,6 +446,23 @@ export function LiveDemoPage() {
             </div>
           </div>
         </section>
+
+        {aiError && (
+          <div className="rounded-2xl border border-ops-rose/30 bg-ops-rose/[0.06] px-5 py-4 flex items-center justify-between gap-4" role="alert">
+            <p className="text-sm font-semibold text-ops-rose">{aiError}</p>
+            <button type="button" onClick={() => setAIError(null)} className="text-sm font-bold text-ops-rose focus-ring rounded">
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {activeRunId && (
+          <LiveAIResponsePanel
+            key={activeRunId}
+            runId={activeRunId}
+            onClose={() => setActiveRunId(null)}
+          />
+        )}
 
         <div className="grid xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.55fr)] gap-5">
           <main className="space-y-5">
@@ -631,8 +665,28 @@ export function LiveDemoPage() {
                 onClick={() => void startAIAnalysis()}
                 className="mt-4 w-full rounded-xl bg-ink-primary px-4 py-3.5 text-sm font-bold text-white hover:bg-ops-amber disabled:opacity-40 focus-ring"
               >
-                {launchingAI ? 'Starting AI route...' : 'Analyze current enterprise →'}
+                {launchingAI
+                  ? 'Starting AI route...'
+                  : activeRunId
+                    ? 'Analyze latest state again'
+                    : 'Analyze current enterprise ->'}
               </button>
+              <label className="mt-3 flex items-center gap-3 rounded-xl border border-border-dim bg-deep px-3 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoAnalyze}
+                  onChange={(event) => setAutoAnalyze(event.target.checked)}
+                  className="h-4 w-4 accent-amber-500"
+                />
+                <span>
+                  <span className="block text-sm font-bold text-ink-primary">
+                    Analyze applied changes
+                  </span>
+                  <span className="block text-xs text-ink-muted mt-0.5">
+                    Starts a fresh governed route after each successful event.
+                  </span>
+                </span>
+              </label>
             </section>
 
             <section className="rounded-[1.5rem] border border-border-dim bg-abyss shadow-card p-5">
