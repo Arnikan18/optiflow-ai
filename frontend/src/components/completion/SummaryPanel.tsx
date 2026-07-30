@@ -1,8 +1,10 @@
-import type { RunEvent, RunSummary } from '../../types/api';
+import { Link } from 'react-router-dom';
+import type { DemoPortfolio, RunEvent, RunSummary } from '../../types/api';
 
 interface SummaryPanelProps {
   runData: RunSummary | null;
   events: RunEvent[];
+  portfolio: DemoPortfolio | null;
 }
 
 interface ExecutionReceipt {
@@ -49,9 +51,27 @@ function displaySummary(value: RunSummary['business_summary']): string | null {
   }
 }
 
-function ReceiptCard({ receipt }: { receipt: ExecutionReceipt }) {
+function ReceiptCard({
+  receipt,
+  portfolio,
+}: {
+  receipt: ExecutionReceipt;
+  portfolio: DemoPortfolio | null;
+}) {
   const success = receipt.status === 'SUCCESS';
   const allocation = receipt.allocation ?? {};
+  const worker = portfolio?.specialists.find(
+    (item) => item.specialist_id === allocation.specialist_id,
+  );
+  const incident = portfolio?.incidents.find(
+    (item) => item.incident_id === allocation.incident_id,
+  );
+  const capacity = worker?.capacity;
+  const used = worker?.active_assignments ?? worker?.current_workload;
+  const free = worker?.available_capacity
+    ?? (capacity === null || capacity === undefined || used === null || used === undefined
+      ? null
+      : Math.max(capacity - used, 0));
 
   return (
     <article className={`rounded-2xl border p-4 ${
@@ -73,12 +93,24 @@ function ReceiptCard({ receipt }: { receipt: ExecutionReceipt }) {
       </div>
       <div className="grid sm:grid-cols-2 gap-3 mt-4">
         <div>
-          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">Specialist</p>
-          <p className="text-xs font-bold text-ink-primary mt-1">{allocation.specialist_id ?? 'Not reported'}</p>
+          <p className="text-xs font-mono uppercase tracking-[0.13em] text-ink-muted">Worker assigned</p>
+          <p className="mt-1 text-lg font-extrabold text-ops-emerald">
+            {worker?.specialist_name ?? allocation.specialist_id ?? 'Not reported'}
+          </p>
+          {worker && (
+            <p className="mt-1 text-sm text-ink-muted">
+              {used ?? '—'}/{capacity ?? '—'} active · {free ?? '—'} free now
+            </p>
+          )}
         </div>
         <div>
-          <p className="text-[8px] font-mono uppercase tracking-[0.13em] text-ink-muted">Incident</p>
-          <p className="text-xs font-bold text-ink-primary mt-1">{allocation.incident_id ?? 'Not reported'}</p>
+          <p className="text-xs font-mono uppercase tracking-[0.13em] text-ink-muted">Work accepted</p>
+          <p className="mt-1 text-lg font-extrabold text-ink-primary">
+            {incident?.title ?? allocation.incident_id ?? 'Not reported'}
+          </p>
+          <p className="mt-1 text-sm text-ink-muted">
+            {incident?.customer_name ?? allocation.customer_id ?? allocation.incident_id ?? 'Customer not reported'}
+          </p>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border-dim">
@@ -92,7 +124,7 @@ function ReceiptCard({ receipt }: { receipt: ExecutionReceipt }) {
   );
 }
 
-export function SummaryPanel({ runData, events }: SummaryPanelProps) {
+export function SummaryPanel({ runData, events, portfolio }: SummaryPanelProps) {
   const receipts = readReceipts(events);
   const successfulReceipts = receipts.filter((receipt) => receipt.status === 'SUCCESS');
   const nonSuccessReceipts = receipts.filter((receipt) => receipt.status !== 'SUCCESS');
@@ -145,6 +177,14 @@ export function SummaryPanel({ runData, events }: SummaryPanelProps) {
         <p className="max-w-3xl text-xs sm:text-sm leading-relaxed text-ink-secondary mt-3">
           {hero.description}
         </p>
+        {hasVerifiedWrites && (
+          <Link
+            to="/"
+            className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-ops-emerald px-4 py-3 text-sm font-bold text-white focus-ring"
+          >
+            View updated worker cards
+          </Link>
+        )}
         <p className="text-[9px] font-mono text-ink-muted mt-4">Audit identity: {runData?.run_id ?? 'not reported'}</p>
       </div>
 
@@ -174,7 +214,11 @@ export function SummaryPanel({ runData, events }: SummaryPanelProps) {
           </div>
           <div className="grid lg:grid-cols-2 gap-3 mt-5">
             {receipts.map((receipt, index) => (
-              <ReceiptCard key={receipt.receipt_id ?? `receipt-${index}`} receipt={receipt} />
+              <ReceiptCard
+                key={receipt.receipt_id ?? `receipt-${index}`}
+                receipt={receipt}
+                portfolio={portfolio}
+              />
             ))}
           </div>
         </div>

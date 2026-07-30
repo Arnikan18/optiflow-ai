@@ -158,7 +158,7 @@ export function RunCockpitPage() {
       cancelled = true;
       window.clearInterval(refreshTimer);
     };
-  }, [runId]);
+  }, [runId, status]);
 
   useEffect(() => {
     if (status !== 'RECEIVED' || runData?.current_node !== 'receive_goal') {
@@ -352,7 +352,9 @@ export function RunCockpitPage() {
                       status={status}
                     />
                   )}
-                  {!terminalSagaFailed && <SummaryPanel runData={runData} events={events} />}
+                  {!terminalSagaFailed && (
+                    <SummaryPanel runData={runData} events={events} portfolio={portfolio} />
+                  )}
                 </div>
               ) : null}
             </div>
