@@ -166,7 +166,7 @@ async def control_reset_legacy():
 # --- AGENT RUN CONTROL ROUTING ---
 import uuid
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from app.agent.manager import start_new_run, resume_run_from_checkpoint, load_last_checkpoint
 
 from pydantic import field_validator
@@ -182,8 +182,24 @@ class CreateRunRequest(BaseModel):
         return v
 
 class ApproveRunRequest(BaseModel):
-    approval_status: str
+    approval_status: Literal["APPROVED", "REJECTED", "MODIFY"]
     recommended_plan: Optional[Dict[str, Any]] = None
+    decision_reason: Optional[str] = None
+    decision_source: Optional[
+        Literal["AI_RECOMMENDATION", "ALTERNATIVE_PLAN", "MANUAL_PLAN", "REJECT_ALL"]
+    ] = None
+
+    @field_validator("decision_reason")
+    @classmethod
+    def validate_decision_reason(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if len(normalized) > 1000:
+            raise ValueError("decision_reason must be at most 1000 characters")
+        return normalized
 
 class ClarifyRunRequest(BaseModel):
     clarification_reply: str
@@ -254,7 +270,13 @@ async def approve_run(run_id: str, body: ApproveRunRequest, db: AsyncSession = D
     if row[0] in ("COMPLETED", "FAILED", "CANCELLED"):
         raise HTTPException(status_code=400, detail=f"Cannot approve run in {row[0]} state.")
         
-    success = await resume_run_from_checkpoint(run_id, body.approval_status, body.recommended_plan)
+    success = await resume_run_from_checkpoint(
+        run_id,
+        body.approval_status,
+        body.recommended_plan,
+        decision_reason=body.decision_reason,
+        decision_source=body.decision_source,
+    )
     if not success:
         raise HTTPException(status_code=404, detail="Run checkpoint not found")
     return {"status": "success", "message": f"Run resumed with status: {body.approval_status}"}

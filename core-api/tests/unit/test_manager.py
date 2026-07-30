@@ -43,11 +43,29 @@ def test_approve_run_route_success():
         mock_execute.return_value = mock_result
         response = client.post("/api/v1/runs/RUN-EXIST-999/approve", json={
             "approval_status": "APPROVED",
-            "recommended_plan": {"plan_id": "PLAN-BALANCED"}
+            "recommended_plan": {"plan_id": "PLAN-BALANCED"},
+            "decision_reason": "Best SLA protection for today's risk.",
+            "decision_source": "AI_RECOMMENDATION",
         })
         assert response.status_code == 200
         assert response.json()["status"] == "success"
-        mock_resume.assert_called_once_with("RUN-EXIST-999", "APPROVED", {"plan_id": "PLAN-BALANCED"})
+        mock_resume.assert_called_once_with(
+            "RUN-EXIST-999",
+            "APPROVED",
+            {"plan_id": "PLAN-BALANCED"},
+            decision_reason="Best SLA protection for today's risk.",
+            decision_source="AI_RECOMMENDATION",
+        )
+
+def test_approve_run_rejects_unknown_decision_source():
+    response = client.post(
+        "/api/v1/runs/RUN-EXIST-999/approve",
+        json={
+            "approval_status": "APPROVED",
+            "decision_source": "BROWSER_GUESS",
+        },
+    )
+    assert response.status_code == 422
 
 def test_clarify_run_route_success():
     with patch("app.main.resume_run_from_checkpoint", return_value=True) as mock_resume, \
