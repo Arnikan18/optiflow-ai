@@ -17,7 +17,8 @@ import { SummaryPanel } from '../components/completion/SummaryPanel';
 import { MissionGuide } from '../components/guide/MissionGuide';
 import { getActiveGuide, PHASE_GUIDES } from '../data/guideContent';
 import { useGuidedPlayback } from '../hooks/useGuidedPlayback';
-import type { RecentRun, RunStatus } from '../types/api';
+import { api } from '../api/client';
+import type { DemoPortfolio, RecentRun, RunStatus } from '../types/api';
 
 const STATUS_BADGE: Record<RunStatus, { label: string; cls: string }> = {
   RECEIVED: { label: 'Route received', cls: 'text-ink-secondary bg-surface' },
@@ -65,6 +66,7 @@ export function RunCockpitPage() {
   });
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [receivedWaitSeconds, setReceivedWaitSeconds] = useState(0);
+  const [portfolio, setPortfolio] = useState<DemoPortfolio | null>(null);
 
   const status = runData?.status ?? null;
   const badge = status ? STATUS_BADGE[status] : null;
@@ -116,6 +118,29 @@ export function RunCockpitPage() {
     ?? runData?.structured_goal?.objective
     ?? runData?.structured_goal?.objectives?.[0]
     ?? 'Operational decision goal';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshPortfolio = async () => {
+      try {
+        const nextPortfolio = await api.getDemoPortfolio();
+        if (!cancelled) setPortfolio(nextPortfolio);
+      } catch {
+        // The run remains usable from its recorded events when live demo data is unavailable.
+      }
+    };
+
+    void refreshPortfolio();
+    const refreshTimer = window.setInterval(() => {
+      void refreshPortfolio();
+    }, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [runId]);
 
   useEffect(() => {
     if (status !== 'RECEIVED' || runData?.current_node !== 'receive_goal') {
@@ -205,6 +230,8 @@ export function RunCockpitPage() {
             activeId={guide.id}
             selectedId={selectedStageId}
             failed={status === 'FAILED'}
+            portfolio={portfolio}
+            runData={runData}
             onSelect={setSelectedStageId}
           />
         </div>

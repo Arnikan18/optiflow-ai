@@ -1,9 +1,12 @@
 import { PHASE_TIMELINE } from '../../data/guideContent';
+import type { DemoPortfolio, RunSummary } from '../../types/api';
 
 interface DecisionJourneyRailProps {
   activeId: string;
   selectedId: string | null;
   failed: boolean;
+  portfolio: DemoPortfolio | null;
+  runData: RunSummary | null;
   onSelect: (stageId: string | null) => void;
 }
 
@@ -72,20 +75,6 @@ const BRANCHES = [
   },
 ] as const;
 
-const SOURCE_CHIPS = [
-  { label: 'CRM', x: 445, tone: 'violet' },
-  { label: 'INC', x: 485, tone: 'rose' },
-  { label: 'TEAM', x: 530, tone: 'cyan' },
-  { label: 'COMMS', x: 580, tone: 'orange' },
-] as const;
-
-const PLAN_CHIPS = [
-  { label: 'SLA', tone: 'rose' },
-  { label: 'ARR', tone: 'violet' },
-  { label: 'FAIR', tone: 'cyan' },
-  { label: 'BAL', tone: 'emerald' },
-] as const;
-
 const TONE_CLASSES = {
   cyan: 'border-ops-cyan/40 bg-ops-cyan/10 text-ops-cyan',
   emerald: 'border-ops-emerald/40 bg-ops-emerald/10 text-ops-emerald',
@@ -93,6 +82,19 @@ const TONE_CLASSES = {
   rose: 'border-ops-rose/40 bg-ops-rose/10 text-ops-rose',
   violet: 'border-ops-violet/40 bg-ops-violet/10 text-ops-violet',
 } as const;
+
+type MapTone = keyof typeof TONE_CLASSES;
+
+const PLAN_TONES: MapTone[] = ['rose', 'violet', 'cyan', 'emerald'];
+
+function compactProfileName(profile: string): string {
+  return profile
+    .replace(/-first/gi, '')
+    .replace(/revenue/gi, 'ARR')
+    .replace(/fairness/gi, 'Fair')
+    .slice(0, 5)
+    .toUpperCase();
+}
 
 function stateForNode(
   index: number,
@@ -186,6 +188,8 @@ export function DecisionJourneyRail({
   activeId,
   selectedId,
   failed,
+  portfolio,
+  runData,
   onSelect,
 }: DecisionJourneyRailProps) {
   const normalizedActiveId = normalizeJourneyStage(activeId);
@@ -198,6 +202,54 @@ export function DecisionJourneyRail({
   const activeNode = MAP_NODES[activeIndex];
   const activeX = activeNode?.x ?? MAP_NODES[0].x;
   const clarificationActive = activeId === 'clarify';
+  const portfolioSummary = portfolio?.portfolio_summary;
+  const urgentIncidentCount = portfolio?.incidents.filter((incident) => (
+    !['CLOSED', 'RESOLVED', 'CANCELLED'].includes(incident.status?.toUpperCase() ?? '')
+    && ['CRITICAL', 'HIGH'].includes(incident.severity?.toUpperCase() ?? '')
+  )).length ?? 0;
+  const communicationsSelected = runData?.selected_tools.some((tool) => (
+    tool.selected && tool.toolName.toLowerCase().includes('communication')
+  )) ?? false;
+  const sourceChips: Array<{
+    label: string;
+    value: string;
+    x: number;
+    tone: MapTone;
+  }> = [
+    {
+      label: 'CRM',
+      value: portfolioSummary?.total_customers == null
+        ? 'waiting'
+        : `${portfolioSummary.total_customers} clients`,
+      x: 390,
+      tone: 'violet',
+    },
+    {
+      label: 'RISKS',
+      value: portfolio ? `${urgentIncidentCount} urgent` : 'waiting',
+      x: 465,
+      tone: 'rose',
+    },
+    {
+      label: 'TEAM',
+      value: portfolioSummary?.total_specialists == null
+        ? 'waiting'
+        : `${portfolioSummary.available_specialists ?? 0}/${portfolioSummary.total_specialists} ready`,
+      x: 545,
+      tone: 'cyan',
+    },
+    {
+      label: 'COMMS',
+      value: communicationsSelected ? 'selected' : 'standby',
+      x: 620,
+      tone: 'orange',
+    },
+  ];
+  const planChips = (runData?.candidate_plans ?? []).slice(0, 4).map((plan, index) => ({
+    label: compactProfileName(plan.profile),
+    value: `${plan.metrics.assigned_count} placed`,
+    tone: PLAN_TONES[index] ?? 'emerald',
+  }));
 
   return (
     <nav aria-label="Decision map" className="mt-1">
@@ -264,7 +316,7 @@ export function DecisionJourneyRail({
               <path d="M355 139 C355 105 355 90 355 75 H505 V139" fill="none" className="decision-map-flow stroke-ops-orange" strokeWidth="3" />
             )}
 
-            {SOURCE_CHIPS.map((source) => (
+            {sourceChips.map((source) => (
               <path
                 key={source.label}
                 d={`M${source.x} 262 C${source.x} 225 505 225 505 198`}
@@ -318,28 +370,33 @@ export function DecisionJourneyRail({
           })}
 
           <div className="absolute z-10 left-[505px] top-[272px] -translate-x-1/2 flex gap-1.5">
-            {SOURCE_CHIPS.map((source) => (
+            {sourceChips.map((source) => (
               <span
                 key={source.label}
-                className={`rounded-full border px-2.5 py-1 text-[9px] font-mono font-bold ${TONE_CLASSES[source.tone]}`}
+                className={`min-w-[66px] rounded-xl border px-2.5 py-1.5 text-center font-mono ${TONE_CLASSES[source.tone]}`}
               >
-                {source.label}
+                <span className="block text-[9px] font-bold">{source.label}</span>
+                <span className="block text-[8px] opacity-75 mt-0.5">{source.value}</span>
               </span>
             ))}
           </div>
 
           <div className="absolute z-10 left-[655px] top-[249px] -translate-x-1/2 grid grid-cols-2 gap-1.5">
-            {PLAN_CHIPS.map((plan) => (
+            {planChips.length > 0 ? planChips.map((plan) => (
               <button
                 key={plan.label}
                 type="button"
                 onClick={() => onSelect('optimize')}
-                className={`rounded-full border px-2.5 py-1 text-[9px] font-mono font-bold focus-ring ${TONE_CLASSES[plan.tone]}`}
+                className={`rounded-xl border px-2.5 py-1 text-[9px] font-mono font-bold focus-ring ${TONE_CLASSES[plan.tone]}`}
                 aria-label={`Inspect ${plan.label} plan branch`}
               >
-                {plan.label}
+                {plan.label} · {plan.value}
               </button>
-            ))}
+            )) : (
+              <span className="col-span-2 rounded-full border border-border-dim bg-deep px-3 py-1 text-[9px] font-mono text-ink-muted">
+                Plans appear here
+              </span>
+            )}
           </div>
 
           <div className="absolute left-[20px] bottom-3 flex items-center gap-3 text-[9px] font-mono uppercase text-ink-muted">
