@@ -192,6 +192,11 @@ services:
       SAGA_POLL_INTERVAL_SECONDS: ${SAGA_POLL_INTERVAL_SECONDS}
     ports:
       - "${CORE_API_PORT}:${CORE_API_CONTAINER_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:$${SERVICE_PORT}/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - ./shared/python/optiflow_shared:/app/optiflow_shared:ro
       - ./core-api/app:/app/app
@@ -208,6 +213,24 @@ services:
         condition: service_healthy
       communication-service:
         condition: service_healthy
+
+  frontend:
+    profiles: ["full-stack"]
+    build:
+      context: ./frontend
+    container_name: optiflow-frontend
+    environment:
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_CONTAINER_PORT}"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:$${FRONTEND_CONTAINER_PORT}/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   postgres_data:
