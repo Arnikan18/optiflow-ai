@@ -18,7 +18,7 @@ From the repository root in PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
-.\scripts\start-demo.ps1 -ResetData -PreferenceProfile SLA_FIRST
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -ResetData -PreferenceProfile SLA_FIRST
 ```
 
 The launcher:
@@ -33,7 +33,7 @@ The launcher:
 The frontend is intentionally not a Docker service. On later starts, use:
 
 ```powershell
-.\scripts\start-demo.ps1 -SkipBuild -SkipInstall
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -SkipBuild -SkipInstall
 ```
 
 ## What each page is for
@@ -157,7 +157,7 @@ Use one experiment at a time so the cause and effect remain obvious.
 Restore operational demo data without deleting volumes:
 
 ```powershell
-.\scripts\reset-demo.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\reset-demo.ps1
 ```
 
 Restore the mature SLA preference:
@@ -169,7 +169,7 @@ docker compose exec -T core-api python -m scripts.seed_preference_demo --profile
 Check every backend:
 
 ```powershell
-.\scripts\health-check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\health-check.ps1
 ```
 
 Stop the frontend with `Ctrl+C`. Stop backend containers with:
@@ -190,4 +190,3 @@ Use volume deletion only when all local demo history may be discarded.
 - A judge edit starts a fresh run and shows before/live/AI values.
 - Human reason and source appear in decision/preference history.
 - Refreshing the browser does not erase backend state.
-
