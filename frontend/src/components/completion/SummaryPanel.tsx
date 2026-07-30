@@ -99,7 +99,9 @@ export function SummaryPanel({ runData, events }: SummaryPanelProps) {
   const latestSaga = [...events].reverse().find((event) =>
     event.event_type === 'SAGA_COMPLETED' || event.event_type === 'SAGA_FAILED');
   const sagaFailed = latestSaga?.event_type === 'SAGA_FAILED';
-  const routeFailed = runData?.status === 'FAILED' || sagaFailed;
+  const routeFailed = runData?.status === 'FAILED'
+    || runData?.status === 'FAILED_SAGA'
+    || sagaFailed;
   const hasVerifiedWrites = successfulReceipts.length > 0 && !sagaFailed;
   const businessSummary = displaySummary(runData?.business_summary ?? null);
   const changeSummary = displaySummary(runData?.change_summary ?? null);
