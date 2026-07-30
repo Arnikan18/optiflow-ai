@@ -201,12 +201,12 @@ async def get_run_status(run_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Run not found")
         
     checkpoint = await load_last_checkpoint(run_id) or {}
-    candidate_plans = checkpoint.get("candidate_plans", [])
+    candidate_plans = checkpoint.get("candidate_plans") or []
     
     # ── Populate Candidate Summaries dynamically ──────────────────────────────
     from app.services.candidate_comparison_builder import CandidateComparisonBuilder
     
-    enterprise_state = checkpoint.get("enterprise_state", {})
+    enterprise_state = checkpoint.get("enterprise_state") or {}
     customers = enterprise_state.get("customers", [])
     
     pers_rec = checkpoint.get("personalized_recommendation")

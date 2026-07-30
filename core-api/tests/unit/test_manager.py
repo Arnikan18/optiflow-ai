@@ -158,3 +158,25 @@ def test_get_run_status_success():
         assert data["business_summary"] == "Summary markdown"
         assert data["change_summary"] == "Change markdown"
 
+def test_get_run_status_handles_nullable_partial_checkpoint():
+    with patch("sqlalchemy.ext.asyncio.AsyncSession.execute") as mock_execute, \
+         patch("app.main.load_last_checkpoint") as mock_load:
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (
+            "RUN-PARTIAL-123",
+            "WAITING_FOR_CLARIFICATION",
+            "pause_for_clarification",
+            None,
+        )
+        mock_execute.return_value = mock_result
+        mock_load.return_value = {
+            "candidate_plans": None,
+            "enterprise_state": None,
+        }
+
+        response = client.get("/api/v1/runs/RUN-PARTIAL-123")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["candidate_plans"] == []
+        assert data["candidate_plan_summary"] == []
