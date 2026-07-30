@@ -8,7 +8,7 @@ import {
   type TodayProblem,
   type WorkerReadiness,
 } from '../../data/todayDecisionModel';
-import type { DemoPortfolio } from '../../types/api';
+import type { DemoIncident, DemoPortfolio } from '../../types/api';
 import { GoalInput } from '../run/GoalInput';
 
 const BAND_STYLE: Record<PressureBand, {
@@ -120,10 +120,12 @@ function Metric({
 
 function WorkerButton({
   worker,
+  assignedProblems,
   open,
   onClick,
 }: {
   worker: WorkerReadiness;
+  assignedProblems: DemoIncident[];
   open: boolean;
   onClick: () => void;
 }) {
@@ -135,7 +137,7 @@ function WorkerButton({
       type="button"
       onClick={onClick}
       aria-expanded={open}
-      className={`w-[210px] shrink-0 rounded-2xl border p-4 text-left transition-all focus-ring ${
+      className={`w-[240px] shrink-0 rounded-2xl border p-4 text-left transition-all focus-ring ${
         open
           ? 'border-ops-cyan bg-ops-cyan/[0.07] shadow-card'
           : 'border-border-dim bg-abyss hover:border-border-base'
@@ -152,11 +154,14 @@ function WorkerButton({
           <span className={`mt-1 flex items-center gap-1.5 text-xs font-bold ${style.text}`}>
             <span className={`h-2 w-2 rounded-full ${style.dot}`} />
             {style.label}
+            {assignedProblems.length > 0 && (
+              <span className="text-ink-muted">· {assignedProblems.length} active</span>
+            )}
           </span>
         </span>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border-dim pt-3">
+      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border-dim pt-3">
         <div>
           <p className="text-base font-extrabold text-ink-primary">
             {effectiveness === null ? '—' : `${Math.round(effectiveness)}%`}
@@ -165,16 +170,28 @@ function WorkerButton({
         </div>
         <div>
           <p className="text-base font-extrabold text-ink-primary">
+            {assignedProblems.length}
+          </p>
+          <p className="text-xs text-ink-muted">active work</p>
+        </div>
+        <div>
+          <p className="text-base font-extrabold text-ink-primary">
             {worker.remainingCapacity}/{worker.specialist.capacity ?? 0}
           </p>
-          <p className="text-xs text-ink-muted">capacity free</p>
+          <p className="text-xs text-ink-muted">free</p>
         </div>
       </div>
     </button>
   );
 }
 
-function WorkerDetail({ worker }: { worker: WorkerReadiness }) {
+function WorkerDetail({
+  worker,
+  assignedProblems,
+}: {
+  worker: WorkerReadiness;
+  assignedProblems: DemoIncident[];
+}) {
   const specialist = worker.specialist;
 
   return (
@@ -187,8 +204,42 @@ function WorkerDetail({ worker }: { worker: WorkerReadiness }) {
           </p>
         </div>
         <span className="rounded-full border border-border-base bg-abyss px-3 py-1 text-xs font-bold text-ink-secondary">
-          {worker.usedCapacity} used · {worker.remainingCapacity} free
+          {assignedProblems.length} active work · {worker.remainingCapacity} capacity free
         </span>
+      </div>
+
+      <div className="mt-5 border-t border-border-dim pt-4">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-ink-muted">Current work</p>
+        {assignedProblems.length > 0 ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {assignedProblems.map((incident) => (
+              <div
+                key={incident.incident_id}
+                className="rounded-xl border border-border-dim bg-abyss px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink-primary">
+                      {incident.title ?? incident.incident_id}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ink-muted">
+                      {incident.customer_name ?? incident.customer_id}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-ops-cyan/10 px-2 py-1 text-xs font-bold text-ops-cyan">
+                    {incident.status?.replace(/_/g, ' ') ?? 'Assigned'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-ink-muted">
+            {worker.usedCapacity > 0
+              ? `${worker.usedCapacity} capacity ${worker.usedCapacity === 1 ? 'unit is' : 'units are'} used by work outside this escalation portfolio.`
+              : 'No active incident is assigned.'}
+          </p>
+        )}
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -385,6 +436,20 @@ export function TodayDecisionBoard() {
     () => portfolio ? deriveTeamReadiness(portfolio) : [],
     [portfolio],
   );
+  const assignedProblemsByWorker = useMemo(() => {
+    const result = new Map<string, DemoIncident[]>();
+    if (!portfolio) return result;
+    const closedStatuses = new Set(['CLOSED', 'RESOLVED', 'CANCELLED']);
+    portfolio.incidents.forEach((incident) => {
+      const specialistId = incident.current_specialist_id;
+      const status = incident.status?.toUpperCase() ?? '';
+      if (!specialistId || closedStatuses.has(status)) return;
+      const assigned = result.get(specialistId) ?? [];
+      assigned.push(incident);
+      result.set(specialistId, assigned);
+    });
+    return result;
+  }, [portfolio]);
   const selectedWorker = workers.find(
     (worker) => worker.specialist.specialist_id === openWorkerId,
   ) ?? null;
@@ -475,6 +540,7 @@ export function TodayDecisionBoard() {
             <div key={worker.specialist.specialist_id} className="snap-start">
               <WorkerButton
                 worker={worker}
+                assignedProblems={assignedProblemsByWorker.get(worker.specialist.specialist_id) ?? []}
                 open={openWorkerId === worker.specialist.specialist_id}
                 onClick={() => setOpenWorkerId((current) => (
                   current === worker.specialist.specialist_id
@@ -485,7 +551,12 @@ export function TodayDecisionBoard() {
             </div>
           ))}
         </div>
-        {selectedWorker && <WorkerDetail worker={selectedWorker} />}
+        {selectedWorker && (
+          <WorkerDetail
+            worker={selectedWorker}
+            assignedProblems={assignedProblemsByWorker.get(selectedWorker.specialist.specialist_id) ?? []}
+          />
+        )}
       </section>
 
       <section aria-labelledby="today-problems-heading">
