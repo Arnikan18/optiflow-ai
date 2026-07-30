@@ -8,11 +8,13 @@ import {
 } from './pages/WorkspacePages';
 import { DecisionsPage } from './pages/DecisionsPage';
 import { SimpleSettingsPage } from './pages/SimpleSettingsPage';
+import { EnterpriseSimulationProvider } from './hooks/useEnterpriseSimulation';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Shell>
+      <EnterpriseSimulationProvider>
+        <Shell>
         <Routes>
           <Route path="/" element={<ControlRoomPage />} />
           <Route path="/decision-flow" element={<Navigate to="/" replace />} />
@@ -35,7 +37,8 @@ export default function App() {
             )}
           />
         </Routes>
-      </Shell>
+        </Shell>
+      </EnterpriseSimulationProvider>
     </BrowserRouter>
   );
 }

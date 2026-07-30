@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { api } from '../api/client';
 import type {
   DemoPortfolio,
@@ -146,7 +155,7 @@ function errorMessage(caught: unknown): string {
     : 'The live enterprise demo could not complete this action.';
 }
 
-export function useEnterpriseSimulation(
+function useEnterpriseSimulationController(
   pollIntervalMs = 3_000,
 ): UseEnterpriseSimulationResult {
   const [scenarios, setScenarios] = useState<EnterpriseScenario[]>([]);
@@ -243,7 +252,7 @@ export function useEnterpriseSimulation(
     };
   }, [pollIntervalMs, refresh, refreshRuntime]);
 
-  return {
+  const controller: UseEnterpriseSimulationResult = {
     scenarios,
     defaultScenarioId,
     status,
@@ -259,7 +268,7 @@ export function useEnterpriseSimulation(
       scenario_id: scenarioId,
       mode,
       reset_existing: true,
-      auto_advance: false,
+      auto_advance: mode === 'TIMELINE',
     })),
     pause: () => perform('pause', () => api.pauseEnterpriseSimulation()),
     resume: () => perform('resume', () => api.resumeEnterpriseSimulation()),
@@ -268,4 +277,43 @@ export function useEnterpriseSimulation(
     inject: (payload) => perform('inject', () => api.injectEnterpriseEvent(payload)),
     clearError: () => setError(null),
   };
+
+  useEffect(() => {
+    if (
+      status?.status !== 'RUNNING'
+      || status.mode !== 'TIMELINE'
+      || status.pending_events.length === 0
+      || busyAction !== null
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void perform('advance', () => api.advanceEnterpriseSimulation());
+    }, 10_000);
+    return () => window.clearTimeout(timer);
+  }, [
+    busyAction,
+    perform,
+    status?.current_timeline_position,
+    status?.mode,
+    status?.pending_events.length,
+    status?.status,
+  ]);
+
+  return controller;
+}
+
+const EnterpriseSimulationContext = createContext<UseEnterpriseSimulationResult | null>(null);
+
+export function EnterpriseSimulationProvider({ children }: { children: ReactNode }) {
+  const simulation = useEnterpriseSimulationController();
+  return createElement(EnterpriseSimulationContext.Provider, { value: simulation }, children);
+}
+
+export function useEnterpriseSimulation(): UseEnterpriseSimulationResult {
+  const simulation = useContext(EnterpriseSimulationContext);
+  if (!simulation) {
+    throw new Error('useEnterpriseSimulation must be used inside EnterpriseSimulationProvider');
+  }
+  return simulation;
 }
