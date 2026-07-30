@@ -124,7 +124,11 @@ async def test_update_preference_memory_workflow_node():
         
         # Execute node
         node_update = await update_preference_memory(state)
-        assert node_update == {"current_node": "update_preference_memory"}
+        assert node_update == {
+            "current_node": "update_preference_memory",
+            "approval_status": "APPROVED",
+            "modification_requested": False,
+        }
         
         # Validate that database record was updated and saved
         async with async_session() as session:
