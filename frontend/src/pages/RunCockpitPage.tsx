@@ -233,8 +233,6 @@ export function RunCockpitPage() {
             activeId={guide.id}
             selectedId={selectedStageId}
             failed={status === 'FAILED'}
-            portfolio={portfolio}
-            runData={runData}
             onSelect={handleStageSelect}
           />
         </div>
