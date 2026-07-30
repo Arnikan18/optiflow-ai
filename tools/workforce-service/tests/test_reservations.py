@@ -438,9 +438,9 @@ def test_admin_reset_auth_determinism_and_missing_config(client, admin_headers, 
         201,
     )
     reset = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert reset == {"specialist_count": 5, "reservation_count": 5}
+    assert reset == {"specialist_count": 8, "reservation_count": 8}
     repeated = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert repeated == {"specialist_count": 5, "reservation_count": 5}
+    assert repeated == {"specialist_count": 8, "reservation_count": 8}
     assert_error(
         client.get("/workforce/api/v1/reservations/RES-RESET-001", headers=auth_headers),
         404,

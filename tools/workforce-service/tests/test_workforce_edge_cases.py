@@ -57,7 +57,7 @@ def test_seed_is_idempotent_and_does_not_overwrite_existing_data(tmp_path, monke
             await conn.run_sync(Base.metadata.create_all)
 
         async with db_session.async_session() as session:
-            assert await seed_workforce_if_empty(session) == {"specialist_count": 5, "reservation_count": 5}
+            assert await seed_workforce_if_empty(session) == {"specialist_count": 8, "reservation_count": 8}
         async with db_session.async_session() as session:
             assert await seed_workforce_if_empty(session) == {"specialist_count": 0, "reservation_count": 0}
         async with db_session.async_session() as session:
@@ -154,4 +154,4 @@ def test_cancelled_reservation_does_not_reduce_capacity(client, auth_headers):
 
 def test_foreign_rows_removed_in_reset_order(client, admin_headers):
     reset = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert reset == {"specialist_count": 5, "reservation_count": 5}
+    assert reset == {"specialist_count": 8, "reservation_count": 8}

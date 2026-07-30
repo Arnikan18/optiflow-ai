@@ -30,7 +30,7 @@ def test_customer_list_default_pagination_and_stable_metadata(client, auth_heade
     data = assert_success(response)
     assert data["page"] == 1
     assert data["page_size"] == 20
-    assert data["total_items"] == 5
+    assert data["total_items"] == 8
     assert data["total_pages"] == 1
     assert [customer["customer_id"] for customer in data["customers"]] == sorted(
         customer["customer_id"] for customer in data["customers"]
@@ -42,7 +42,7 @@ def test_customer_list_custom_pagination_and_page_beyond_results(client, auth_he
     assert page_one.status_code == 200
     data = assert_success(page_one)
     assert len(data["customers"]) == 2
-    assert data["total_pages"] == 3
+    assert data["total_pages"] == 4
 
     beyond = client.get("/crm/api/v1/customers?page=99&page_size=2", headers=auth_headers)
     assert beyond.status_code == 200
@@ -61,7 +61,7 @@ def test_customer_filters_and_search(client, auth_headers):
     tier = client.get("/crm/api/v1/customers?tier= enterprise ", headers=auth_headers)
     assert tier.status_code == 200
     tier_data = assert_success(tier)
-    assert tier_data["total_items"] == 2
+    assert tier_data["total_items"] == 3
     assert all(customer["tier"] == "Enterprise" for customer in tier_data["customers"])
 
     by_id = client.get("/crm/api/v1/customers?search=alpha", headers=auth_headers)
@@ -191,11 +191,11 @@ def test_admin_reset_requires_key_and_restores_seed(client, auth_headers, admin_
 
     reset = client.post("/admin/reset", headers=admin_headers)
     assert reset.status_code == 200
-    assert assert_success(reset)["seeded_records"] == 5
+    assert assert_success(reset)["seeded_records"] == 8
 
     second_reset = client.post("/admin/reset", headers=admin_headers)
     assert second_reset.status_code == 200
-    assert assert_success(second_reset)["seeded_records"] == 5
+    assert assert_success(second_reset)["seeded_records"] == 8
 
     missing_after_reset = client.get("/crm/api/v1/customers/CUS-TEMP", headers=auth_headers)
     assert missing_after_reset.status_code == 404
