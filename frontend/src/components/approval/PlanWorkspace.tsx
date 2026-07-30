@@ -255,9 +255,12 @@ export function PlanWorkspace({
   const recommended = sorted[0] ?? null;
   const [pendingPlan, setPendingPlan] = useState<CandidatePlan | null>(null);
   const [confirmReject, setConfirmReject] = useState(false);
-  const [actionInFlight, setActionInFlight] = useState<'approve' | 'reject' | null>(null);
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [showModify, setShowModify] = useState(false);
+  const [actionInFlight, setActionInFlight] = useState<'approve' | 'modify' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [decisionReason, setDecisionReason] = useState('');
+  const [modificationInstruction, setModificationInstruction] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
@@ -302,6 +305,27 @@ export function PlanWorkspace({
     }
   };
 
+  const handleModify = async () => {
+    const instruction = modificationInstruction.trim();
+    if (!instruction) {
+      setError('Tell the AI what must change before it creates revised plans.');
+      return;
+    }
+    setActionInFlight('modify');
+    setError(null);
+    try {
+      await api.approveRun(runId, {
+        approval_status: 'MODIFY',
+        decision_reason: instruction,
+        decision_source: 'MODIFICATION',
+      });
+      onApproved();
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The plan could not be revised.');
+      setActionInFlight(null);
+    }
+  };
+
   if (!recommended) {
     return (
       <div className="rounded-2xl border border-border-dim bg-deep p-8 text-center">
@@ -330,6 +354,48 @@ export function PlanWorkspace({
         <div className="rounded-xl border border-ops-rose/35 bg-ops-rose/[0.06] px-4 py-3 text-sm font-bold text-ops-rose" role="alert">
           {error}
         </div>
+      )}
+
+      {showModify && (
+        <section className="rounded-2xl border border-ops-violet/40 bg-ops-violet/[0.06] p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-ops-violet">Ask AI to revise</p>
+              <p className="text-sm text-ink-secondary mt-1">
+                State the changed priority or constraint. Revised plans will return here for approval.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowModify(false)}
+              className="min-h-11 rounded-xl px-3 text-sm font-bold text-ink-muted hover:text-ink-primary focus-ring"
+              aria-label="Close revision form"
+            >
+              Close
+            </button>
+          </div>
+          <label className="block mt-4">
+            <span className="sr-only">Plan revision instruction</span>
+            <textarea
+              value={modificationInstruction}
+              maxLength={1000}
+              rows={3}
+              onChange={(event) => setModificationInstruction(event.target.value)}
+              placeholder="Example: Protect SLA first and keep every worker below 80% capacity."
+              className="w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+            />
+          </label>
+          <div className="flex justify-end mt-3">
+            <button
+              type="button"
+              disabled={actionInFlight !== null || !modificationInstruction.trim()}
+              onClick={() => void handleModify()}
+              className="min-h-11 rounded-xl bg-ops-violet px-5 py-3 text-sm font-bold text-white disabled:opacity-40 focus-ring"
+            >
+              {actionInFlight === 'modify' ? 'Creating revised plans…' : 'Create revised plans'}
+            </button>
+          </div>
+        </section>
       )}
 
       {pendingPlan && (
@@ -401,14 +467,24 @@ export function PlanWorkspace({
               {preferenceReason(recommended, recommendedSummary)}
             </p>
           </div>
-          <button
-            type="button"
-            disabled={actionInFlight !== null}
-            onClick={() => setPendingPlan(recommended)}
-            className="rounded-xl bg-ops-amber px-5 py-3 text-base font-bold text-white hover:bg-ops-amber-bright disabled:opacity-40 focus-ring"
-          >
-            Review recommendation
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={actionInFlight !== null}
+              onClick={() => setShowModify(true)}
+              className="min-h-11 rounded-xl border border-border-base bg-deep px-4 py-3 text-sm font-bold text-ink-secondary hover:border-ops-violet hover:text-ops-violet disabled:opacity-40 focus-ring"
+            >
+              Request changes
+            </button>
+            <button
+              type="button"
+              disabled={actionInFlight !== null}
+              onClick={() => setPendingPlan(recommended)}
+              className="min-h-11 rounded-xl bg-ops-amber px-5 py-3 text-base font-bold text-white hover:bg-ops-amber-bright disabled:opacity-40 focus-ring"
+            >
+              Review &amp; approve
+            </button>
+          </div>
         </div>
 
         <div className="mt-5">
@@ -416,11 +492,30 @@ export function PlanWorkspace({
         </div>
       </section>
 
-      {alternatives.length > 0 && (
-        <section>
+      {alternatives.length > 0 && !showAlternatives && (
+        <button
+          type="button"
+          onClick={() => setShowAlternatives(true)}
+          className="w-full min-h-12 rounded-2xl border border-border-base bg-deep px-5 py-3 text-left text-base font-bold text-ink-secondary hover:border-ops-cyan hover:text-ops-cyan focus-ring"
+        >
+          Reject this recommendation and compare {alternatives.length} other plans
+        </button>
+      )}
+
+      {alternatives.length > 0 && showAlternatives && (
+        <section id="alternative-plans" className="rounded-2xl border border-border-dim bg-deep p-5">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xl font-extrabold text-ink-primary">Other valid options</h3>
-            <span className="text-sm text-ink-muted">{alternatives.length} alternatives</span>
+            <div>
+              <h3 className="text-xl font-extrabold text-ink-primary">Choose another plan</h3>
+              <p className="text-sm text-ink-muted mt-1">Nothing executes until you confirm one.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAlternatives(false)}
+              className="min-h-11 rounded-xl px-3 text-sm font-bold text-ink-muted hover:text-ink-primary focus-ring"
+            >
+              Hide
+            </button>
           </div>
           <div className="grid lg:grid-cols-3 gap-3 mt-3">
             {alternatives.map((plan) => (
