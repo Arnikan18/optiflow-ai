@@ -60,6 +60,11 @@ async def resume_run_from_checkpoint(
         
     # Inject resumption context
     checkpoint_state["approval_status"] = approval_status
+    if approval_status == "MODIFY" and decision_reason:
+        original_goal = checkpoint_state.get("goal_text", "")
+        checkpoint_state["goal_text"] = (
+            f"{original_goal} (Manager modification: {decision_reason})"
+        )
     if recommended_plan:
         checkpoint_state["recommended_plan"] = recommended_plan
     if decision_reason:

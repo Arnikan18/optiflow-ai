@@ -43,6 +43,7 @@ class AgentState(TypedDict, total=False):
     approval_status: str
     decision_reason: Optional[str]
     decision_source: Optional[str]
+    modification_requested: bool
     approved_state_version: int
     approved_plan_version: int
     execution_actions: List[Dict[str, Any]]
