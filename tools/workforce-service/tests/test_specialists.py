@@ -96,6 +96,7 @@ def test_specialist_filters_and_search(client, auth_headers):
     assert {item["specialist_id"] for item in min_capacity["specialists"]} == {
         "SPEC-KAI",
         "SPEC-LEILA",
+        "SPEC-MAYA",
         "SPEC-OMAR",
         "SPEC-PRIYA",
         "SPEC-SOFIA",
@@ -131,13 +132,14 @@ def test_available_specialists_filters_capacity_and_pending_counts(client, auth_
     )
     assert [item["specialist_id"] for item in required_two["specialists"]] == [
         "SPEC-LEILA",
+        "SPEC-MAYA",
         "SPEC-OMAR",
     ]
 
     maya = assert_success(client.get("/workforce/api/v1/specialists/SPEC-MAYA", headers=auth_headers))
     assert maya["current_workload"] == 0
-    assert maya["effective_workload"] == 1
-    assert maya["available_capacity"] == 1
+    assert maya["effective_workload"] == 0
+    assert maya["available_capacity"] == 2
     assert maya["operationally_available"] is True
     assert maya["completed_assignments_30d"] == 38
     assert maya["sla_success_rate_30d"] == 96.0
@@ -153,17 +155,17 @@ def test_list_workloads_exposes_reservation_counts(client, auth_headers):
 
     workloads = {item["specialist_id"]: item for item in data["workloads"]}
     assert workloads["SPEC-MAYA"]["assigned_count"] == 0
-    assert workloads["SPEC-MAYA"]["tentative_reservation_count"] == 1
+    assert workloads["SPEC-MAYA"]["tentative_reservation_count"] == 0
     assert workloads["SPEC-MAYA"]["confirmed_reservation_count"] == 0
-    assert workloads["SPEC-MAYA"]["available_capacity"] == 1
-    assert workloads["SPEC-MAYA"]["utilisation_percentage"] == 50.0
+    assert workloads["SPEC-MAYA"]["available_capacity"] == 2
+    assert workloads["SPEC-MAYA"]["utilisation_percentage"] == 0.0
 
     assert workloads["SPEC-DANIEL"]["assigned_count"] == 1
     assert workloads["SPEC-DANIEL"]["confirmed_reservation_count"] == 1
     assert workloads["SPEC-LEILA"]["assigned_count"] == 1
     assert workloads["SPEC-LEILA"]["available_capacity"] == 2
-    assert workloads["SPEC-OMAR"]["tentative_reservation_count"] == 1
-    assert workloads["SPEC-OMAR"]["available_capacity"] == 2
+    assert workloads["SPEC-OMAR"]["tentative_reservation_count"] == 0
+    assert workloads["SPEC-OMAR"]["available_capacity"] == 3
 
 
 def test_get_specialist_existing_missing_inactive_and_full_capacity(client, auth_headers):

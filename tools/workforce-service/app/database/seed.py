@@ -241,7 +241,9 @@ def build_seed_reservations() -> list[Reservation]:
             incident_id="INC-SUMMIT-001",
             status="TENTATIVE",
             created_at=created_at,
-            expires_at=_utc_datetime("2099-07-24T10:05:00Z"),
+            # Historical evidence only. A live seed reservation would consume
+            # capacity and conflict with a newly approved Summit assignment.
+            expires_at=_utc_datetime("2026-07-22T10:05:00Z"),
             updated_at=created_at,
         ),
         Reservation(
