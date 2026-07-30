@@ -128,6 +128,8 @@ export interface RecentPreferenceDecision {
   selected_profile: string | null;
   personalized_profile: string | null;
   accepted_personalized: boolean | null;
+  decision_reason: string | null;
+  decision_source: string | null;
   goal_text: string | null;
   created_at: string;
 }

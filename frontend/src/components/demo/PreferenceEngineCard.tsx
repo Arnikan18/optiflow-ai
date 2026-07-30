@@ -202,6 +202,11 @@ export function PreferenceEngineCard({
                                 ? 'Manager override'
                                 : 'Stored in memory'}
                           </p>
+                          {decision.decision_reason && (
+                            <p className="mt-1 line-clamp-2 text-xs text-ink-secondary">
+                              “{decision.decision_reason}”
+                            </p>
+                          )}
                         </div>
                         <span className="shrink-0 text-xs text-ink-muted">{shortDate(decision.created_at)}</span>
                       </article>

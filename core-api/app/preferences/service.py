@@ -31,6 +31,8 @@ class RecentPreferenceDecision(BaseModel):
     selected_profile: str | None
     personalized_profile: str | None
     accepted_personalized: bool | None
+    decision_reason: str | None
+    decision_source: str | None
     goal_text: str | None
     created_at: datetime
 
@@ -136,6 +138,16 @@ async def get_preference_summary(
                     decision,
                     str(selected_profile) if selected_profile else None,
                     str(personalized_profile) if personalized_profile else None,
+                ),
+                decision_reason=(
+                    str(payload.get("decision_reason"))
+                    if payload.get("decision_reason")
+                    else None
+                ),
+                decision_source=(
+                    str(payload.get("decision_source"))
+                    if payload.get("decision_source")
+                    else None
                 ),
                 goal_text=goal_text,
                 created_at=event.created_at,
