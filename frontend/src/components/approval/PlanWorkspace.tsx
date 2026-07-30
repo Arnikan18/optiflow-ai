@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
 import type { CandidatePlan, CandidatePlanSummary } from '../../types/api';
+import { PlanBranchExplorer } from './PlanBranchExplorer';
 import { PlanCard } from './PlanCard';
 
 interface PlanWorkspaceProps {
@@ -356,11 +357,11 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSu
           Human approval gate
         </p>
         <h2 className="text-xl font-extrabold tracking-[-0.035em] text-ink-primary mt-1">
-          Choose the tradeoff you can defend.
+          Choose a branch. Preview the consequence.
         </h2>
-        <p className="text-sm text-ink-secondary leading-relaxed max-w-3xl mt-2">
-          The planning engines produced {plans.length} candidate plans from the same constraints. Compare their
-          measurable outcomes, inspect their reasoning, and approve one. No enterprise write has happened yet.
+        <p className="text-[10px] text-ink-muted leading-relaxed max-w-2xl mt-2">
+          {plans.length} feasible profiles share the same evidence and constraints. Selecting one changes only the
+          preview; execution still requires a separate confirmation.
         </p>
       </div>
 
@@ -414,32 +415,47 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSu
 
       {sorted.length > 0 ? (
         <>
-          {candidatePlanSummary && candidatePlanSummary.length > 0 && (
-            <CandidateComparisonTable summaries={candidatePlanSummary} />
-          )}
-          <ComparisonMatrix plans={sorted} recommendedPlanId={recommendedPlanId} />
-          <div>
-            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+          <PlanBranchExplorer
+            plans={sorted}
+            recommendedPlanId={recommendedPlanId}
+            busy={actionInFlight !== null}
+            onReview={setPendingPlan}
+          />
+
+          <details className="group rounded-2xl border border-border-dim bg-deep/55">
+            <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-xs font-bold text-ink-primary focus-ring rounded">
+              <span>Open complete plan evidence and assignments</span>
+              <span className="text-ops-cyan group-open:rotate-45 transition-transform">+</span>
+            </summary>
+            <div className="px-5 pb-5 pt-5 border-t border-border-dim space-y-5">
+              {candidatePlanSummary && candidatePlanSummary.length > 0 && (
+                <CandidateComparisonTable summaries={candidatePlanSummary} />
+              )}
+              <ComparisonMatrix plans={sorted} recommendedPlanId={recommendedPlanId} />
               <div>
-                <p className="text-[8px] font-mono uppercase tracking-[0.16em] text-ink-muted">Plan details</p>
-                <h3 className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
-                  Inspect assignments and reasoning before approval
-                </h3>
+                <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[8px] font-mono uppercase tracking-[0.16em] text-ink-muted">Plan evidence</p>
+                    <h3 className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
+                      Assignments, reasoning, and solver metadata
+                    </h3>
+                  </div>
+                  <p className="text-[9px] text-ink-muted">Read-only backend evidence</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+                  {sorted.map((plan) => (
+                    <PlanCard
+                      key={plan.plan_id}
+                      plan={plan}
+                      isRecommended={plan.plan_id === recommendedPlanId}
+                      onSelect={setPendingPlan}
+                      busy={actionInFlight !== null}
+                    />
+                  ))}
+                </div>
               </div>
-              <p className="text-[9px] text-ink-muted">Approving one plan starts SAGA execution.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-              {sorted.map((plan) => (
-                <PlanCard
-                  key={plan.plan_id}
-                  plan={plan}
-                  isRecommended={plan.plan_id === recommendedPlanId}
-                  onSelect={setPendingPlan}
-                  busy={actionInFlight !== null}
-                />
-              ))}
-            </div>
-          </div>
+          </details>
 
           <details className="rounded-2xl border border-border-dim bg-deep/60">
             <summary className="cursor-pointer px-5 py-4 text-xs font-bold text-ink-primary focus-ring rounded">

@@ -45,7 +45,21 @@ const PROFILE_STYLE: Record<string, {
     background: 'bg-ops-emerald/[0.065]',
     marker: 'bg-ops-emerald',
   },
+  'Revenue First': {
+    short: 'ARR',
+    border: 'border-ops-emerald/40',
+    text: 'text-ops-emerald',
+    background: 'bg-ops-emerald/[0.065]',
+    marker: 'bg-ops-emerald',
+  },
   'Fairness-First': {
+    short: 'FAIR',
+    border: 'border-ops-violet/40',
+    text: 'text-ops-violet',
+    background: 'bg-ops-violet/[0.065]',
+    marker: 'bg-ops-violet',
+  },
+  'Fairness First': {
     short: 'FAIR',
     border: 'border-ops-violet/40',
     text: 'text-ops-violet',
