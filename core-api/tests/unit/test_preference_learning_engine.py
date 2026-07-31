@@ -109,7 +109,9 @@ async def test_update_preference_memory_workflow_node():
         "approval_status": "APPROVED",
         "recommended_plan": {"profile": "Balanced"},
         "personalized_recommendation": {"profile": "Balanced"},
-        "goal_text": "Optimize SLA deadlines."
+        "goal_text": "Optimize SLA deadlines.",
+        "decision_reason": "Best tradeoff for today's SLA risk.",
+        "decision_source": "AI_RECOMMENDATION",
     }
     
     async with async_session() as session:
@@ -122,7 +124,11 @@ async def test_update_preference_memory_workflow_node():
         
         # Execute node
         node_update = await update_preference_memory(state)
-        assert node_update == {"current_node": "update_preference_memory"}
+        assert node_update == {
+            "current_node": "update_preference_memory",
+            "approval_status": "APPROVED",
+            "modification_requested": False,
+        }
         
         # Validate that database record was updated and saved
         async with async_session() as session:
@@ -137,3 +143,5 @@ async def test_update_preference_memory_workflow_node():
         call_kwargs = mock_persistence.save_run_event.call_args.kwargs
         assert call_kwargs["event_type"] == "PREFERENCE_MEM_UPDATED"
         assert call_kwargs["run_id"] == "RUN-TEST-NODE"
+        assert call_kwargs["payload_dict"]["decision_reason"] == "Best tradeoff for today's SLA risk."
+        assert call_kwargs["payload_dict"]["decision_source"] == "AI_RECOMMENDATION"

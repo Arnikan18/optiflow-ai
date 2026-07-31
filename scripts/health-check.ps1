@@ -83,6 +83,7 @@ Import-DotEnv (Join-Path $RepoRoot ".env")
 
 $coreUrl = if ($env:VITE_CORE_API_URL) { $env:VITE_CORE_API_URL.TrimEnd("/") } else { Get-LocalBaseUrl "CORE_API_PORT" "8000" }
 $checks = @(
+    @{ Name = "frontend"; Url = "$(Get-LocalBaseUrl 'FRONTEND_PORT' '3000')/"; Parse = $false },
     @{ Name = "core-api"; Url = "$coreUrl/health"; Parse = $false },
     @{ Name = "core-demo-health"; Url = "$coreUrl/api/v1/demo/health"; Parse = $true },
     @{ Name = "crm-service"; Url = "$(Get-LocalBaseUrl 'CRM_SERVICE_PORT' '8101')/health"; Parse = $false },

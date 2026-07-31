@@ -2,23 +2,28 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './components/layout/Shell';
 import { ControlRoomPage } from './pages/ControlRoomPage';
 import { RunCockpitPage } from './pages/RunCockpitPage';
+import { LiveDemoPage } from './pages/LiveDemoPage';
 import {
   DemoLabPage,
-  RunHistoryPage,
-  SettingsPage,
 } from './pages/WorkspacePages';
+import { DecisionsPage } from './pages/DecisionsPage';
+import { SimpleSettingsPage } from './pages/SimpleSettingsPage';
+import { EnterpriseSimulationProvider } from './hooks/useEnterpriseSimulation';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Shell>
+      <EnterpriseSimulationProvider>
+        <Shell>
         <Routes>
           <Route path="/" element={<ControlRoomPage />} />
           <Route path="/decision-flow" element={<Navigate to="/" replace />} />
           <Route path="/run/:runId" element={<RunCockpitPage />} />
-          <Route path="/history" element={<RunHistoryPage />} />
+          <Route path="/history" element={<DecisionsPage />} />
           <Route path="/demo-lab" element={<DemoLabPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/judge" element={<LiveDemoPage />} />
+          <Route path="/live-demo" element={<Navigate to="/judge" replace />} />
+          <Route path="/settings" element={<SimpleSettingsPage />} />
           <Route
             path="*"
             element={(
@@ -32,7 +37,8 @@ export default function App() {
             )}
           />
         </Routes>
-      </Shell>
+        </Shell>
+      </EnterpriseSimulationProvider>
     </BrowserRouter>
   );
 }

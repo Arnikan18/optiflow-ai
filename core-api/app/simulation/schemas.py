@@ -28,6 +28,7 @@ class EnterpriseEventType(StrEnum):
     ESCALATE_PRIORITY = "ESCALATE_PRIORITY"
     CHANGE_SLA = "CHANGE_SLA"
     CHANGE_ESTIMATED_EFFORT = "CHANGE_ESTIMATED_EFFORT"
+    CHANGE_WORKER_CAPACITY = "CHANGE_WORKER_CAPACITY"
     ENGINEER_ON_LEAVE = "ENGINEER_ON_LEAVE"
     ENGINEER_RETURNED = "ENGINEER_RETURNED"
 
@@ -374,12 +375,44 @@ class EngineerAvailabilityPayload(BaseModel):
         return normalize_datetime(value, "effective_at")
 
 
+class ChangeWorkerCapacityPayload(BaseModel):
+    specialist_id: str = Field(min_length=1, max_length=64)
+    capacity: int | None = Field(default=None, ge=1, le=100)
+    current_workload: int | None = Field(default=None, ge=0, le=100)
+    reason: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("specialist_id")
+    @classmethod
+    def validate_specialist_id(cls, value: str) -> str:
+        return normalize_identifier(value, "specialist_id")
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @model_validator(mode="after")
+    def validate_change(self) -> "ChangeWorkerCapacityPayload":
+        if self.capacity is None and self.current_workload is None:
+            raise ValueError("capacity or current_workload is required")
+        if (
+            self.capacity is not None
+            and self.current_workload is not None
+            and self.current_workload > self.capacity
+        ):
+            raise ValueError("current_workload cannot exceed capacity")
+        return self
+
+
 EVENT_PAYLOAD_MODELS: dict[EnterpriseEventType, type[BaseModel]] = {
     EnterpriseEventType.NEW_TICKET: NewTicketPayload,
     EnterpriseEventType.RESOLVE_TICKET: ResolveTicketPayload,
     EnterpriseEventType.ESCALATE_PRIORITY: EscalatePriorityPayload,
     EnterpriseEventType.CHANGE_SLA: ChangeSLAPayload,
     EnterpriseEventType.CHANGE_ESTIMATED_EFFORT: ChangeEstimatedEffortPayload,
+    EnterpriseEventType.CHANGE_WORKER_CAPACITY: ChangeWorkerCapacityPayload,
     EnterpriseEventType.ENGINEER_ON_LEAVE: EngineerAvailabilityPayload,
     EnterpriseEventType.ENGINEER_RETURNED: EngineerAvailabilityPayload,
 }

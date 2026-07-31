@@ -21,6 +21,7 @@ from app.demo.schemas import (
     FailureSimulationRequest,
     HealthComponent,
     PortfolioSummary,
+    PrioritySignal,
     SimulationStateData,
     SourceStatusData,
     SpecialistResponseSimulationRequest,
@@ -80,6 +81,15 @@ def parse_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 
@@ -337,6 +347,78 @@ def assignment_status_by_incident(assignments: list[dict[str, Any]]) -> dict[str
     return status_by_incident
 
 
+def incident_priority(
+    incident: dict[str, Any],
+    customer: DemoCustomer | None,
+    now: datetime,
+) -> tuple[int | None, int | None, list[PrioritySignal]]:
+    deadline = parse_datetime(incident.get("sla_deadline"))
+    minutes_to_sla = round((deadline - now).total_seconds() / 60) if deadline else None
+    if not is_active_incident(incident):
+        return None, minutes_to_sla, []
+
+    signals: list[PrioritySignal] = []
+    severity = str(incident.get("severity") or incident.get("priority") or "").upper()
+    severity_points = {"CRITICAL": 40, "HIGH": 30, "MEDIUM": 15, "LOW": 5}.get(severity, 0)
+    if severity_points:
+        signals.append(PrioritySignal(key="severity", label=f"{severity.title()} severity", points=severity_points))
+
+    if minutes_to_sla is not None:
+        if minutes_to_sla <= 0:
+            sla_points, sla_label = 30, "SLA overdue"
+        elif minutes_to_sla <= 60:
+            sla_points, sla_label = 27, "SLA due within 1 hour"
+        elif minutes_to_sla <= 240:
+            sla_points, sla_label = 22, "SLA due within 4 hours"
+        elif minutes_to_sla <= 720:
+            sla_points, sla_label = 15, "SLA due within 12 hours"
+        elif minutes_to_sla <= 1440:
+            sla_points, sla_label = 8, "SLA due within 24 hours"
+        else:
+            sla_points, sla_label = 0, ""
+        if sla_points:
+            signals.append(PrioritySignal(key="sla", label=sla_label, points=sla_points))
+
+    strategic_priority = customer.strategic_priority if customer else None
+    customer_points = {"HIGH": 15, "MEDIUM": 8, "LOW": 3}.get(strategic_priority or "", 0)
+    if customer_points:
+        signals.append(
+            PrioritySignal(
+                key="customer",
+                label=f"{strategic_priority.title()} customer priority",
+                points=customer_points,
+            )
+        )
+
+    arr = customer.arr if customer else None
+    if arr is not None:
+        if arr >= 1_000_000:
+            arr_points = 10
+        elif arr >= 500_000:
+            arr_points = 7
+        elif arr >= 250_000:
+            arr_points = 4
+        else:
+            arr_points = 0
+        if arr_points:
+            signals.append(PrioritySignal(key="arr", label=f"${arr:,.0f} ARR exposed", points=arr_points))
+
+    if not incident.get("assigned_specialist_id"):
+        signals.append(PrioritySignal(key="unassigned", label="Needs an owner", points=5))
+
+    return sum(signal.points for signal in signals), minutes_to_sla, signals
+
+
+def worker_effectiveness(specialist: dict[str, Any]) -> float | None:
+    completed = parse_int(specialist.get("completed_assignments_30d")) or 0
+    sla = parse_float(specialist.get("sla_success_rate_30d"))
+    acceptance = parse_float(specialist.get("assignment_acceptance_rate_30d"))
+    reliability = parse_float(specialist.get("capacity_reliability_rate_30d"))
+    if completed == 0 or sla is None or acceptance is None or reliability is None:
+        return None
+    return round((sla * 0.45) + (acceptance * 0.30) + (reliability * 0.25), 1)
+
+
 def build_portfolio(
     *,
     customers_data: dict[str, Any] | None,
@@ -374,29 +456,54 @@ def build_portfolio(
         )
         for customer in customers_raw
     ]
+    customers_by_id = {customer.customer_id: customer for customer in customers}
 
     assignment_statuses = assignment_status_by_incident(assignments_raw)
     incidents = []
     for incident in incidents_raw:
+        customer_id = str(incident.get("customer_id") or "")
+        customer = customers_by_id.get(customer_id)
         created_at = parse_datetime(incident.get("created_at"))
         age_hours = round((now - created_at).total_seconds() / 3600, 2) if created_at else None
+        priority_score, minutes_to_sla, priority_signals = incident_priority(incident, customer, now)
         incidents.append(
             DemoIncident(
                 incident_id=str(incident.get("incident_id") or ""),
-                customer_id=str(incident.get("customer_id") or ""),
+                customer_id=customer_id,
+                customer_name=customer.customer_name if customer else None,
                 title=incident.get("title"),
                 summary=incident.get("description") or incident.get("summary"),
                 severity=incident.get("severity") or incident.get("priority"),
                 status=incident.get("status"),
                 sla_deadline=incident.get("sla_deadline"),
                 sla_risk=is_near_sla_breach(incident, now),
-                required_skills=[],
+                minutes_to_sla=minutes_to_sla,
+                estimated_effort_minutes=parse_int(incident.get("estimated_effort_minutes")),
+                required_skills=list(incident.get("required_skills") or []),
+                arr_exposure=customer.arr if customer else None,
+                strategic_priority=customer.strategic_priority if customer else None,
+                priority_rank=None,
+                priority_score=priority_score,
+                priority_signals=priority_signals,
                 current_specialist_id=incident.get("assigned_specialist_id"),
                 assignment_status=assignment_statuses.get(str(incident.get("incident_id") or "")),
                 age_hours=age_hours,
                 opened_at=incident.get("created_at"),
             )
         )
+    incidents.sort(
+        key=lambda item: (
+            item.priority_score is None,
+            -(item.priority_score or 0),
+            item.sla_deadline or "9999",
+            item.incident_id,
+        )
+    )
+    priority_rank = 1
+    for incident in incidents:
+        if incident.priority_score is not None:
+            incident.priority_rank = priority_rank
+            priority_rank += 1
 
     workloads_by_specialist = {item.get("specialist_id"): item for item in workloads_raw}
     specialists = []
@@ -405,6 +512,9 @@ def build_portfolio(
         workload = workloads_by_specialist.get(specialist_id, {})
         capacity = specialist.get("capacity")
         current_workload = specialist.get("current_workload")
+        available_capacity = workload.get("available_capacity")
+        if available_capacity is None:
+            available_capacity = specialist.get("available_capacity")
         reserved_workload = None
         if "tentative_reservation_count" in workload:
             reserved_workload = int(workload.get("tentative_reservation_count") or 0)
@@ -421,8 +531,29 @@ def build_portfolio(
                 reserved_workload=reserved_workload,
                 utilisation_percentage=workload.get("utilisation_percentage"),
                 active_assignments=current_workload,
+                available_capacity=parse_int(available_capacity),
+                operationally_available=specialist.get("operationally_available"),
+                completed_assignments_30d=parse_int(specialist.get("completed_assignments_30d")) or 0,
+                sla_success_rate_30d=parse_float(specialist.get("sla_success_rate_30d")),
+                average_resolution_minutes_30d=parse_int(
+                    specialist.get("average_resolution_minutes_30d")
+                ),
+                assignment_acceptance_rate_30d=parse_float(
+                    specialist.get("assignment_acceptance_rate_30d")
+                ),
+                capacity_reliability_rate_30d=parse_float(
+                    specialist.get("capacity_reliability_rate_30d")
+                ),
+                effectiveness_score=worker_effectiveness(specialist),
             )
         )
+    specialists.sort(
+        key=lambda item: (
+            item.operationally_available is not True,
+            -(item.effectiveness_score or 0),
+            item.specialist_name,
+        )
+    )
 
     workloads = [
         DemoWorkload(

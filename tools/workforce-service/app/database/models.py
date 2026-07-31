@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -22,6 +22,11 @@ class Specialist(Base):
     current_workload: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     availability: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    completed_assignments_30d: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sla_success_rate_30d: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    average_resolution_minutes_30d: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    assignment_acceptance_rate_30d: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    capacity_reliability_rate_30d: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -41,6 +46,26 @@ class Specialist(Base):
         CheckConstraint("capacity >= 1", name="ck_specialists_capacity_positive"),
         CheckConstraint("current_workload >= 0", name="ck_specialists_workload_nonnegative"),
         CheckConstraint("current_workload <= capacity", name="ck_specialists_workload_capacity"),
+        CheckConstraint(
+            "completed_assignments_30d >= 0",
+            name="ck_specialists_completed_assignments_30d_nonnegative",
+        ),
+        CheckConstraint(
+            "sla_success_rate_30d IS NULL OR sla_success_rate_30d BETWEEN 0 AND 100",
+            name="ck_specialists_sla_success_rate_30d_range",
+        ),
+        CheckConstraint(
+            "average_resolution_minutes_30d IS NULL OR average_resolution_minutes_30d > 0",
+            name="ck_specialists_average_resolution_30d_positive",
+        ),
+        CheckConstraint(
+            "assignment_acceptance_rate_30d IS NULL OR assignment_acceptance_rate_30d BETWEEN 0 AND 100",
+            name="ck_specialists_assignment_acceptance_rate_30d_range",
+        ),
+        CheckConstraint(
+            "capacity_reliability_rate_30d IS NULL OR capacity_reliability_rate_30d BETWEEN 0 AND 100",
+            name="ck_specialists_capacity_reliability_rate_30d_range",
+        ),
     )
 
 

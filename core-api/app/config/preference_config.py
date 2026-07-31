@@ -2,6 +2,8 @@ import logging
 from enum import Enum
 from typing import Optional
 
+from app.config.settings import settings
+
 logger = logging.getLogger("core-api.config.preference_config")
 
 class OptimizationProfile(str, Enum):
@@ -24,14 +26,14 @@ class PreferenceConfig:
     """
     # ── Learning Thresholds ──────────────────────────────────────────────────
     # Minimum runs required to transition out of COLD_START learning state
-    COLD_START_RUNS = 5
+    COLD_START_RUNS = settings.cold_start_runs
     # Minimum runs required to transition into MATURE learning state
-    MATURE_LEARNING_RUNS = 20
+    MATURE_LEARNING_RUNS = settings.mature_learning_runs
 
     # ── Confidence Level Thresholds ──────────────────────────────────────────
     # Confidence score bounds determining low/medium/high confidence level enums
-    CONFIDENCE_LOW_THRESHOLD = 0.40
-    CONFIDENCE_HIGH_THRESHOLD = 0.70
+    CONFIDENCE_LOW_THRESHOLD = settings.preference_confidence_low_threshold
+    CONFIDENCE_HIGH_THRESHOLD = settings.preference_confidence_high_threshold
 
     # ── Acceptance Logic Parameters ──────────────────────────────────────────
     # Minimum recommendations shown to apply the low acceptance rate warning template
@@ -41,14 +43,14 @@ class PreferenceConfig:
 
     # ── Recommendation Scoring Weights ───────────────────────────────────────
     # Weights determining candidate preference_score from selection frequency vs current goal text matching
-    PROFILE_WEIGHT = 0.70
-    GOAL_SIMILARITY_WEIGHT = 0.30
+    PROFILE_WEIGHT = settings.preference_profile_weight
+    GOAL_SIMILARITY_WEIGHT = settings.preference_goal_similarity_weight
     MAX_PREF_SCORE = 100.0
 
     # ── Confidence Score Weights ─────────────────────────────────────────────
     # Weights combining selection dominance and recommendation acceptance rate to calculate confidence
-    DOMINANCE_FACTOR_WEIGHT = 0.60
-    ACCEPTANCE_FACTOR_WEIGHT = 0.40
+    DOMINANCE_FACTOR_WEIGHT = settings.preference_dominance_factor_weight
+    ACCEPTANCE_FACTOR_WEIGHT = settings.preference_acceptance_factor_weight
     # Default acceptance rate assumed before any recommendations have been shown
     DEFAULT_ACCEPTANCE_RATE_BASELINE = 0.50
 

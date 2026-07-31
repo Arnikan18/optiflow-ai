@@ -85,6 +85,7 @@ class CPSatOptimizer(BaseOptimizer):
             incident
             for incident in sorted(escalations, key=lambda item: str(item.get("incident_id") or ""))
             if str(incident.get("status", "")).upper() in ("OPEN", "UNASSIGNED", "ASSIGNED", "IN_PROGRESS")
+            and not incident.get("assigned_specialist_id")
         ]
         ordered_specialists = sorted(specialists, key=lambda item: str(item.get("specialist_id") or ""))
 

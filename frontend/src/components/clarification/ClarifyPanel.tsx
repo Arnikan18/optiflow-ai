@@ -96,7 +96,7 @@ export function ClarifyPanel({ runId, runData, onSubmitted }: ClarifyPanelProps)
             disabled={submitting}
             placeholder="e.g. 'Prioritise Tier 1 customers over Tier 2 when specialist capacity is full. Assign at least one specialist to any incident with an SLA breach within 4 hours.'"
             className="w-full bg-deep border border-border-dim rounded-lg p-4 text-ink-primary
-              placeholder:text-ink-ghost resize-none focus:outline-none focus:border-ops-orange
+              placeholder:text-ink-ghost resize-none focus-ring focus:border-ops-orange
               font-sans text-sm leading-relaxed transition-colors disabled:opacity-50"
           />
         </div>

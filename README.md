@@ -636,6 +636,9 @@ optiflow-ai/
 
 # Getting Started
 
+For the competition walkthrough and the one-command fresh-laptop setup, use
+[`docs/container-demo-setup.md`](docs/container-demo-setup.md).
+
 ## Prerequisites
 
 Install:
@@ -643,10 +646,9 @@ Install:
 - Git
 - Docker Desktop
 - Docker Compose v2
-- Python 3.12
-- Node.js 22 LTS
 
-Docker Compose is the recommended method for running the complete system.
+Docker Compose runs PostgreSQL, the four enterprise services, Core, and the
+Nginx-served React frontend. Python and Node.js are not required on the demo laptop.
 
 ---
 
@@ -693,30 +695,19 @@ The project uses one root `.env` file as the local source of configuration.
 
 ---
 
-## 3. Start the complete system
+## 3. Start the complete seeded application
 
 ### Windows PowerShell
 
 ```powershell
-docker compose --profile full-stack up --build
+powershell -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Fresh -Force
 ```
 
-Detached mode:
-
-```powershell
-docker compose --profile full-stack up --build -d
-```
-
-### Linux / Git Bash
+### Linux / macOS
 
 ```bash
-docker compose --profile full-stack up --build
-```
-
-Run in detached mode:
-
-```bash
-docker compose --profile full-stack up --build -d
+chmod +x scripts/start-demo.sh scripts/reset-demo.sh
+./scripts/start-demo.sh --fresh --force
 ```
 
 ---
@@ -847,6 +838,8 @@ docker compose --profile full-stack logs -f crm-service
 ```powershell
 docker compose --profile full-stack down
 ```
+
+Stop the local frontend with `Ctrl+C` in its Vite terminal.
 
 ### Linux / Git Bash
 

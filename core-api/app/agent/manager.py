@@ -4,6 +4,7 @@ import json
 from typing import Dict, Any, Optional
 from sqlalchemy import text
 from app.agent.graph import compiled_graph
+from app.config.settings import settings
 from app.database.session import async_session
 
 logger = logging.getLogger("core-api.agent.manager")
@@ -13,7 +14,10 @@ async def run_agent_background(state: Dict[str, Any]) -> None:
     run_id = state.get("run_id", "unknown")
     print(f"[ExecutionManager] Starting background task for run: {run_id}")
     try:
-        await compiled_graph.ainvoke(state)
+        await compiled_graph.ainvoke(
+            state,
+            config={"recursion_limit": settings.max_graph_steps},
+        )
         print(f"[ExecutionManager] Background task completed for run: {run_id}")
     except Exception as e:
         logger.error(f"[ExecutionManager] Critical error running agent graph for {run_id}: {str(e)}")
@@ -48,7 +52,9 @@ async def resume_run_from_checkpoint(
     run_id: str, 
     approval_status: str, 
     recommended_plan: Optional[Dict[str, Any]] = None,
-    clarification_reply: Optional[str] = None
+    clarification_reply: Optional[str] = None,
+    decision_reason: Optional[str] = None,
+    decision_source: Optional[str] = None,
 ) -> bool:
     """Restores the last checkpoint state, injects decision flags, and resumes execution."""
     checkpoint_state = await load_last_checkpoint(run_id)
@@ -58,8 +64,17 @@ async def resume_run_from_checkpoint(
         
     # Inject resumption context
     checkpoint_state["approval_status"] = approval_status
+    if approval_status == "MODIFY" and decision_reason:
+        original_goal = checkpoint_state.get("goal_text", "")
+        checkpoint_state["goal_text"] = (
+            f"{original_goal} (Manager modification: {decision_reason})"
+        )
     if recommended_plan:
         checkpoint_state["recommended_plan"] = recommended_plan
+    if decision_reason:
+        checkpoint_state["decision_reason"] = decision_reason
+    if decision_source:
+        checkpoint_state["decision_source"] = decision_source
     if clarification_reply:
         # Append clarification context to the original goal text
         orig_goal = checkpoint_state.get("goal_text", "")

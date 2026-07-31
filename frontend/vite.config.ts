@@ -21,6 +21,13 @@ export default defineConfig(({ mode }) => {
             ? { 'X-Admin-Key': coreAdminKey }
             : undefined,
         },
+        '/api/v1/simulation': {
+          target: 'http://localhost:8000',
+          changeOrigin: true,
+          headers: coreAdminKey
+            ? { 'X-Admin-Key': coreAdminKey }
+            : undefined,
+        },
         '/api': {
           target: 'http://localhost:8000',
           changeOrigin: true,

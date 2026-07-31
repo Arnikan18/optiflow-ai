@@ -80,6 +80,20 @@ export interface CandidatePlanSummary {
   rank: number;
 }
 
+export type PreferenceLearningState = 'COLD_START' | 'LEARNING' | 'MATURE';
+export type PreferenceConfidenceLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface PersonalizedRecommendation {
+  candidate_plan_id: string;
+  candidate_index: number;
+  preference_score: number;
+  confidence: number;
+  confidence_level: PreferenceConfidenceLevel;
+  learning_state: PreferenceLearningState;
+  reason: string;
+  profile?: string | null;
+}
+
 export interface RunSummary {
   run_id: string;
   status: RunStatus;
@@ -94,7 +108,46 @@ export interface RunSummary {
   selected_tools: SelectedTool[];
   business_summary: string | Record<string, unknown> | null;
   change_summary: string | Record<string, unknown> | null;
+  personalized_recommendation: PersonalizedRecommendation | null;
   candidate_plan_summary: CandidatePlanSummary[];
+}
+
+export interface PreferenceRecommendationStatistics {
+  shown: number;
+  accepted: number;
+  rejected: number;
+  acceptance_rate: number;
+  last_updated: string | null;
+  last_recommendation_timestamp: string | null;
+}
+
+export interface RecentPreferenceDecision {
+  event_id: string;
+  run_id: string;
+  decision: string;
+  selected_profile: string | null;
+  personalized_profile: string | null;
+  accepted_personalized: boolean | null;
+  decision_reason: string | null;
+  decision_source: string | null;
+  goal_text: string | null;
+  created_at: string;
+}
+
+export interface PreferenceSummary {
+  learning_state: PreferenceLearningState;
+  total_decisions: number;
+  runs_until_next_state: number;
+  cold_start_runs_required: number;
+  mature_runs_required: number;
+  profile_counts: Record<string, number>;
+  dominant_profile: string | null;
+  dominant_profile_share: number;
+  confidence: number;
+  recommendation_statistics: PreferenceRecommendationStatistics;
+  learned_constraints: string[];
+  recent_decisions: RecentPreferenceDecision[];
+  updated_at: string;
 }
 
 // SSE event
@@ -185,6 +238,8 @@ export interface CreateRunResponse {
 export interface ApproveRunPayload {
   approval_status: 'APPROVED' | 'REJECTED' | 'MODIFY';
   recommended_plan?: CandidatePlan;
+  decision_reason?: string;
+  decision_source?: 'AI_RECOMMENDATION' | 'ALTERNATIVE_PLAN' | 'MODIFICATION' | 'MANUAL_PLAN' | 'REJECT_ALL';
 }
 
 export interface ClarifyRunPayload {
@@ -220,16 +275,30 @@ export interface DemoCustomer {
   current_incident_count: number;
 }
 
+export interface PrioritySignal {
+  key: string;
+  label: string;
+  points: number;
+}
+
 export interface DemoIncident {
   incident_id: string;
   customer_id: string;
+  customer_name: string | null;
   title: string | null;
   summary: string | null;
   severity: string | null;
   status: string | null;
   sla_deadline: string | null;
   sla_risk: boolean | null;
+  minutes_to_sla: number | null;
+  estimated_effort_minutes: number | null;
   required_skills: string[];
+  arr_exposure: number | null;
+  strategic_priority: string | null;
+  priority_rank: number | null;
+  priority_score: number | null;
+  priority_signals: PrioritySignal[];
   current_specialist_id: string | null;
   assignment_status: string | null;
   age_hours: number | null;
@@ -246,6 +315,14 @@ export interface DemoSpecialist {
   reserved_workload: number | null;
   utilisation_percentage: number | null;
   active_assignments: number | null;
+  available_capacity: number | null;
+  operationally_available: boolean | null;
+  completed_assignments_30d: number;
+  sla_success_rate_30d: number | null;
+  average_resolution_minutes_30d: number | null;
+  assignment_acceptance_rate_30d: number | null;
+  capacity_reliability_rate_30d: number | null;
+  effectiveness_score: number | null;
 }
 
 export interface DemoWorkload {
@@ -342,6 +419,127 @@ export interface SimulationState {
   services: Record<string, unknown>;
   degraded: boolean;
   generated_at: string;
+}
+
+// Dynamic enterprise simulation
+export type EnterpriseSimulationMode = 'TIMELINE' | 'INTERACTIVE';
+export type EnterpriseSimulationStatus =
+  | 'IDLE'
+  | 'RUNNING'
+  | 'PAUSED'
+  | 'STOPPED'
+  | 'COMPLETED'
+  | 'ERROR';
+export type EnterpriseEventType =
+  | 'NEW_TICKET'
+  | 'RESOLVE_TICKET'
+  | 'ESCALATE_PRIORITY'
+  | 'CHANGE_SLA'
+  | 'CHANGE_ESTIMATED_EFFORT'
+  | 'CHANGE_WORKER_CAPACITY'
+  | 'ENGINEER_ON_LEAVE'
+  | 'ENGINEER_RETURNED';
+export type EnterpriseEventProcessingStatus =
+  | 'RECEIVED'
+  | 'VALIDATED'
+  | 'APPLIED'
+  | 'NOTIFIED'
+  | 'FAILED'
+  | 'PARTIALLY_APPLIED';
+export type EnterpriseNotificationStatus =
+  | 'NOT_REQUIRED'
+  | 'PENDING'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'ACKNOWLEDGED';
+
+export interface EnterpriseScenario {
+  scenario_id: string;
+  name: string;
+  description: string;
+  version: string;
+  mode: EnterpriseSimulationMode;
+  duration: string;
+  start_time: string;
+  end_time: string;
+  timezone: string;
+  stages: string[];
+  tags: string[];
+  schema_version: string;
+  created_at: string;
+}
+
+export interface EnterpriseScenarioList {
+  scenarios: EnterpriseScenario[];
+  default_scenario_id: string | null;
+}
+
+export interface EnterpriseSimulationStatusData {
+  simulation_id: string | null;
+  scenario_id: string | null;
+  scenario_name: string | null;
+  mode: EnterpriseSimulationMode | null;
+  status: EnterpriseSimulationStatus;
+  current_time: string | null;
+  current_stage: string | null;
+  current_timeline_position: number;
+  processed_events: string[];
+  pending_events: string[];
+  last_event: Record<string, unknown> | null;
+  enterprise_changed: boolean;
+  notification_status: EnterpriseNotificationStatus;
+  started_at: string | null;
+  paused_at: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+}
+
+export interface StartEnterpriseSimulationPayload {
+  scenario_id?: string;
+  mode: EnterpriseSimulationMode;
+  reset_existing?: boolean;
+  auto_advance?: boolean;
+}
+
+export interface StartEnterpriseSimulationResult extends EnterpriseSimulationStatusData {
+  next_event: Record<string, unknown> | null;
+}
+
+export interface AdvanceEnterpriseSimulationResult extends EnterpriseSimulationStatusData {
+  processed_event: Record<string, unknown> | null;
+  next_event: Record<string, unknown> | null;
+  completed: boolean;
+}
+
+export interface JudgeEnterpriseEventPayload {
+  event_type: EnterpriseEventType;
+  payload: Record<string, unknown>;
+  event_id?: string;
+  scenario_id?: string;
+  description?: string;
+  effective_time?: string;
+  idempotency_key?: string;
+}
+
+export interface EnterpriseEventResult {
+  accepted: boolean;
+  event_id: string;
+  event_type: EnterpriseEventType;
+  processing_status: EnterpriseEventProcessingStatus;
+  enterprise_changed: boolean;
+  applied_at: string | null;
+  notification_status: EnterpriseNotificationStatus;
+  notification_id: string | null;
+  changed_entities: Array<Record<string, unknown>>;
+  errors: Array<Record<string, unknown>>;
+}
+
+export interface EnterpriseEventHistory {
+  events: Array<Record<string, unknown>>;
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
 }
 
 export interface DemoResetResult {

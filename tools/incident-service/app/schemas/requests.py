@@ -27,6 +27,7 @@ RunId = Annotated[str, Field(min_length=1, max_length=64)]
 IdempotencyKey = Annotated[str, Field(min_length=1, max_length=128)]
 IncidentTitle = Annotated[str, Field(min_length=1, max_length=200)]
 IncidentDescription = Annotated[str, Field(min_length=1, max_length=2000)]
+SkillCode = Annotated[str, Field(min_length=1, max_length=80)]
 
 
 def normalize_identifier(value: str, field_name: str) -> str:
@@ -85,6 +86,19 @@ def normalize_search(value: str | None) -> str | None:
     return normalized or None
 
 
+def normalize_skills(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        skill = value.strip().lower()
+        if not skill:
+            raise ValueError("required_skills cannot contain empty values")
+        if skill not in seen:
+            normalized.append(skill)
+            seen.add(skill)
+    return normalized
+
+
 class IncidentCreateRequest(BaseModel):
     incident_id: IncidentId
     customer_id: CustomerId
@@ -94,6 +108,7 @@ class IncidentCreateRequest(BaseModel):
     sla_deadline: datetime
     status: str = "OPEN"
     estimated_effort_minutes: int | None = Field(default=None, ge=1, le=10080)
+    required_skills: list[SkillCode] = Field(default_factory=list, max_length=25)
     assigned_specialist_id: SpecialistId | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, validate_default=True)
@@ -148,6 +163,11 @@ class IncidentCreateRequest(BaseModel):
         if value is None:
             return None
         return normalize_specialist_id(value)
+
+    @field_validator("required_skills")
+    @classmethod
+    def validate_required_skills(cls, values: list[str]) -> list[str]:
+        return normalize_skills(values)
 
 
 class IncidentStatusUpdateRequest(BaseModel):
@@ -223,6 +243,7 @@ class IncidentSimulationSeedRequest(BaseModel):
     status: str = "OPEN"
     sla_deadline: datetime
     estimated_effort_minutes: int | None = Field(default=None, ge=1, le=10080)
+    required_skills: list[SkillCode] = Field(default_factory=list, max_length=25)
     assigned_specialist_id: SpecialistId | None = None
     assignment_run_id: RunId | None = None
     assignment_idempotency_key: IdempotencyKey | None = None
@@ -299,6 +320,11 @@ class IncidentSimulationSeedRequest(BaseModel):
         if not normalized:
             raise ValueError("assignment_idempotency_key cannot be empty")
         return normalized
+
+    @field_validator("required_skills")
+    @classmethod
+    def validate_required_skills(cls, values: list[str]) -> list[str]:
+        return normalize_skills(values)
 
 
 class IncidentSimulationLoadStateRequest(BaseModel):

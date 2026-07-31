@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, DateTime, Index, Integer, PrimaryKeyConstraint, String
+from sqlalchemy import JSON, CheckConstraint, DateTime, Index, Integer, PrimaryKeyConstraint, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -23,6 +23,7 @@ class Incident(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True, default="OPEN")
     sla_deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     estimated_effort_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    required_skills: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     assigned_specialist_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     assignment_run_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     assignment_idempotency_key: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -54,6 +55,40 @@ class Settings(BaseSettings):
     simulation_event_timeout_seconds: float = 3.0
     simulation_max_event_retries: int = 2
     simulation_scenario_root: str = "scenarios"
+
+    cold_start_runs: int = Field(default=5, ge=1)
+    mature_learning_runs: int = Field(default=20, ge=2)
+    preference_confidence_low_threshold: float = Field(default=0.40, ge=0.0, le=1.0)
+    preference_confidence_high_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
+    preference_profile_weight: float = Field(default=0.70, ge=0.0, le=1.0)
+    preference_goal_similarity_weight: float = Field(default=0.30, ge=0.0, le=1.0)
+    preference_dominance_factor_weight: float = Field(default=0.60, ge=0.0, le=1.0)
+    preference_acceptance_factor_weight: float = Field(default=0.40, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_preference_settings(self) -> "Settings":
+        if self.mature_learning_runs <= self.cold_start_runs:
+            raise ValueError("MATURE_LEARNING_RUNS must be greater than COLD_START_RUNS")
+        if self.preference_confidence_high_threshold <= self.preference_confidence_low_threshold:
+            raise ValueError(
+                "PREFERENCE_CONFIDENCE_HIGH_THRESHOLD must be greater than "
+                "PREFERENCE_CONFIDENCE_LOW_THRESHOLD"
+            )
+        profile_total = self.preference_profile_weight + self.preference_goal_similarity_weight
+        if abs(profile_total - 1.0) > 0.000001:
+            raise ValueError(
+                "PREFERENCE_PROFILE_WEIGHT and PREFERENCE_GOAL_SIMILARITY_WEIGHT must total 1"
+            )
+        confidence_total = (
+            self.preference_dominance_factor_weight
+            + self.preference_acceptance_factor_weight
+        )
+        if abs(confidence_total - 1.0) > 0.000001:
+            raise ValueError(
+                "PREFERENCE_DOMINANCE_FACTOR_WEIGHT and "
+                "PREFERENCE_ACCEPTANCE_FACTOR_WEIGHT must total 1"
+            )
+        return self
     
     model_config = SettingsConfigDict(
         env_file=".env",

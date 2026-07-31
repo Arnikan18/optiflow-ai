@@ -150,8 +150,8 @@ def test_reservation_allows_new_after_cancel_and_after_expiry(client, auth_heade
 
 
 def test_get_reservation_existing_missing_and_expired(client, auth_headers):
-    pending = assert_success(client.get("/workforce/api/v1/reservations/RES-MAYA-TENTATIVE", headers=auth_headers))
-    assert pending["status"] == "TENTATIVE"
+    historical = assert_success(client.get("/workforce/api/v1/reservations/RES-MAYA-TENTATIVE", headers=auth_headers))
+    assert historical["status"] == "EXPIRED"
 
     expired = assert_success(client.get("/workforce/api/v1/reservations/RES-DANIEL-EXPIRED", headers=auth_headers))
     assert expired["status"] == "EXPIRED"
@@ -438,9 +438,9 @@ def test_admin_reset_auth_determinism_and_missing_config(client, admin_headers, 
         201,
     )
     reset = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert reset == {"specialist_count": 5, "reservation_count": 5}
+    assert reset == {"specialist_count": 8, "reservation_count": 8}
     repeated = assert_success(client.post("/admin/reset", headers=admin_headers))
-    assert repeated == {"specialist_count": 5, "reservation_count": 5}
+    assert repeated == {"specialist_count": 8, "reservation_count": 8}
     assert_error(
         client.get("/workforce/api/v1/reservations/RES-RESET-001", headers=auth_headers),
         404,

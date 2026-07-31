@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
-import type { CandidatePlan, CandidatePlanSummary } from '../../types/api';
-import { PlanCard } from './PlanCard';
+import type { CandidatePlan, CandidatePlanSummary, DemoPortfolio } from '../../types/api';
+import { ManualAssignmentPanel } from './ManualAssignmentPanel';
 
 interface PlanWorkspaceProps {
   runId: string;
@@ -11,315 +11,425 @@ interface PlanWorkspaceProps {
   onApproved: () => void;
 }
 
-interface ComparisonMetric {
-  label: string;
-  explanation: string;
-  direction: 'higher' | 'lower';
-  read: (plan: CandidatePlan) => number | null;
-  format: (value: number) => string;
-}
-
 const PROFILE_FOCUS: Record<string, string> = {
-  Balanced: 'Balances service, revenue, and team load.',
-  'SLA-First': 'Prioritises time-critical service coverage.',
-  'Revenue-First': 'Prioritises ARR protection and customer value.',
-  'Fairness-First': 'Prioritises equitable workload distribution.',
+  Balanced: 'Balances customer impact, SLA risk, and team load.',
+  'SLA-First': 'Protects the most time-critical service commitments.',
+  'SLA First': 'Protects the most time-critical service commitments.',
+  'Revenue-First': 'Protects the greatest customer and revenue exposure.',
+  'Revenue First': 'Protects the greatest customer and revenue exposure.',
+  'Fairness-First': 'Distributes work more evenly across the available team.',
+  'Fairness First': 'Distributes work more evenly across the available team.',
+};
+
+const PROFILE_TONE: Record<string, string> = {
+  Balanced: 'border-ops-cyan/35 bg-ops-cyan/[0.06] text-ops-cyan',
+  'SLA-First': 'border-ops-rose/35 bg-ops-rose/[0.06] text-ops-rose',
+  'SLA First': 'border-ops-rose/35 bg-ops-rose/[0.06] text-ops-rose',
+  'Revenue-First': 'border-ops-emerald/35 bg-ops-emerald/[0.06] text-ops-emerald',
+  'Revenue First': 'border-ops-emerald/35 bg-ops-emerald/[0.06] text-ops-emerald',
+  'Fairness-First': 'border-ops-violet/35 bg-ops-violet/[0.06] text-ops-violet',
+  'Fairness First': 'border-ops-violet/35 bg-ops-violet/[0.06] text-ops-violet',
 };
 
 function profileName(plan: CandidatePlan): string {
   return plan.profile_name ?? plan.profile;
 }
 
-function sortPlans(plans: CandidatePlan[], recommendedId: string | null): CandidatePlan[] {
+function normalizedProfile(value: string): string {
+  return value.toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function summaryFor(
+  plan: CandidatePlan,
+  summaries: CandidatePlanSummary[],
+): CandidatePlanSummary | null {
+  const profile = normalizedProfile(profileName(plan));
+  return summaries.find((summary) => normalizedProfile(summary.profile) === profile) ?? null;
+}
+
+function sortPlans(plans: CandidatePlan[], recommendedPlanId: string | null): CandidatePlan[] {
   return [...plans].sort((left, right) => {
-    if (left.plan_id === recommendedId) return -1;
-    if (right.plan_id === recommendedId) return 1;
-    return 0;
+    if (left.plan_id === recommendedPlanId) return -1;
+    if (right.plan_id === recommendedPlanId) return 1;
+    return right.objective_value - left.objective_value;
   });
 }
 
-function asNumber(value: unknown): number | null {
+function metricNumber(plan: CandidatePlan, key: string): number | null {
+  const value = plan.metrics[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function percent(value: number): string {
-  const normalized = value <= 1 ? value * 100 : value;
-  return `${normalized.toFixed(1)}%`;
+function percent(value: number | null): string {
+  if (value === null) return '—';
+  return `${Math.round(value <= 1 ? value * 100 : value)}%`;
 }
 
-function money(value: number): string {
+function count(value: number | null): string {
+  return value === null ? '—' : Math.round(value).toString();
+}
+
+function money(value: number | null): string {
+  if (value === null) return '—';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    notation: value >= 1_000_000 ? 'compact' : 'standard',
-    maximumFractionDigits: 0,
+    notation: 'compact',
+    maximumFractionDigits: 1,
   }).format(value);
 }
 
-const COMPARISON_METRICS: ComparisonMetric[] = [
-  {
-    label: 'Match rate',
-    explanation: 'Share of required work receiving a viable assignment.',
-    direction: 'higher',
-    read: (plan) => asNumber(plan.metrics.match_rate),
-    format: percent,
-  },
-  {
-    label: 'ARR protected',
-    explanation: 'Annual recurring revenue represented by covered customer work.',
-    direction: 'higher',
-    read: (plan) => asNumber(plan.metrics.arr_protected),
-    format: money,
-  },
-  {
-    label: 'Assigned work',
-    explanation: 'Number of incidents receiving a specialist.',
-    direction: 'higher',
-    read: (plan) => asNumber(plan.metrics.assigned_count),
-    format: String,
-  },
-  {
-    label: 'Unassigned work',
-    explanation: 'Incidents left without an assignment in this plan.',
-    direction: 'lower',
-    read: (plan) => asNumber(plan.metrics.unassigned_count),
-    format: String,
-  },
-  {
-    label: 'SLA breaches avoided',
-    explanation: 'Count of predicted SLA breaches the plan reports avoiding.',
-    direction: 'higher',
-    read: (plan) => asNumber(plan.metrics.sla_breaches_avoided),
-    format: String,
-  },
-  {
-    label: 'Fairness score',
-    explanation: 'Backend score for how evenly work is distributed.',
-    direction: 'higher',
-    read: (plan) => asNumber(plan.metrics.fairness_score),
-    format: percent,
-  },
-  {
-    label: 'Context switches',
-    explanation: 'Reported specialist context changes introduced by the plan.',
-    direction: 'lower',
-    read: (plan) => asNumber(plan.metrics.context_switching_count),
-    format: String,
-  },
-  {
-    label: 'Maximum utilisation',
-    explanation: 'Highest reported utilisation for any one specialist.',
-    direction: 'lower',
-    read: (plan) => asNumber(plan.metrics.maximum_specialist_utilisation),
-    format: percent,
-  },
-];
+function preferenceLabel(summary: CandidatePlanSummary | null): string {
+  if (!summary?.selected) return 'AI option';
+  return summary.rank > 1 ? 'Personalized choice' : 'AI recommended';
+}
 
-function ComparisonMatrix({
+function preferenceReason(
+  plan: CandidatePlan,
+  summary: CandidatePlanSummary | null,
+): string {
+  return summary?.recommendation_reason
+    ?? plan.explanation
+    ?? PROFILE_FOCUS[profileName(plan)]
+    ?? plan.description;
+}
+
+function PlanMetrics({
+  plan,
+  summary,
+}: {
+  plan: CandidatePlan;
+  summary: CandidatePlanSummary | null;
+}) {
+  const metrics = [
+    {
+      label: 'SLA',
+      value: summary ? `${Math.round(summary.sla_score)}` : percent(metricNumber(plan, 'sla_score')),
+    },
+    {
+      label: 'Revenue',
+      value: summary ? `${Math.round(summary.revenue_score)}` : money(metricNumber(plan, 'arr_protected')),
+    },
+    {
+      label: 'Fairness',
+      value: summary ? `${Math.round(summary.fairness_score)}` : percent(metricNumber(plan, 'fairness_score')),
+    },
+    {
+      label: 'New work',
+      value: count(metricNumber(plan, 'assigned_count')),
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="rounded-xl border border-border-dim bg-deep px-4 py-3">
+          <p className="text-xl font-extrabold text-ink-primary">{metric.value}</p>
+          <p className="text-sm text-ink-muted mt-1">{metric.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function planAllocations(plan: CandidatePlan) {
+  return plan.assignments.length ? plan.assignments : plan.allocations;
+}
+
+function AssignmentPreview({
+  plan,
+  portfolio,
+  limit,
+}: {
+  plan: CandidatePlan;
+  portfolio: DemoPortfolio | null;
+  limit?: number;
+}) {
+  const allocations = planAllocations(plan);
+  const visible = typeof limit === 'number' ? allocations.slice(0, limit) : allocations;
+  const existingAssignments = (portfolio?.incidents ?? []).filter((incident) => (
+    Boolean(incident.current_specialist_id)
+    && ['OPEN', 'IN_PROGRESS', 'ESCALATED'].includes(incident.status?.toUpperCase() ?? '')
+  ));
+  const visibleExisting = typeof limit === 'number'
+    ? existingAssignments.slice(0, limit)
+    : existingAssignments;
+  const plannedAdds = allocations.reduce<Record<string, number>>((counts, allocation) => {
+    const incident = portfolio?.incidents.find((item) => item.incident_id === allocation.incident_id);
+    if (incident?.current_specialist_id !== allocation.specialist_id) {
+      counts[allocation.specialist_id] = (counts[allocation.specialist_id] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+
+  if (allocations.length === 0) {
+    if (!portfolio) {
+      return <p className="text-sm text-ink-muted">Checking current worker assignments…</p>;
+    }
+    if (existingAssignments.length === 0) {
+      return (
+        <p className="text-sm text-ink-muted">
+          No new assignment is required for this decision.
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <div className="rounded-xl border border-ops-cyan/25 bg-ops-cyan/[0.05] px-4 py-3">
+          <p className="text-sm font-bold text-ops-cyan">
+            Keep {existingAssignments.length} current worker assignment{existingAssignments.length === 1 ? '' : 's'}
+          </p>
+          <p className="mt-1 text-sm text-ink-secondary">
+            The AI found no safer reassignment, so existing owners remain responsible.
+          </p>
+        </div>
+        {visibleExisting.map((incident) => {
+          const worker = portfolio.specialists.find(
+            (item) => item.specialist_id === incident.current_specialist_id,
+          );
+          const capacity = worker?.capacity;
+          const used = worker?.active_assignments ?? worker?.current_workload;
+          const free = worker?.available_capacity
+            ?? (capacity === null || capacity === undefined || used === null || used === undefined
+              ? null
+              : Math.max(capacity - used, 0));
+          return (
+            <div
+              key={incident.incident_id}
+              className="grid gap-2 rounded-xl border border-border-dim bg-deep px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-ink-primary">
+                  {incident.title ?? incident.incident_id}
+                </p>
+                <p className="truncate text-xs text-ink-muted">
+                  {incident.customer_name ?? incident.customer_id}
+                </p>
+              </div>
+              <span className="hidden text-ops-cyan sm:block" aria-hidden="true">→</span>
+              <div className="min-w-0 sm:text-right">
+                <p className="truncate text-sm font-extrabold text-ops-cyan">
+                  {worker?.specialist_name ?? incident.current_specialist_id}
+                </p>
+                <p className="text-xs text-ink-muted">
+                  {used === null || used === undefined || capacity === null || capacity === undefined
+                    ? 'Current owner'
+                    : `${used}/${capacity} active · ${free ?? 0} free`}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        {visibleExisting.length < existingAssignments.length && (
+          <p className="text-xs font-bold text-ink-muted">
+            +{existingAssignments.length - visibleExisting.length} more current assignment{existingAssignments.length - visibleExisting.length === 1 ? '' : 's'}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {visible.map((allocation, index) => {
+        const incident = portfolio?.incidents.find((item) => item.incident_id === allocation.incident_id);
+        const worker = portfolio?.specialists.find((item) => item.specialist_id === allocation.specialist_id);
+        const capacity = worker?.capacity;
+        const currentFree = worker?.available_capacity
+          ?? (capacity === null || capacity === undefined
+            ? null
+            : Math.max(capacity - (worker?.active_assignments ?? worker?.current_workload ?? 0), 0));
+        const freeAfter = currentFree === null
+          ? null
+          : Math.max(currentFree - (plannedAdds[allocation.specialist_id] ?? 0), 0);
+        const usedAfter = capacity === null || capacity === undefined || freeAfter === null
+          ? null
+          : Math.max(capacity - freeAfter, 0);
+
+        return (
+          <div
+            key={`${allocation.incident_id}-${allocation.specialist_id}-${index}`}
+            className="grid gap-2 rounded-xl border border-border-dim bg-deep px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-ink-primary">
+                {incident?.title ?? allocation.incident_id}
+              </p>
+              <p className="truncate text-xs text-ink-muted">
+                {incident?.customer_name ?? allocation.customer_id ?? allocation.incident_id}
+              </p>
+            </div>
+            <span className="hidden text-ops-cyan sm:block" aria-hidden="true">→</span>
+            <div className="min-w-0 sm:text-right">
+              <p className="truncate text-sm font-extrabold text-ops-cyan">
+                {worker?.specialist_name ?? allocation.specialist_id}
+              </p>
+              <p className="text-xs text-ink-muted">
+                {usedAfter === null || capacity === null || capacity === undefined
+                  ? 'Capacity updates after execution'
+                  : `${usedAfter}/${capacity} used after · ${freeAfter} free`}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+      {visible.length < allocations.length && (
+        <p className="text-xs font-bold text-ink-muted">
+          +{allocations.length - visible.length} more assignment{allocations.length - visible.length === 1 ? '' : 's'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AlternativeCard({
+  plan,
+  summary,
+  portfolio,
+  busy,
+  onSelect,
+}: {
+  plan: CandidatePlan;
+  summary: CandidatePlanSummary | null;
+  portfolio: DemoPortfolio | null;
+  busy: boolean;
+  onSelect: (plan: CandidatePlan) => void;
+}) {
+  const profile = profileName(plan);
+  const tone = PROFILE_TONE[profile] ?? PROFILE_TONE.Balanced;
+  const feasible = plan.feasible
+    ?? plan.metadata.feasibility
+    ?? plan.metadata.solver_status !== 'INFEASIBLE';
+
+  return (
+    <article className="rounded-2xl border border-border-dim bg-deep p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-lg font-extrabold text-ink-primary">{profile}</p>
+          <p className="text-sm leading-relaxed text-ink-muted mt-1">
+            {PROFILE_FOCUS[profile] ?? plan.description}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-3 py-1 text-sm font-bold ${tone}`}>
+          {summary ? `#${summary.rank}` : 'Option'}
+        </span>
+      </div>
+
+      <div className="mt-4">
+        <AssignmentPreview plan={plan} portfolio={portfolio} limit={2} />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-border-dim">
+        <div className="flex gap-4 text-sm">
+          <span className="text-ink-muted">
+            Covered <strong className="text-ink-primary">{count(metricNumber(plan, 'assigned_count'))}</strong>
+          </span>
+          <span className="text-ink-muted">
+            Waiting <strong className="text-ink-primary">{count(metricNumber(plan, 'unassigned_count'))}</strong>
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={busy || !feasible}
+          onClick={() => onSelect(plan)}
+          className="rounded-xl border border-border-base bg-abyss px-4 py-2.5 text-sm font-bold text-ink-primary hover:border-ops-violet hover:text-ops-violet disabled:opacity-40 focus-ring"
+        >
+          Choose
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PlanEvidence({
   plans,
   recommendedPlanId,
+  portfolio,
 }: {
   plans: CandidatePlan[];
   recommendedPlanId: string | null;
+  portfolio: DemoPortfolio | null;
 }) {
-  const visibleMetrics = COMPARISON_METRICS.filter((metric) =>
-    plans.some((plan) => metric.read(plan) !== null),
-  );
-
   return (
-    <section className="rounded-2xl border border-border-base bg-abyss overflow-hidden" aria-labelledby="plan-comparison-title">
-      <div className="px-5 py-4 border-b border-border-dim bg-deep/60">
-        <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
-          Side-by-side decision matrix
-        </p>
-        <h3 id="plan-comparison-title" className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
-          See what each profile wins—and what it gives up
-        </h3>
-        <p className="text-[10px] leading-relaxed text-ink-muted mt-1.5">
-          “Best” marks the strongest supplied value for that row, not a universally best plan.
-        </p>
+    <details className="group rounded-2xl border border-border-dim bg-deep">
+      <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-base font-bold text-ink-primary focus-ring rounded-2xl">
+        <span>View plan evidence and assignments</span>
+        <span className="text-ops-cyan group-open:rotate-45 transition-transform">+</span>
+      </summary>
+      <div className="border-t border-border-dim p-5 space-y-3">
+        {plans.map((plan) => {
+          const allocations = planAllocations(plan);
+          return (
+            <details key={plan.plan_id} className="rounded-xl border border-border-dim bg-abyss">
+              <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3 focus-ring rounded-xl">
+                <span className="text-base font-bold text-ink-primary">{profileName(plan)}</span>
+                <span className="text-sm text-ink-muted">
+                  {plan.plan_id === recommendedPlanId ? 'Recommended · ' : ''}
+                  {allocations.length} assignments
+                </span>
+              </summary>
+              <div className="border-t border-border-dim px-4 py-4">
+                <p className="text-sm leading-relaxed text-ink-secondary whitespace-pre-wrap">
+                  {plan.explanation || plan.description}
+                </p>
+                <div className="mt-4">
+                  <AssignmentPreview plan={plan} portfolio={portfolio} />
+                </div>
+                <p className="text-sm text-ink-muted mt-4">
+                  {plan.metadata.solver_type} · {plan.metadata.solver_status} ·{' '}
+                  {plan.metadata.solving_time_ms}ms
+                </p>
+              </div>
+            </details>
+          );
+        })}
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse">
-          <caption className="sr-only">
-            Comparison of candidate allocation plan metrics and tradeoffs
-          </caption>
-          <thead>
-            <tr>
-              <th className="w-48 px-4 py-4 text-left border-b border-r border-border-dim bg-deep">
-                <span className="text-[8px] font-mono uppercase tracking-[0.14em] text-ink-muted">Metric</span>
-              </th>
-              {plans.map((plan) => {
-                const name = profileName(plan);
-                const recommended = plan.plan_id === recommendedPlanId;
-                return (
-                  <th key={plan.plan_id} className={`min-w-40 px-4 py-4 text-left border-b border-r last:border-r-0 border-border-dim ${recommended ? 'bg-ops-amber/5' : 'bg-deep'}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-extrabold text-ink-primary">{name}</span>
-                      {recommended && (
-                        <span className="rounded-full bg-ops-amber px-2 py-1 text-[7px] font-mono uppercase text-white">
-                          recommended
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[9px] font-normal leading-relaxed text-ink-muted mt-2">
-                      {PROFILE_FOCUS[name] ?? plan.description}
-                    </p>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleMetrics.map((metric) => {
-              const values = plans.map(metric.read);
-              const supplied = values.filter((value): value is number => value !== null);
-              const best = supplied.length > 0
-                ? (metric.direction === 'higher' ? Math.max(...supplied) : Math.min(...supplied))
-                : null;
-
-              return (
-                <tr key={metric.label}>
-                  <th scope="row" className="px-4 py-3 text-left border-b border-r border-border-dim bg-deep/60">
-                    <span className="block text-[10px] font-bold text-ink-secondary">{metric.label}</span>
-                    <span className="block text-[8px] font-normal leading-relaxed text-ink-muted mt-1">
-                      {metric.explanation}
-                    </span>
-                  </th>
-                  {plans.map((plan, index) => {
-                    const value = values[index];
-                    const winner = value !== null && value === best;
-                    return (
-                      <td key={plan.plan_id} className={`px-4 py-3 border-b border-r last:border-r-0 border-border-dim ${winner ? 'bg-ops-emerald/5' : ''}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`text-xs font-mono font-semibold ${winner ? 'text-ops-emerald' : 'text-ink-secondary'}`}>
-                            {value === null ? '—' : metric.format(value)}
-                          </span>
-                          {winner && supplied.length > 1 && (
-                            <span className="text-[7px] font-mono uppercase tracking-wider text-ops-emerald">best</span>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-            <tr>
-              <th scope="row" className="px-4 py-3 text-left border-r border-border-dim bg-deep/60">
-                <span className="block text-[10px] font-bold text-ink-secondary">Solver truth</span>
-                <span className="block text-[8px] font-normal text-ink-muted mt-1">Status, engine, and actual solve time.</span>
-              </th>
-              {plans.map((plan) => (
-                <td key={plan.plan_id} className="px-4 py-3 border-r last:border-r-0 border-border-dim">
-                  <p className="text-[9px] font-mono font-semibold text-ink-primary">{plan.metadata.solver_status}</p>
-                  <p className="text-[8px] text-ink-muted mt-1">
-                    {plan.metadata.solver_type} · {plan.metadata.solving_time_ms}ms
-                    {plan.metadata.fallback_status ? ' · fallback' : ''}
-                  </p>
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    </details>
   );
 }
 
-function CandidateComparisonTable({ summaries }: { summaries: CandidatePlanSummary[] }) {
-  if (!summaries || summaries.length === 0) return null;
-
-  // Ensure items are sorted by rank descending/ascending
-  const sortedSummaries = [...summaries].sort((a, b) => a.rank - b.rank);
-
-  return (
-    <section className="rounded-2xl border border-border-base bg-abyss overflow-hidden animate-fade-up" aria-labelledby="candidate-comparison-title">
-      <div className="px-5 py-4 border-b border-border-dim bg-deep/60">
-        <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-cyan">
-          Strategy evaluation dashboard
-        </p>
-        <h3 id="candidate-comparison-title" className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
-          Candidate Plan Comparison
-        </h3>
-        <p className="text-[10px] leading-relaxed text-ink-muted mt-1.5">
-          AI-driven tradeoffs comparison across generated optimization strategies. Highlighted row indicates the selected recommendation.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] border-collapse">
-          <caption className="sr-only">Candidate optimization plan scores and selected recommendation</caption>
-          <thead>
-            <tr className="border-b border-border-dim bg-deep/40 text-[9px] font-mono uppercase tracking-wider text-ink-muted">
-              <th className="px-5 py-3 text-left w-16">Rank</th>
-              <th className="px-5 py-3 text-left w-48">Profile</th>
-              <th className="px-5 py-3 text-right w-24">Objective</th>
-              <th className="px-5 py-3 text-right w-24">SLA</th>
-              <th className="px-5 py-3 text-right w-24">Revenue</th>
-              <th className="px-5 py-3 text-right w-24">Fairness</th>
-              <th className="px-5 py-3 text-right w-24">Workload</th>
-              <th className="px-5 py-3 text-left">Explanation</th>
-              <th className="px-5 py-3 text-center w-32">Recommended</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedSummaries.map((summary) => {
-              const isPersonalized = summary.selected && summary.rank > 1;
-              return (
-                <tr 
-                  key={summary.profile} 
-                  className={`border-b border-border-dim/60 last:border-0 transition-colors ${
-                    summary.selected 
-                      ? 'bg-ops-amber/10 text-ops-amber hover:bg-ops-amber/15 font-semibold' 
-                      : 'text-ink-secondary hover:bg-deep/20'
-                  }`}
-                >
-                  <td className="px-5 py-4 text-xs font-mono">#{summary.rank}</td>
-                  <td className="px-5 py-4 text-xs font-extrabold flex items-center gap-2">
-                    {summary.selected && <span className="text-ops-amber text-sm">⭐</span>}
-                    <span>{summary.profile}</span>
-                    {isPersonalized && (
-                      <span className="rounded bg-ops-violet px-2 py-0.5 text-[8px] font-bold text-white uppercase shrink-0">
-                        AI Personalized
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.objective_score.toFixed(1)}</td>
-                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.sla_score.toFixed(0)} / 100</td>
-                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.revenue_score.toFixed(0)} / 100</td>
-                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.fairness_score.toFixed(0)} / 100</td>
-                  <td className="px-5 py-4 text-xs font-mono text-right">{summary.workload_score.toFixed(0)} / 100</td>
-                  <td className="px-5 py-4 text-xs">
-                    <span className={summary.selected ? "text-ops-amber" : "text-ink-muted/80"}>
-                      {summary.recommendation_reason}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-center">
-                    {summary.selected ? (
-                      <span className="rounded bg-ops-amber px-2 py-1 text-[8px] font-bold text-white uppercase">
-                        AI Recommended
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-ink-muted/40">—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
+export function PlanWorkspace({
+  runId,
+  plans,
+  recommendedPlanId,
+  candidatePlanSummary = [],
+  onApproved,
+}: PlanWorkspaceProps) {
+  const sorted = useMemo(
+    () => sortPlans(plans, recommendedPlanId),
+    [plans, recommendedPlanId],
   );
-}
-
-export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSummary, onApproved }: PlanWorkspaceProps) {
+  const recommended = sorted[0] ?? null;
   const [pendingPlan, setPendingPlan] = useState<CandidatePlan | null>(null);
   const [confirmReject, setConfirmReject] = useState(false);
-  const [actionInFlight, setActionInFlight] = useState<'approve' | 'reject' | null>(null);
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [showModify, setShowModify] = useState(false);
+  const [actionInFlight, setActionInFlight] = useState<'approve' | 'modify' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const sorted = sortPlans(plans, recommendedPlanId);
+  const [decisionReason, setDecisionReason] = useState('');
+  const [modificationInstruction, setModificationInstruction] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [portfolio, setPortfolio] = useState<DemoPortfolio | null>(null);
+
+  useEffect(() => {
+    if (pendingPlan && !plans.some((plan) => plan.plan_id === pendingPlan.plan_id)) {
+      setPendingPlan(null);
+    }
+  }, [pendingPlan, plans]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getDemoPortfolio()
+      .then((nextPortfolio) => {
+        if (!cancelled) setPortfolio(nextPortfolio);
+      })
+      .catch(() => {
+        // Plan IDs remain visible if live names and capacity are temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
 
   const handleApprove = async () => {
     if (!pendingPlan) return;
@@ -329,10 +439,14 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSu
       await api.approveRun(runId, {
         approval_status: 'APPROVED',
         recommended_plan: pendingPlan,
+        decision_reason: decisionReason.trim() || undefined,
+        decision_source: pendingPlan.plan_id === recommended.plan_id
+          ? 'AI_RECOMMENDATION'
+          : 'ALTERNATIVE_PLAN',
       });
       onApproved();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Approval failed');
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The decision could not be approved.');
       setActionInFlight(null);
     }
   };
@@ -341,69 +455,153 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSu
     setActionInFlight('reject');
     setError(null);
     try {
-      await api.approveRun(runId, { approval_status: 'REJECTED' });
+      await api.approveRun(runId, {
+        approval_status: 'REJECTED',
+        decision_reason: rejectionReason.trim() || undefined,
+        decision_source: 'REJECT_ALL',
+      });
       onApproved();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Rejection failed');
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The plans could not be rejected.');
       setActionInFlight(null);
     }
   };
 
-  return (
-    <div className="animate-fade-up space-y-6">
-      <div>
-        <p className="text-[9px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-amber">
-          Human approval gate
-        </p>
-        <h2 className="text-xl font-extrabold tracking-[-0.035em] text-ink-primary mt-1">
-          Choose the tradeoff you can defend.
-        </h2>
-        <p className="text-sm text-ink-secondary leading-relaxed max-w-3xl mt-2">
-          The planning engines produced {plans.length} candidate plans from the same constraints. Compare their
-          measurable outcomes, inspect their reasoning, and approve one. No enterprise write has happened yet.
-        </p>
+  const handleModify = async () => {
+    const instruction = modificationInstruction.trim();
+    if (!instruction) {
+      setError('Tell the AI what must change before it creates revised plans.');
+      return;
+    }
+    setActionInFlight('modify');
+    setError(null);
+    try {
+      await api.approveRun(runId, {
+        approval_status: 'MODIFY',
+        decision_reason: instruction,
+        decision_source: 'MODIFICATION',
+      });
+      onApproved();
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'The plan could not be revised.');
+      setActionInFlight(null);
+    }
+  };
+
+  if (!recommended) {
+    return (
+      <div className="rounded-2xl border border-border-dim bg-deep p-8 text-center">
+        <span className="mx-auto block h-6 w-6 rounded-full border-2 border-ops-cyan/30 border-t-ops-cyan animate-spin" />
+        <p className="text-base font-bold text-ink-secondary mt-4">Preparing plan options…</p>
       </div>
+    );
+  }
+
+  const recommendedSummary = summaryFor(recommended, candidatePlanSummary);
+  const personalized = Boolean(recommendedSummary?.selected && recommendedSummary.rank > 1);
+  const alternatives = sorted.filter((plan) => plan.plan_id !== recommended.plan_id);
+
+  return (
+    <div className="space-y-5 animate-fade-up">
+      <header>
+        <p className="text-sm font-mono font-bold uppercase tracking-[0.14em] text-ops-amber">
+          Human decision
+        </p>
+        <h2 className="text-2xl font-extrabold tracking-[-0.04em] text-ink-primary mt-1">
+          Review the recommendation.
+        </h2>
+      </header>
 
       {error && (
-        <div className="border border-ops-rose/40 bg-ops-rose/5 rounded-lg px-4 py-3 text-sm text-ops-rose animate-fade-up" role="alert">
-          Approval failed: {error}
+        <div className="rounded-xl border border-ops-rose/35 bg-ops-rose/[0.06] px-4 py-3 text-sm font-bold text-ops-rose" role="alert">
+          {error}
         </div>
       )}
 
-      {pendingPlan && (
-        <section className="rounded-2xl border border-ops-amber bg-ops-amber/5 p-5 shadow-card" aria-label="Confirm plan selection">
-          <p className="text-[8px] font-mono font-semibold uppercase tracking-[0.16em] text-ops-amber">
-            Review before execution
-          </p>
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mt-2">
+      {showModify && (
+        <section className="rounded-2xl border border-ops-violet/40 bg-ops-violet/[0.06] p-5">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-extrabold text-ink-primary">
-                {profileName(pendingPlan)}
-                {pendingPlan.plan_id !== recommendedPlanId && (
-                  <span className="ml-2 rounded-full bg-ops-violet/10 px-2 py-1 text-[8px] font-mono uppercase text-ops-violet">
-                    explicit override
-                  </span>
-                )}
-              </h3>
-              <p className="text-[10px] leading-relaxed text-ink-secondary mt-2 max-w-2xl">
-                Confirming sends this exact backend plan to Core and starts SAGA execution. The selected plan is
-                recorded; Core does not currently accept a separate override-reason field.
+              <p className="text-sm font-bold text-ops-violet">Ask AI to revise</p>
+              <p className="text-sm text-ink-secondary mt-1">
+                State the changed priority or constraint. Revised plans will return here for approval.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowModify(false)}
+              className="min-h-11 rounded-xl px-3 text-sm font-bold text-ink-muted hover:text-ink-primary focus-ring"
+              aria-label="Close revision form"
+            >
+              Close
+            </button>
+          </div>
+          <label className="block mt-4">
+            <span className="sr-only">Plan revision instruction</span>
+            <textarea
+              value={modificationInstruction}
+              maxLength={1000}
+              rows={3}
+              onChange={(event) => setModificationInstruction(event.target.value)}
+              placeholder="Example: Protect SLA first and keep every worker below 80% capacity."
+              className="w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+            />
+          </label>
+          <div className="flex justify-end mt-3">
+            <button
+              type="button"
+              disabled={actionInFlight !== null || !modificationInstruction.trim()}
+              onClick={() => void handleModify()}
+              className="min-h-11 rounded-xl bg-ops-violet px-5 py-3 text-sm font-bold text-white disabled:opacity-40 focus-ring"
+            >
+              {actionInFlight === 'modify' ? 'Creating revised plans…' : 'Create revised plans'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {pendingPlan && (
+        <section className="rounded-2xl border border-ops-amber/50 bg-ops-amber/[0.06] p-5">
+          <p className="text-sm font-bold uppercase tracking-wide text-ops-amber">Final check</p>
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_auto] gap-5 items-end mt-2">
+            <div className="space-y-4">
+              <div>
+              <h3 className="text-xl font-extrabold text-ink-primary">{profileName(pendingPlan)}</h3>
+              <p className="text-sm text-ink-secondary mt-1">
+                {pendingPlan.plan_id === recommended.plan_id
+                  ? 'Continue with the AI recommendation.'
+                  : 'Use this alternative instead of the AI recommendation.'}
+              </p>
+              </div>
+              <AssignmentPreview plan={pendingPlan} portfolio={portfolio} />
+              <label className="block">
+                <span className="text-sm font-bold text-ink-secondary">
+                  Why this choice? <span className="font-normal text-ink-muted">(optional)</span>
+                </span>
+                <textarea
+                  value={decisionReason}
+                  maxLength={1000}
+                  rows={2}
+                  onChange={(event) => setDecisionReason(event.target.value)}
+                  placeholder="Add context for the decision history"
+                  className="mt-2 w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setPendingPlan(null)}
                 disabled={actionInFlight !== null}
-                className="rounded-lg border border-border-base bg-abyss px-4 py-2.5 text-[10px] font-semibold text-ink-secondary disabled:opacity-40 focus-ring"
+                onClick={() => setPendingPlan(null)}
+                className="rounded-xl border border-border-base bg-abyss px-4 py-3 text-sm font-bold text-ink-secondary disabled:opacity-40 focus-ring"
               >
-                Keep comparing
+                Go back
               </button>
               <button
                 type="button"
-                onClick={() => void handleApprove()}
                 disabled={actionInFlight !== null}
-                className="rounded-lg bg-ops-amber px-4 py-2.5 text-[10px] font-bold text-white disabled:opacity-40 focus-ring"
+                onClick={() => void handleApprove()}
+                className="rounded-xl bg-ops-amber px-5 py-3 text-sm font-bold text-white disabled:opacity-40 focus-ring"
               >
                 {actionInFlight === 'approve' ? 'Starting execution…' : 'Confirm and execute'}
               </button>
@@ -412,92 +610,166 @@ export function PlanWorkspace({ runId, plans, recommendedPlanId, candidatePlanSu
         </section>
       )}
 
-      {sorted.length > 0 ? (
-        <>
-          {candidatePlanSummary && candidatePlanSummary.length > 0 && (
-            <CandidateComparisonTable summaries={candidatePlanSummary} />
-          )}
-          <ComparisonMatrix plans={sorted} recommendedPlanId={recommendedPlanId} />
+      <section className="rounded-[1.5rem] border border-ops-amber/40 bg-abyss shadow-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-              <div>
-                <p className="text-[8px] font-mono uppercase tracking-[0.16em] text-ink-muted">Plan details</p>
-                <h3 className="text-base font-extrabold tracking-[-0.03em] text-ink-primary mt-1">
-                  Inspect assignments and reasoning before approval
-                </h3>
-              </div>
-              <p className="text-[9px] text-ink-muted">Approving one plan starts SAGA execution.</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-              {sorted.map((plan) => (
-                <PlanCard
-                  key={plan.plan_id}
-                  plan={plan}
-                  isRecommended={plan.plan_id === recommendedPlanId}
-                  onSelect={setPendingPlan}
-                  busy={actionInFlight !== null}
-                />
-              ))}
-            </div>
-          </div>
-
-          <details className="rounded-2xl border border-border-dim bg-deep/60">
-            <summary className="cursor-pointer px-5 py-4 text-xs font-bold text-ink-primary focus-ring rounded">
-              Continue manually or reject these plans
-            </summary>
-            <div className="px-5 pb-5 border-t border-border-dim pt-4">
-              <ol className="grid sm:grid-cols-3 gap-2">
-                {[
-                  'Rank incidents by SLA deadline and customer impact.',
-                  'Match required skills against confirmed available capacity.',
-                  'Record the chosen tradeoff before changing each system.',
-                ].map((step, index) => (
-                  <li key={step} className="rounded-xl border border-border-dim bg-abyss p-3 text-[10px] leading-relaxed text-ink-secondary">
-                    <span className="block text-[8px] font-mono text-ops-cyan mb-1">0{index + 1}</span>
-                    {step}
-                  </li>
-                ))}
-              </ol>
-              <p className="text-[9px] leading-relaxed text-ink-muted mt-3">
-                Goal-change instructions are not supported by the current Core contract. Reject this proposal and
-                start a revised goal if the decision itself must change.
-              </p>
-              {!confirmReject ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmReject(true)}
-                  className="mt-4 text-[10px] font-semibold text-ops-rose hover:underline focus-ring rounded"
-                >
-                  Reject automated proposal
-                </button>
-              ) : (
-                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-ops-rose/30 bg-ops-rose/5 p-3">
-                  <p className="text-[10px] text-ink-secondary flex-1">
-                    Rejecting ends this automated route without executing a plan.
-                  </p>
-                  <button type="button" onClick={() => setConfirmReject(false)} className="text-[10px] font-semibold text-ink-muted">
-                    Go back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleReject()}
-                    disabled={actionInFlight !== null}
-                    className="rounded-lg bg-ops-rose px-3 py-2 text-[10px] font-bold text-white disabled:opacity-40"
-                  >
-                    {actionInFlight === 'reject' ? 'Rejecting…' : 'Confirm rejection'}
-                  </button>
-                </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-ops-amber px-3 py-1 text-sm font-bold text-white">
+                {preferenceLabel(recommendedSummary)}
+              </span>
+              {personalized && (
+                <span className="rounded-full border border-ops-violet/35 bg-ops-violet/[0.08] px-3 py-1 text-sm font-bold text-ops-violet">
+                  Preference memory
+                </span>
               )}
             </div>
-          </details>
-        </>
-      ) : (
-        <div className="border border-border-dim rounded-xl p-12 text-center">
-          <span className="mx-auto block w-5 h-5 rounded-full border-2 border-ops-cyan/30 border-t-ops-cyan animate-spin" />
-          <p className="text-sm font-semibold text-ink-secondary mt-4">Generating candidate plans</p>
-          <p className="text-xs text-ink-muted font-mono mt-1">Waiting for solver results from the backend.</p>
+            <h3 className="text-3xl font-extrabold tracking-[-0.045em] text-ink-primary mt-3">
+              {profileName(recommended)}
+            </h3>
+            <p className="max-w-3xl text-base leading-relaxed text-ink-secondary mt-2">
+              {preferenceReason(recommended, recommendedSummary)}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={actionInFlight !== null}
+              onClick={() => setShowModify(true)}
+              className="min-h-11 rounded-xl border border-border-base bg-deep px-4 py-3 text-sm font-bold text-ink-secondary hover:border-ops-violet hover:text-ops-violet disabled:opacity-40 focus-ring"
+            >
+              Request changes
+            </button>
+            <button
+              type="button"
+              disabled={actionInFlight !== null}
+              onClick={() => setPendingPlan(recommended)}
+              className="min-h-11 rounded-xl bg-ops-amber px-5 py-3 text-base font-bold text-white hover:bg-ops-amber-bright disabled:opacity-40 focus-ring"
+            >
+              Review &amp; approve
+            </button>
+          </div>
         </div>
+
+        <div className="mt-5 border-t border-border-dim pt-5">
+          <p className="mb-3 text-sm font-bold text-ink-primary">Proposed work assignments</p>
+          <AssignmentPreview plan={recommended} portfolio={portfolio} />
+        </div>
+
+        <div className="mt-5">
+          <PlanMetrics plan={recommended} summary={recommendedSummary} />
+        </div>
+      </section>
+
+      {alternatives.length > 0 && !showAlternatives && (
+        <button
+          type="button"
+          onClick={() => setShowAlternatives(true)}
+          className="w-full min-h-12 rounded-2xl border border-border-base bg-deep px-5 py-3 text-left text-base font-bold text-ink-secondary hover:border-ops-cyan hover:text-ops-cyan focus-ring"
+        >
+          Reject this recommendation and compare {alternatives.length} other plans
+        </button>
       )}
+
+      {alternatives.length > 0 && showAlternatives && (
+        <section id="alternative-plans" className="rounded-2xl border border-border-dim bg-deep p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-extrabold text-ink-primary">Choose another plan</h3>
+              <p className="text-sm text-ink-muted mt-1">Nothing executes until you confirm one.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAlternatives(false)}
+              className="min-h-11 rounded-xl px-3 text-sm font-bold text-ink-muted hover:text-ink-primary focus-ring"
+            >
+              Hide
+            </button>
+          </div>
+          <div className="grid lg:grid-cols-3 gap-3 mt-3">
+            {alternatives.map((plan) => (
+              <AlternativeCard
+                key={plan.plan_id}
+                plan={plan}
+                summary={summaryFor(plan, candidatePlanSummary)}
+                portfolio={portfolio}
+                busy={actionInFlight !== null}
+                onSelect={setPendingPlan}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <PlanEvidence
+        plans={sorted}
+        recommendedPlanId={recommended.plan_id}
+        portfolio={portfolio}
+      />
+
+      <ManualAssignmentPanel
+        runId={runId}
+        plan={recommended}
+        onApproved={onApproved}
+      />
+
+      <details className="rounded-2xl border border-border-dim bg-deep">
+        <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between gap-3 text-base font-bold text-ink-primary focus-ring rounded-2xl">
+          <span>Reject all plans</span>
+          <span className="text-ops-rose">+</span>
+        </summary>
+        <div className="border-t border-border-dim p-5">
+          {!confirmReject ? (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="text-sm text-ink-secondary">
+                Stop this run without changing any enterprise system.
+              </p>
+              <button
+                type="button"
+                onClick={() => setConfirmReject(true)}
+                className="rounded-xl border border-ops-rose/35 bg-ops-rose/[0.06] px-4 py-2.5 text-sm font-bold text-ops-rose focus-ring"
+              >
+                Reject all
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-bold text-ops-rose">No plan will be executed.</p>
+                <label className="mt-3 block">
+                  <span className="text-sm font-bold text-ink-secondary">
+                    Why are these plans unsuitable? <span className="font-normal text-ink-muted">(optional)</span>
+                  </span>
+                  <textarea
+                    value={rejectionReason}
+                    maxLength={1000}
+                    rows={2}
+                    onChange={(event) => setRejectionReason(event.target.value)}
+                    placeholder="Record what the next plan should consider"
+                    className="mt-2 w-full resize-y rounded-xl border border-border-base bg-abyss px-4 py-3 text-base text-ink-primary placeholder:text-ink-muted focus-ring"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmReject(false)}
+                  className="rounded-xl border border-border-base px-4 py-2.5 text-sm font-bold text-ink-secondary"
+                >
+                  Go back
+                </button>
+                <button
+                  type="button"
+                  disabled={actionInFlight !== null}
+                  onClick={() => void handleReject()}
+                  className="rounded-xl bg-ops-rose px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  {actionInFlight === 'reject' ? 'Rejecting…' : 'Confirm rejection'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

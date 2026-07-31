@@ -39,12 +39,14 @@ function Invoke-Check {
 
     $status = 0
     $ok = $false
+    $failureMessage = ""
     try {
         $params = @{
             Method = $Method
             Uri = $Url
             Headers = $Headers
             TimeoutSec = 15
+            UseBasicParsing = $true
         }
         if ($null -ne $Body) {
             $params["ContentType"] = "application/json"
@@ -54,10 +56,13 @@ function Invoke-Check {
         $status = [int]$response.StatusCode
         $ok = $ExpectedStatus -contains $status
     } catch {
-        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
-            $status = [int]$_.Exception.Response.StatusCode
-        } else {
-            $status = 0
+        $failureMessage = $_.Exception.Message
+        $responseProperty = $_.Exception.PSObject.Properties["Response"]
+        if ($null -ne $responseProperty -and $null -ne $responseProperty.Value) {
+            $statusCodeProperty = $responseProperty.Value.PSObject.Properties["StatusCode"]
+            if ($null -ne $statusCodeProperty) {
+                $status = [int]$statusCodeProperty.Value
+            }
         }
         $ok = $false
     }
@@ -66,7 +71,7 @@ function Invoke-Check {
         Write-Host ("PASS {0,-42} HTTP {1}" -f $Name, $status)
         return $true
     }
-    Write-Host ("FAIL {0,-42} HTTP {1}" -f $Name, $status)
+    Write-Host ("FAIL {0,-42} HTTP {1} {2}" -f $Name, $status, $failureMessage)
     return $false
 }
 

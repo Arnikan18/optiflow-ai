@@ -31,6 +31,27 @@ def _error_json(status_code: int, message: str, error_code: str) -> JSONResponse
 async def initialize_database() -> None:
     async with db_session.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if conn.dialect.name == "sqlite":
+            columns = await conn.exec_driver_sql("PRAGMA table_info(specialists)")
+            existing_columns = {row[1] for row in columns.fetchall()}
+            if "completed_assignments_30d" not in existing_columns:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE specialists ADD COLUMN completed_assignments_30d INTEGER NOT NULL DEFAULT 0"
+                )
+            if "sla_success_rate_30d" not in existing_columns:
+                await conn.exec_driver_sql("ALTER TABLE specialists ADD COLUMN sla_success_rate_30d REAL")
+            if "average_resolution_minutes_30d" not in existing_columns:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE specialists ADD COLUMN average_resolution_minutes_30d INTEGER"
+                )
+            if "assignment_acceptance_rate_30d" not in existing_columns:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE specialists ADD COLUMN assignment_acceptance_rate_30d REAL"
+                )
+            if "capacity_reliability_rate_30d" not in existing_columns:
+                await conn.exec_driver_sql(
+                    "ALTER TABLE specialists ADD COLUMN capacity_reliability_rate_30d REAL"
+                )
 
     if get_settings().seed_on_startup:
         async with db_session.async_session() as session:

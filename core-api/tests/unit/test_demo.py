@@ -56,6 +56,8 @@ def test_build_portfolio_success_summary():
                     "priority": "CRITICAL",
                     "status": "OPEN",
                     "sla_deadline": "2026-07-28T01:00:00Z",
+                    "estimated_effort_minutes": 90,
+                    "required_skills": ["payments", "api-integration"],
                     "assigned_specialist_id": None,
                     "created_at": "2026-07-27T01:00:00Z",
                 }
@@ -71,6 +73,11 @@ def test_build_portfolio_success_summary():
                     "capacity": 2,
                     "current_workload": 0,
                     "operationally_available": True,
+                    "completed_assignments_30d": 38,
+                    "sla_success_rate_30d": 96.0,
+                    "average_resolution_minutes_30d": 72,
+                    "assignment_acceptance_rate_30d": 94.0,
+                    "capacity_reliability_rate_30d": 97.0,
                 }
             ]
         },
@@ -93,7 +100,20 @@ def test_build_portfolio_success_summary():
     assert portfolio.degraded is False
     assert portfolio.customers[0].current_incident_count == 1
     assert portfolio.incidents[0].assignment_status == "PENDING"
+    assert portfolio.incidents[0].customer_name == "Alpha Bank"
+    assert portfolio.incidents[0].required_skills == ["payments", "api-integration"]
+    assert portfolio.incidents[0].priority_rank == 1
+    assert portfolio.incidents[0].priority_score == 97
+    assert [signal.key for signal in portfolio.incidents[0].priority_signals] == [
+        "severity",
+        "sla",
+        "customer",
+        "arr",
+        "unassigned",
+    ]
     assert portfolio.specialists[0].reserved_workload == 1
+    assert portfolio.specialists[0].effectiveness_score == 95.7
+    assert portfolio.specialists[0].completed_assignments_30d == 38
     assert portfolio.portfolio_summary.total_customers == 1
     assert portfolio.portfolio_summary.unassigned_incidents == 1
 

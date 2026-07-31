@@ -30,16 +30,30 @@ class DemoCustomer(BaseModel):
     current_incident_count: int = Field(ge=0)
 
 
+class PrioritySignal(BaseModel):
+    key: str
+    label: str
+    points: int = Field(ge=0)
+
+
 class DemoIncident(BaseModel):
     incident_id: str
     customer_id: str
+    customer_name: str | None
     title: str | None
     summary: str | None
     severity: str | None
     status: str | None
     sla_deadline: str | None
     sla_risk: bool | None
+    minutes_to_sla: int | None
+    estimated_effort_minutes: int | None
     required_skills: list[str]
+    arr_exposure: float | None
+    strategic_priority: str | None
+    priority_rank: int | None
+    priority_score: int | None
+    priority_signals: list[PrioritySignal]
     current_specialist_id: str | None
     assignment_status: str | None
     age_hours: float | None
@@ -56,6 +70,14 @@ class DemoSpecialist(BaseModel):
     reserved_workload: int | None
     utilisation_percentage: float | None
     active_assignments: int | None
+    available_capacity: int | None
+    operationally_available: bool | None
+    completed_assignments_30d: int
+    sla_success_rate_30d: float | None
+    average_resolution_minutes_30d: int | None
+    assignment_acceptance_rate_30d: float | None
+    capacity_reliability_rate_30d: float | None
+    effectiveness_score: float | None
 
 
 class DemoWorkload(BaseModel):

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     assignment_request_ttl_seconds: int = 900
     min_assignment_request_ttl_seconds: int = 30
     max_assignment_request_ttl_seconds: int = 86400
+    demo_default_assignment_response: Optional[Literal["ACCEPTED", "REJECTED"]] = None
     simulated_delivery_mode: str = "success"
     incident_service_url: Optional[str] = None
     workforce_service_url: Optional[str] = None

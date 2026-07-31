@@ -323,6 +323,18 @@ async def apply_configured_response_if_due(
 
     configured = await _matching_configured_response(session, request, now_utc)
     if configured is None:
+        default_response = get_settings().demo_default_assignment_response
+        if default_response is None:
+            return request
+
+        request.status = default_response
+        request.response_note = "Configured demo default response."
+        request.response_reason = "Configured demo default response."
+        request.responded_at = now_utc
+        request.updated_at = now_utc
+        session.add(request)
+        await session.commit()
+        await session.refresh(request)
         return request
 
     due_at = _as_utc(request.created_at) + timedelta(seconds=configured.delay_seconds or 0)

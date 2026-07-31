@@ -150,6 +150,29 @@ class EnterpriseServiceClient:
             json_body={"availability": available, "reason": reason},
         )
 
+    async def set_specialist_capacity(
+        self,
+        specialist_id: str,
+        *,
+        capacity: int | None,
+        current_workload: int | None,
+        reason: str | None,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            settings.workforce_service_url,
+            f"/workforce/api/v1/specialists/{specialist_id}/simulation-capacity",
+            json_body={
+                key: value
+                for key, value in {
+                    "capacity": capacity,
+                    "current_workload": current_workload,
+                    "reason": reason,
+                }.items()
+                if value is not None
+            },
+        )
+
     async def release_incident_workload(self, incident_id: str, reason: str | None) -> dict[str, Any]:
         return await self._request(
             "POST",

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Reservation, Specialist, SpecialistSkill
 from app.schemas.requests import (
     WorkforceSimulationAvailabilityRequest,
+    WorkforceSimulationCapacityRequest,
     normalize_skill,
     normalize_specialist_id,
 )
@@ -321,6 +322,11 @@ def specialist_view_to_dict(view: SpecialistView) -> dict:
         "current_workload": specialist.current_workload,
         "availability": specialist.availability,
         "active": specialist.active,
+        "completed_assignments_30d": specialist.completed_assignments_30d,
+        "sla_success_rate_30d": specialist.sla_success_rate_30d,
+        "average_resolution_minutes_30d": specialist.average_resolution_minutes_30d,
+        "assignment_acceptance_rate_30d": specialist.assignment_acceptance_rate_30d,
+        "capacity_reliability_rate_30d": specialist.capacity_reliability_rate_30d,
         "effective_workload": view.effective_workload,
         "available_capacity": view.available_capacity,
         "operationally_available": view.operationally_available,
@@ -341,6 +347,11 @@ def specialist_view_to_legacy_dict(view: SpecialistView) -> dict:
         "effectiveWorkload": view.effective_workload,
         "availableCapacity": view.available_capacity,
         "operationallyAvailable": view.operationally_available,
+        "completedAssignments30d": specialist.completed_assignments_30d,
+        "slaSuccessRate30d": specialist.sla_success_rate_30d,
+        "averageResolutionMinutes30d": specialist.average_resolution_minutes_30d,
+        "assignmentAcceptanceRate30d": specialist.assignment_acceptance_rate_30d,
+        "capacityReliabilityRate30d": specialist.capacity_reliability_rate_30d,
         "created_at": specialist.created_at,
         "updated_at": specialist.updated_at,
     }
@@ -369,6 +380,44 @@ async def set_specialist_availability_for_simulation(
         return view
 
     specialist.availability = payload.availability
+    specialist.updated_at = datetime.now(timezone.utc)
+    try:
+        session.add(specialist)
+        await session.commit()
+        await session.refresh(specialist)
+        return await get_specialist(session, specialist.specialist_id)
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise _database_error() from exc
+
+
+async def set_specialist_capacity_for_simulation(
+    session: AsyncSession,
+    specialist_id: str,
+    payload: WorkforceSimulationCapacityRequest,
+) -> SpecialistView:
+    view = await get_specialist(session, specialist_id)
+    specialist = view.specialist
+    next_capacity = payload.capacity if payload.capacity is not None else specialist.capacity
+    next_workload = (
+        payload.current_workload
+        if payload.current_workload is not None
+        else specialist.current_workload
+    )
+    effective_workload = next_workload + view.active_pending_reservations
+
+    if effective_workload > next_capacity:
+        raise WorkforceError(
+            409,
+            "WORKFORCE_CAPACITY_CONFLICT",
+            "Capacity cannot be below assigned and pending workload",
+        )
+
+    if specialist.capacity == next_capacity and specialist.current_workload == next_workload:
+        return view
+
+    specialist.capacity = next_capacity
+    specialist.current_workload = next_workload
     specialist.updated_at = datetime.now(timezone.utc)
     try:
         session.add(specialist)

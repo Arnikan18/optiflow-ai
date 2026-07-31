@@ -1,47 +1,33 @@
 import type { ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useEnterpriseSimulation } from '../../hooks/useEnterpriseSimulation';
 
-type NavIcon = 'today' | 'history' | 'lab' | 'settings';
+type NavIcon = 'today' | 'live' | 'history' | 'settings';
 
 type NavigationItem = {
-  number: string;
   label: string;
-  shortLabel: string;
-  description: string;
   to: string;
   icon: NavIcon;
 };
 
 const NAVIGATION: NavigationItem[] = [
   {
-    number: '01',
-    label: "Today's Goal",
-    shortLabel: 'Today',
-    description: 'Live goal and decision journey',
+    label: 'Today',
     to: '/',
     icon: 'today',
   },
   {
-    number: '02',
-    label: 'History',
-    shortLabel: 'History',
-    description: 'Continue and review decisions',
+    label: 'Judge Mode',
+    to: '/judge',
+    icon: 'live',
+  },
+  {
+    label: 'Decisions',
     to: '/history',
     icon: 'history',
   },
   {
-    number: '03',
-    label: 'Scenario Lab',
-    shortLabel: 'Scenarios',
-    description: 'Test controlled outcomes',
-    to: '/demo-lab',
-    icon: 'lab',
-  },
-  {
-    number: '04',
     label: 'Settings',
-    shortLabel: 'Settings',
-    description: 'Appearance and playback',
     to: '/settings',
     icon: 'settings',
   },
@@ -56,16 +42,17 @@ function Icon({ name }: { name: NavIcon }) {
         <path d="m9.5 10.2 1.6 1.6 3.5-3.6" />
       </>
     ),
+    live: (
+      <>
+        <path d="M3 12h4l2.2-5 4.1 10 2.2-5H21" />
+        <circle cx="3" cy="12" r="1.2" />
+        <circle cx="21" cy="12" r="1.2" />
+      </>
+    ),
     history: (
       <>
         <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5" />
         <path d="M4 4v4.5h4.5M12 8v4l3 2" />
-      </>
-    ),
-    lab: (
-      <>
-        <path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3" />
-        <path d="M7.5 15h9" />
       </>
     ),
     settings: (
@@ -101,7 +88,10 @@ function isItemActive(pathname: string, item: NavigationItem): boolean {
 
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const simulation = useEnterpriseSimulation();
   const isRunPage = pathname.startsWith('/run/');
+  const isJudgePage = pathname.startsWith('/judge');
+  const liveSimulation = simulation.status?.status === 'RUNNING';
 
   return (
     <div className="min-h-screen bg-void flex flex-col overflow-x-hidden">
@@ -118,16 +108,30 @@ export function Shell({ children }: { children: ReactNode }) {
               </svg>
             </div>
             <div>
-              <div className="text-[15px] leading-none font-extrabold tracking-[-0.03em] text-ink-primary">
-                optiflow
-              </div>
-              <div className="text-[9px] mt-1 font-mono uppercase tracking-[0.22em] text-ink-muted">
-                decision atlas
+              <div className="text-base leading-none font-extrabold tracking-[-0.03em] text-ink-primary">
+                OptiFlow
               </div>
             </div>
           </Link>
 
           <div className="flex items-center gap-3">
+            {liveSimulation ? (
+              <Link
+                to="/judge"
+                className="hidden sm:inline-flex min-h-11 items-center gap-2 rounded-full border border-ops-emerald/30 bg-ops-emerald/10 px-3 py-2 text-sm font-bold text-ops-emerald focus-ring"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-ops-emerald opacity-40" />
+                  <span className="relative h-2 w-2 rounded-full bg-ops-emerald" />
+                </span>
+                Live demo · {simulation.status?.current_stage ?? 'monitoring'}
+              </Link>
+            ) : isJudgePage && (
+              <span className="hidden sm:inline-flex items-center gap-2 rounded-full border border-ops-violet/30 bg-ops-violet/10 px-3 py-2 text-sm font-bold text-ops-violet">
+                <span className="w-1.5 h-1.5 rounded-full bg-ops-violet animate-pulse" />
+                Judge Mode
+              </span>
+            )}
             {isRunPage && (
               <Link
                 to="/"
@@ -137,18 +141,13 @@ export function Shell({ children }: { children: ReactNode }) {
                 New decision
               </Link>
             )}
-            <div className="hidden md:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.16em] text-ink-muted">
-              <span className="w-1.5 h-1.5 rounded-full bg-ops-emerald" />
-              human governed
-            </div>
-            <div className="h-5 w-px bg-border-dim hidden md:block" />
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border-dim bg-deep">
+            <div className="flex min-h-11 items-center gap-2 px-3 rounded-full border border-border-dim bg-deep">
               <span className="relative flex w-2 h-2">
                 <span className="absolute inset-0 rounded-full bg-ops-emerald animate-ping opacity-40" />
                 <span className="relative w-2 h-2 rounded-full bg-ops-emerald" />
               </span>
-              <span className="hidden sm:inline text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-secondary">
-                systems live
+              <span className="hidden sm:inline text-sm font-semibold text-ink-secondary">
+                Systems live
               </span>
             </div>
           </div>
@@ -167,12 +166,12 @@ export function Shell({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex items-center gap-2 px-3.5 py-3 text-xs font-semibold transition-colors focus-ring ${
+                className={`relative min-h-12 flex items-center gap-2 px-4 text-sm font-semibold transition-colors focus-ring ${
                   active ? 'text-ink-primary' : 'text-ink-muted hover:text-ink-primary'
                 }`}
               >
                 <Icon name={item.icon} />
-                {item.shortLabel}
+                {item.label}
                 {active && <span className="absolute left-3 right-3 bottom-0 h-0.5 bg-ops-amber" />}
               </NavLink>
             );
@@ -181,17 +180,12 @@ export function Shell({ children }: { children: ReactNode }) {
       </nav>
 
       <div className="flex flex-1 min-h-0">
-        <aside className="hidden lg:flex w-60 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-border-dim bg-abyss flex-col">
-          <div className="px-5 pt-6 pb-4">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-ink-muted">
-              Decision workspace
-            </p>
-            <p className="text-xs leading-relaxed text-ink-secondary mt-2">
-              Set today's goal, understand each choice, and return to any outcome.
-            </p>
+        <aside className="hidden lg:flex w-56 shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] border-r border-border-dim bg-abyss flex-col">
+          <div className="px-5 pt-6 pb-3">
+            <p className="text-sm font-bold text-ink-muted">Workspace</p>
           </div>
 
-          <nav className="px-3 space-y-1" aria-label="Decision workspace">
+          <nav className="px-3 space-y-2" aria-label="Decision workspace">
             {NAVIGATION.map((item) => {
               const active = isItemActive(pathname, item);
               return (
@@ -199,7 +193,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   key={item.to}
                   to={item.to}
                   aria-current={active ? 'page' : undefined}
-                  className={`group relative grid grid-cols-[32px_1fr] gap-3 rounded-xl px-3 py-3.5 transition-all focus-ring ${
+                  className={`group relative min-h-12 flex items-center gap-3 rounded-xl px-3 py-2 transition-all focus-ring ${
                     active
                       ? 'bg-ink-primary text-white shadow-card'
                       : 'text-ink-secondary hover:bg-deep hover:text-ink-primary'
@@ -210,19 +204,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   }`}>
                     <Icon name={item.icon} />
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold">{item.label}</span>
-                      <span className={`text-[8px] font-mono ${active ? 'text-white/40' : 'text-ink-ghost'}`}>
-                        {item.number}
-                      </span>
-                    </div>
-                    <p className={`text-[9px] leading-relaxed mt-1 ${
-                      active ? 'text-white/55' : 'text-ink-muted'
-                    }`}>
-                      {item.description}
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold">{item.label}</span>
                   {active && (
                     <span className="absolute -right-px top-3 bottom-3 w-1 rounded-l-full bg-ops-amber" />
                   )}
@@ -230,20 +212,6 @@ export function Shell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-
-          <div className="mt-auto p-4">
-            <div className="rounded-2xl border border-border-dim bg-deep p-4">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-ops-emerald" />
-                <span className="text-[9px] font-mono font-semibold uppercase tracking-[0.14em] text-ink-secondary">
-                  Manual route ready
-                </span>
-              </div>
-              <p className="text-[10px] leading-relaxed text-ink-muted mt-2">
-                Every automated step will include a human fallback.
-              </p>
-            </div>
-          </div>
         </aside>
 
         <main className="flex-1 min-h-0 min-w-0">{children}</main>

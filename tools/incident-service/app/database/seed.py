@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ def _utc_datetime(value: str) -> datetime:
 
 def build_seed_incidents() -> list[Incident]:
     created_at = _utc_datetime("2026-07-22T10:00:00Z")
+    demo_now = datetime.now(timezone.utc).replace(microsecond=0)
     return [
         Incident(
             incident_id="INC-ALPHA-001",
@@ -21,6 +22,8 @@ def build_seed_incidents() -> list[Incident]:
             priority="CRITICAL",
             status="OPEN",
             sla_deadline=_utc_datetime("2026-07-22T12:00:00Z"),
+            estimated_effort_minutes=120,
+            required_skills=["billing", "payments", "api-integration"],
             assigned_specialist_id=None,
             created_at=created_at,
             updated_at=created_at,
@@ -33,6 +36,8 @@ def build_seed_incidents() -> list[Incident]:
             priority="HIGH",
             status="IN_PROGRESS",
             sla_deadline=_utc_datetime("2099-07-25T10:00:00Z"),
+            estimated_effort_minutes=180,
+            required_skills=["identity", "saml", "enterprise-onboarding"],
             assigned_specialist_id="SPEC-NIMAL",
             created_at=created_at,
             updated_at=created_at,
@@ -45,6 +50,8 @@ def build_seed_incidents() -> list[Incident]:
             priority="MEDIUM",
             status="OPEN",
             sla_deadline=_utc_datetime("2099-07-27T10:00:00Z"),
+            estimated_effort_minutes=90,
+            required_skills=["data-reporting", "exports"],
             assigned_specialist_id=None,
             created_at=created_at,
             updated_at=created_at,
@@ -57,6 +64,8 @@ def build_seed_incidents() -> list[Incident]:
             priority="LOW",
             status="RESOLVED",
             sla_deadline=_utc_datetime("2026-07-23T10:00:00Z"),
+            estimated_effort_minutes=60,
+            required_skills=["security", "compliance"],
             assigned_specialist_id="SPEC-MAYA",
             created_at=created_at,
             updated_at=_utc_datetime("2026-07-23T11:00:00Z"),
@@ -69,9 +78,67 @@ def build_seed_incidents() -> list[Incident]:
             priority="HIGH",
             status="CLOSED",
             sla_deadline=_utc_datetime("2026-07-21T18:00:00Z"),
+            estimated_effort_minutes=240,
+            required_skills=["data-migration", "database"],
             assigned_specialist_id="SPEC-DANIEL",
             created_at=created_at,
             updated_at=_utc_datetime("2026-07-22T13:00:00Z"),
+        ),
+        Incident(
+            incident_id="INC-ORBIT-001",
+            customer_id="CUS-ORBIT",
+            title="Mobile authentication outage",
+            description="Mobile customers cannot complete multi-factor authentication during sign-in.",
+            priority="CRITICAL",
+            status="OPEN",
+            sla_deadline=demo_now + timedelta(minutes=45),
+            estimated_effort_minutes=150,
+            required_skills=["identity", "mobile", "security"],
+            assigned_specialist_id=None,
+            created_at=demo_now - timedelta(minutes=75),
+            updated_at=demo_now - timedelta(minutes=8),
+        ),
+        Incident(
+            incident_id="INC-HARBOR-001",
+            customer_id="CUS-HARBOR",
+            title="Clinical export queue delayed",
+            description="Scheduled clinical exports are processing too slowly for the morning handover.",
+            priority="HIGH",
+            status="IN_PROGRESS",
+            sla_deadline=demo_now + timedelta(hours=4),
+            estimated_effort_minutes=105,
+            required_skills=["clinical-data", "queue-operations"],
+            assigned_specialist_id="SPEC-LEILA",
+            created_at=demo_now - timedelta(hours=5),
+            updated_at=demo_now - timedelta(minutes=18),
+        ),
+        Incident(
+            incident_id="INC-NOVA-002",
+            customer_id="CUS-NOVA",
+            title="Launch data validation failure",
+            description="Final product catalogue validation is blocking the planned production launch.",
+            priority="HIGH",
+            status="OPEN",
+            sla_deadline=demo_now + timedelta(hours=8),
+            estimated_effort_minutes=135,
+            required_skills=["data-validation", "enterprise-onboarding"],
+            assigned_specialist_id=None,
+            created_at=demo_now - timedelta(hours=3),
+            updated_at=demo_now - timedelta(minutes=22),
+        ),
+        Incident(
+            incident_id="INC-SUMMIT-001",
+            customer_id="CUS-SUMMIT",
+            title="Student roster sync backlog",
+            description="Roster changes are delayed and need data integration review before the next school day.",
+            priority="MEDIUM",
+            status="OPEN",
+            sla_deadline=demo_now + timedelta(hours=12),
+            estimated_effort_minutes=75,
+            required_skills=["data-integration", "roster-sync"],
+            assigned_specialist_id=None,
+            created_at=demo_now - timedelta(hours=9),
+            updated_at=demo_now - timedelta(minutes=35),
         ),
     ]
 

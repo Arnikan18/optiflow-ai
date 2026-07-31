@@ -41,17 +41,24 @@ def test_list_specialists_default_pagination_and_legacy_route(client, auth_heade
     data = assert_success(client.get("/workforce/api/v1/specialists", headers=auth_headers))
     assert data["page"] == 1
     assert data["page_size"] == 20
-    assert data["total_items"] == 5
+    assert data["total_items"] == 8
     assert [item["specialist_id"] for item in data["specialists"]] == [
         "SPEC-DANIEL",
         "SPEC-KAI",
+        "SPEC-LEILA",
         "SPEC-MAYA",
         "SPEC-NIMAL",
+        "SPEC-OMAR",
         "SPEC-PRIYA",
+        "SPEC-SOFIA",
     ]
 
     page_two = assert_success(client.get("/workforce/api/v1/specialists?page=2&page_size=3", headers=auth_headers))
-    assert [item["specialist_id"] for item in page_two["specialists"]] == ["SPEC-NIMAL", "SPEC-PRIYA"]
+    assert [item["specialist_id"] for item in page_two["specialists"]] == [
+        "SPEC-MAYA",
+        "SPEC-NIMAL",
+        "SPEC-OMAR",
+    ]
 
     beyond = assert_success(client.get("/workforce/api/v1/specialists?page=99", headers=auth_headers))
     assert beyond["specialists"] == []
@@ -64,15 +71,21 @@ def test_list_specialists_default_pagination_and_legacy_route(client, auth_heade
         "SPEC-NIMAL",
         "SPEC-PRIYA",
         "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+        "SPEC-SOFIA",
     }
 
 
 def test_specialist_filters_and_search(client, auth_headers):
     active = assert_success(client.get("/workforce/api/v1/specialists?active=true", headers=auth_headers))
-    assert active["total_items"] == 4
+    assert active["total_items"] == 7
 
     unavailable = assert_success(client.get("/workforce/api/v1/specialists?availability=false", headers=auth_headers))
-    assert [item["specialist_id"] for item in unavailable["specialists"]] == ["SPEC-PRIYA"]
+    assert [item["specialist_id"] for item in unavailable["specialists"]] == [
+        "SPEC-PRIYA",
+        "SPEC-SOFIA",
+    ]
 
     billing = assert_success(client.get("/workforce/api/v1/specialists?skill= Billing ", headers=auth_headers))
     assert [item["specialist_id"] for item in billing["specialists"]] == ["SPEC-MAYA", "SPEC-PRIYA"]
@@ -80,7 +93,14 @@ def test_specialist_filters_and_search(client, auth_headers):
     min_capacity = assert_success(
         client.get("/workforce/api/v1/specialists?min_available_capacity=2", headers=auth_headers)
     )
-    assert {item["specialist_id"] for item in min_capacity["specialists"]} == {"SPEC-KAI", "SPEC-PRIYA"}
+    assert {item["specialist_id"] for item in min_capacity["specialists"]} == {
+        "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+        "SPEC-PRIYA",
+        "SPEC-SOFIA",
+    }
 
     by_id = assert_success(client.get("/workforce/api/v1/specialists?search=daniel", headers=auth_headers))
     assert [item["specialist_id"] for item in by_id["specialists"]] == ["SPEC-DANIEL"]
@@ -91,39 +111,61 @@ def test_specialist_filters_and_search(client, auth_headers):
 
 def test_available_specialists_filters_capacity_and_pending_counts(client, auth_headers):
     available = assert_success(client.get("/workforce/api/v1/specialists/available", headers=auth_headers))
-    assert [item["specialist_id"] for item in available["specialists"]] == ["SPEC-DANIEL", "SPEC-MAYA"]
+    assert [item["specialist_id"] for item in available["specialists"]] == [
+        "SPEC-DANIEL",
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    ]
 
     technical = assert_success(
         client.get("/workforce/api/v1/specialists/available?skill=technical", headers=auth_headers)
     )
-    assert [item["specialist_id"] for item in technical["specialists"]] == ["SPEC-DANIEL", "SPEC-MAYA"]
+    assert [item["specialist_id"] for item in technical["specialists"]] == [
+        "SPEC-DANIEL",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    ]
 
     required_two = assert_success(
         client.get("/workforce/api/v1/specialists/available?required_capacity=2", headers=auth_headers)
     )
-    assert required_two["specialists"] == []
+    assert [item["specialist_id"] for item in required_two["specialists"]] == [
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    ]
 
     maya = assert_success(client.get("/workforce/api/v1/specialists/SPEC-MAYA", headers=auth_headers))
     assert maya["current_workload"] == 0
-    assert maya["effective_workload"] == 1
-    assert maya["available_capacity"] == 1
+    assert maya["effective_workload"] == 0
+    assert maya["available_capacity"] == 2
     assert maya["operationally_available"] is True
+    assert maya["completed_assignments_30d"] == 38
+    assert maya["sla_success_rate_30d"] == 96.0
+    assert maya["average_resolution_minutes_30d"] == 72
+    assert maya["assignment_acceptance_rate_30d"] == 94.0
+    assert maya["capacity_reliability_rate_30d"] == 97.0
 
 
 def test_list_workloads_exposes_reservation_counts(client, auth_headers):
     data = assert_success(client.get("/workforce/api/v1/workloads", headers=auth_headers))
     assert data["page"] == 1
-    assert data["total_items"] == 5
+    assert data["total_items"] == 8
 
     workloads = {item["specialist_id"]: item for item in data["workloads"]}
     assert workloads["SPEC-MAYA"]["assigned_count"] == 0
-    assert workloads["SPEC-MAYA"]["tentative_reservation_count"] == 1
+    assert workloads["SPEC-MAYA"]["tentative_reservation_count"] == 0
     assert workloads["SPEC-MAYA"]["confirmed_reservation_count"] == 0
-    assert workloads["SPEC-MAYA"]["available_capacity"] == 1
-    assert workloads["SPEC-MAYA"]["utilisation_percentage"] == 50.0
+    assert workloads["SPEC-MAYA"]["available_capacity"] == 2
+    assert workloads["SPEC-MAYA"]["utilisation_percentage"] == 0.0
 
     assert workloads["SPEC-DANIEL"]["assigned_count"] == 1
     assert workloads["SPEC-DANIEL"]["confirmed_reservation_count"] == 1
+    assert workloads["SPEC-LEILA"]["assigned_count"] == 1
+    assert workloads["SPEC-LEILA"]["available_capacity"] == 2
+    assert workloads["SPEC-OMAR"]["tentative_reservation_count"] == 0
+    assert workloads["SPEC-OMAR"]["available_capacity"] == 3
 
 
 def test_get_specialist_existing_missing_inactive_and_full_capacity(client, auth_headers):
@@ -157,7 +199,12 @@ def test_invalid_specialist_queries_use_standard_422(client, auth_headers):
 def test_legacy_availability_and_workload(client, auth_headers):
     availability = client.get("/availability", headers=auth_headers)
     assert availability.status_code == 200
-    assert {item["specialistId"] for item in availability.json()["specialists"]} == {"SPEC-DANIEL", "SPEC-MAYA"}
+    assert {item["specialistId"] for item in availability.json()["specialists"]} == {
+        "SPEC-DANIEL",
+        "SPEC-LEILA",
+        "SPEC-MAYA",
+        "SPEC-OMAR",
+    }
 
     workload = client.get("/workload", headers=auth_headers)
     assert workload.status_code == 200
@@ -167,6 +214,9 @@ def test_legacy_availability_and_workload(client, auth_headers):
         "SPEC-NIMAL",
         "SPEC-PRIYA",
         "SPEC-KAI",
+        "SPEC-LEILA",
+        "SPEC-OMAR",
+        "SPEC-SOFIA",
     }
 
 
@@ -200,6 +250,11 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
                 "current_workload": 1,
                 "availability": True,
                 "active": True,
+                "completed_assignments_30d": 14,
+                "sla_success_rate_30d": 92.5,
+                "average_resolution_minutes_30d": 86,
+                "assignment_acceptance_rate_30d": 90.0,
+                "capacity_reliability_rate_30d": 96.0,
                 "created_at": "2026-07-22T09:00:00Z",
                 "updated_at": "2026-07-22T09:00:00Z",
             }
@@ -224,6 +279,13 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     assert loaded.status_code == 200
     assert assert_success(loaded)["specialist_count"] == 1
 
+    persisted = assert_success(
+        client.get("/workforce/api/v1/specialists/SPEC-SIM-001", headers=auth_headers)
+    )
+    assert persisted["completed_assignments_30d"] == 14
+    assert persisted["sla_success_rate_30d"] == 92.5
+    assert persisted["average_resolution_minutes_30d"] == 86
+
     unavailable = assert_success(
         client.patch(
             "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-availability",
@@ -233,6 +295,25 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     )
     assert unavailable["availability"] is False
     assert unavailable["operationally_available"] is False
+
+    capacity = assert_success(
+        client.patch(
+            "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-capacity",
+            json={"capacity": 3, "current_workload": 2, "reason": "live demo"},
+            headers=auth_headers,
+        )
+    )
+    assert capacity["capacity"] == 3
+    assert capacity["current_workload"] == 2
+    assert capacity["available_capacity"] == 1
+
+    conflict = client.patch(
+        "/workforce/api/v1/specialists/SPEC-SIM-001/simulation-capacity",
+        json={"capacity": 1},
+        headers=auth_headers,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["errorCode"] == "WORKFORCE_CAPACITY_CONFLICT"
 
     released = assert_success(
         client.post(
@@ -245,4 +326,4 @@ def test_simulation_load_availability_and_release_workload(client, auth_headers,
     assert released["reservation_ids"] == ["RES-SIM-001"]
 
     specialist = assert_success(client.get("/workforce/api/v1/specialists/SPEC-SIM-001", headers=auth_headers))
-    assert specialist["current_workload"] == 0
+    assert specialist["current_workload"] == 1
